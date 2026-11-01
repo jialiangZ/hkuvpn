@@ -19,8 +19,12 @@
 | OpenConnect + gost | `powershell -ExecutionPolicy Bypass -File $HOME\hkuvpn\windows\bin\get-tools.ps1` |
 
 `get-tools.ps1` **必须以管理员身份运行** —— OpenConnect 安装程序要注册 Wintun
-网络适配器。它会下载 gost（哈希固定）、OpenConnect 安装程序，运行安装程序，并打印
-安装包的 SHA-256 供你留档。
+网络适配器。两份下载都做 SHA-256 校验：gost 对官方 go-gost checksums，OpenConnect
+对官方 v9.21 **tag** 构建的固定哈希（tag 流水线的产物永久保留，而漂移的 `master`
+产物一周后就过期）。OpenConnect 9.21 与 Docker 镜像内构建的版本一致，安装完成后安装
+包会被删除。
+
+已在 Windows 11（build 26300）+ PowerShell 5.1 上验证。
 
 账号信息放在仓库之外：
 
@@ -51,7 +55,7 @@ echo $LASTEXITCODE     # 期望 0
 admin    : not elevated (connect self-elevates via UAC)
 config   : ok (HKU_USER=youruid@connect.hku.hk)
 pin file : ok (C:\Users\<你>\.vpn\hku.pass)
-openconn.: ok (C:\Program Files\OpenConnect\bin\openconnect.exe)
+openconn.: ok (C:\Program Files\OpenConnect\openconnect.exe)
 gost     : ok (C:\Users\<你>\hkuvpn\windows\tools\gost.exe)
 script   : ok (etc\vpnc-script-win.js)
 curl.exe : ok

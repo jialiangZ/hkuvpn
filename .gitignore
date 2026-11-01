@@ -3,6 +3,9 @@
 *.cache
 .vpn/
 
+# Downloaded Windows binaries (gost, the OpenConnect installer)
+windows/tools/
+
 # OS / editor
 .DS_Store
 *.swp

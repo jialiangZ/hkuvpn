@@ -83,9 +83,14 @@ cd $HOME\hkuvpn\windows\bin
 powershell -ExecutionPolicy Bypass -File .\get-tools.ps1
 ```
 
-That downloads gost (hash-pinned) and the OpenConnect installer, and runs
-the installer if you are elevated. Then configure — same files and formats
-as the Docker edition:
+That downloads gost and the OpenConnect installer, verifies **both** against
+pinned SHA-256 hashes, and runs the installer if you are elevated. gost is
+the official go-gost release; OpenConnect is the official GitLab CI build of
+the **v9.21 tag** (its artifacts never expire, unlike the moving `master`
+ones) — the same OpenConnect version the Docker image builds. The installer
+is deleted once it has run.
+
+Then configure — same files and formats as the Docker edition:
 
 ```powershell
 mkdir $HOME\.vpn

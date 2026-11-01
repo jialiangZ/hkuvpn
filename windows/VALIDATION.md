@@ -22,9 +22,14 @@ inspects routes, logs, and state.
 | OpenConnect + gost | `powershell -ExecutionPolicy Bypass -File $HOME\hkuvpn\windows\bin\get-tools.ps1` |
 
 `get-tools.ps1` must run **elevated** — the OpenConnect installer registers the
-Wintun network adapter, which needs administrator rights. It downloads gost
-(hash-pinned), the OpenConnect installer, runs the installer, and prints the
-installer's SHA-256 for your records.
+Wintun network adapter, which needs administrator rights. Both downloads are
+SHA-256 verified: gost against the official go-gost checksums, OpenConnect
+against the pinned hash of the official v9.21 **tag** build (the tag pipeline
+keeps its artifacts forever; the moving `master` ones expire after a week).
+OpenConnect 9.21 is the same version the Docker image builds, and the
+installer is removed once it has run.
+
+Verified on Windows 11 (build 26300) with PowerShell 5.1.
 
 Your HKU credentials live outside the repository:
 
@@ -56,7 +61,7 @@ Expected:
 admin    : not elevated (connect self-elevates via UAC)
 config   : ok (HKU_USER=youruid@connect.hku.hk)
 pin file : ok (C:\Users\<you>\.vpn\hku.pass)
-openconn.: ok (C:\Program Files\OpenConnect\bin\openconnect.exe)
+openconn.: ok (C:\Program Files\OpenConnect\openconnect.exe)
 gost     : ok (C:\Users\<you>\hkuvpn\windows\tools\gost.exe)
 script   : ok (etc\vpnc-script-win.js)
 curl.exe : ok

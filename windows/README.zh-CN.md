@@ -53,7 +53,9 @@ cd $HOME\hkuvpn\windows\bin
 powershell -ExecutionPolicy Bypass -File .\get-tools.ps1
 ```
 
-该脚本会下载 gost（SHA256 固定校验）和 OpenConnect 安装包（已提权时自动静默安装）。然后配置 —— 文件路径和格式与 Docker 版一致：
+该脚本会下载 gost 和 OpenConnect 安装包，**两者都做 SHA-256 固定校验**，并在已提权时自动静默安装。gost 取官方 go-gost 发行包；OpenConnect 取官方 GitLab CI 的 **v9.21 tag** 构建（tag 流水线的产物永久保留，而漂移的 `master` 产物会过期）—— 与 Docker 镜像内的 OpenConnect 版本一致。安装完成后安装包会被删除。
+
+然后配置 —— 文件路径和格式与 Docker 版一致：
 
 ```powershell
 mkdir $HOME\.vpn
