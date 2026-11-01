@@ -6,9 +6,9 @@ get-tools.ps1 - fetch the native Windows dependencies for hkuvpn.ps1.
      Download is verified against a SHA256 pinned from the official
      go-gost checksums.txt, the same way docker/Dockerfile pins it.
   2. OpenConnect command-line installer (64-bit, GnuTLS build, includes
-     the Wintun driver since OpenConnect v9.00). This is an automated
-     GitLab CI build of the master branch, so its hash cannot be pinned;
-     the script prints the SHA256 for your records.
+     the Wintun driver since OpenConnect v9.00). It is the official GitLab
+     CI build of the v9.21 TAG, whose artifacts never expire, so the
+     download is SHA256-verified too.
 
 Usage (elevated PowerShell recommended, so the installer can run):
   powershell -ExecutionPolicy Bypass -File get-tools.ps1
@@ -22,11 +22,23 @@ try {
         [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 } catch {}
 
-$ToolsDir = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'tools'
+# Tools live next to this script's parent directory (windows/tools), which is
+# where hkuvpn.ps1 looks for them.
+$ToolsDir = Join-Path (Split-Path -Parent $PSScriptRoot) 'tools'
 $GostVersion = '3.3.0'
 $GostUrl = "https://github.com/go-gost/gost/releases/download/v${GostVersion}/gost_${GostVersion}_windows_amd64.zip"
 $GostSha256 = 'CC8AC946F86994A3AED47EF1F838CFB6B7649D9245C91FCB9899654B33D61170'
-$OcUrl = 'https://gitlab.com/openconnect/openconnect/-/jobs/artifacts/master/raw/openconnect-installer-MinGW64-GnuTLS.exe?job=MinGW64/GnuTLS'
+
+# OpenConnect for Windows comes from the official GitLab CI build of the
+# v9.21 tag. That tag pipeline keeps its Windows artifacts forever
+# ("persist-windows-builds-for-tagged-releases", expire_in: never), so the
+# URL stays valid - unlike the moving "master" artifacts, which expire after
+# a week. The SHA-256 is pinned, so this download is verified like gost's.
+$OcVersion = 'v9.21'
+$OcJobId   = '14877945030'    # MinGW64/GnuTLS job of the v9.21 tag pipeline
+$OcFile    = 'openconnect-installer-MinGW64-GnuTLS.exe'
+$OcUrl     = "https://gitlab.com/api/v4/projects/openconnect%2Fopenconnect/jobs/$OcJobId/artifacts/$OcFile"
+$OcSha256  = '6EE9E8EB9BC59EF70BB0717DF7F99703F8A2CCD11D8E45D58A61F9A2E6EF7D00'
 
 function Test-IsAdmin {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -79,10 +91,14 @@ if ($ocPresent) {
     Write-Host "openconnect.exe already present: $ocPresent"
 } else {
     $installer = Join-Path $ToolsDir 'openconnect-installer.exe'
-    Write-Host 'Downloading OpenConnect installer (GitLab CI master build, 64-bit)...'
+    Write-Host "Downloading OpenConnect $OcVersion installer (GitLab CI tag build, 64-bit)..."
     Invoke-WebRequest -Uri $OcUrl -OutFile $installer -UseBasicParsing
     $ocHash = (Get-FileHash -Path $installer -Algorithm SHA256).Hash
-    Write-Host "Installer SHA256 (record it if you want a pin): $ocHash"
+    if ($ocHash -ne $OcSha256) {
+        Remove-Item $installer -Force
+        throw "OpenConnect installer hash mismatch: got $ocHash, expected $OcSha256 (pinned for $OcVersion)"
+    }
+    Write-Host 'OpenConnect installer hash verified.'
 
     if (Test-IsAdmin) {
         Write-Host 'Running the installer silently (/S)...'
@@ -104,7 +120,7 @@ if ($ocPresent) {
 
 # --- vpnc script check --------------------------------------------------------
 
-$vpnc = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'etc\vpnc-script-win.js'
+$vpnc = Join-Path (Split-Path -Parent $PSScriptRoot) 'etc\vpnc-script-win.js'
 if (Test-Path $vpnc) {
     Write-Host "vpnc script ok: $vpnc"
 } else {

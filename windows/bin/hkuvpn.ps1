@@ -186,7 +186,10 @@ function Find-OpenConnect {
     $candidates = @(
         (Join-Path $Script:ToolsDir 'openconnect.exe'),
         (Join-Path $env:ProgramFiles 'OpenConnect\openconnect.exe'),
-        (Join-Path $env:ProgramFiles 'OpenConnect\bin\openconnect.exe')
+        (Join-Path $env:ProgramFiles 'OpenConnect\bin\openconnect.exe'),
+        # Legacy location: older get-tools.ps1 created <repo>\tools instead of
+        # <repo>\windows\tools.
+        (Join-Path (Split-Path -Parent $Script:VpnHome) 'tools\openconnect.exe')
     )
     foreach ($c in $candidates) { if (Test-Path $c) { return $c } }
     $cmd = Get-Command openconnect.exe -ErrorAction SilentlyContinue
@@ -196,8 +199,12 @@ function Find-OpenConnect {
 
 function Find-Gost {
     if ($env:HKUVPN_GOST -and (Test-Path $env:HKUVPN_GOST)) { return $env:HKUVPN_GOST }
-    $c = Join-Path $Script:ToolsDir 'gost.exe'
-    if (Test-Path $c) { return $c }
+    $candidates = @(
+        (Join-Path $Script:ToolsDir 'gost.exe'),
+        # Legacy location (see Find-OpenConnect).
+        (Join-Path (Split-Path -Parent $Script:VpnHome) 'tools\gost.exe')
+    )
+    foreach ($c in $candidates) { if (Test-Path $c) { return $c } }
     $cmd = Get-Command gost.exe -ErrorAction SilentlyContinue
     if ($cmd) { return $cmd.Source }
     return $null
