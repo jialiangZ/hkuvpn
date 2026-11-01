@@ -1019,7 +1019,8 @@ function Find-AndConsume {
 }
 
 function Get-MfaCode {
-    param([bool]$Interactive, $OpenConnectProc)
+    param([bool]$Interactive, $OpenConnectProc,
+          [System.Text.StringBuilder]$LogBuffer, [string]$LogPath)
     if ($Interactive) {
         $code = $null
         while (-not ("$code" -match '^\d{6}$')) {
@@ -1039,6 +1040,17 @@ function Get-MfaCode {
             Write-Info 'Response file ignored (need exactly 6 digits); still waiting...'
         }
         if ($OpenConnectProc.HasExited) { return $null }
+        # Keep the log current while waiting, so "hkuvpn.ps1 --logs" shows what
+        # the gateway is saying (the wait blocks the main loop otherwise).
+        if ($LogBuffer -and $LogPath) {
+            try {
+                $txt = $LogBuffer.ToString()
+                if ($txt.Length -gt 0) {
+                    [IO.File]::AppendAllText($LogPath, $txt)
+                    $null = $LogBuffer.Clear()
+                }
+            } catch {}
+        }
         Start-Sleep -Milliseconds 500
     }
 }
@@ -1116,6 +1128,7 @@ function Invoke-TunnelWorker {
     $gostBufE = New-Object System.Text.StringBuilder
     $gostLog  = New-Object System.Text.StringBuilder
     $connected = $false
+    $mfaAttempts = 0
     $lastFlush = Get-Date
     $exitCode = 0
 
@@ -1155,7 +1168,15 @@ function Invoke-TunnelWorker {
             $rsOut = Find-AndConsume $outBuf 'Response:'
             $rsErr = Find-AndConsume $errBuf 'Response:'
             if ($rsOut -or $rsErr) {
-                $code = Get-MfaCode -Interactive $InteractiveMfa -OpenConnectProc $oc
+                if ($mfaAttempts -gt 0) {
+                    # The gateway rejected the previous code - most often it
+                    # was read from the Authenticator too late.
+                    Write-Err 'The previous MFA code was rejected; enter the current one.'
+                    Write-Marker ("HKUVPN_MFA_RETRY count={0}" -f $mfaAttempts)
+                }
+                $mfaAttempts++
+                $code = Get-MfaCode -Interactive $InteractiveMfa -OpenConnectProc $oc `
+                            -LogBuffer $logAll -LogPath $Script:LogFile
                 if (-not $code) { break }
                 $oc.StandardInput.WriteLine($code)
                 $oc.StandardInput.Flush()
