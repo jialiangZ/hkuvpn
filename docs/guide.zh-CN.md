@@ -1,4 +1,4 @@
-# Docker-VPN 使用指南
+# hkuvpn 使用指南
 
 [← 返回 README](../README.zh-CN.md) · [English](guide.en.md)
 
@@ -13,19 +13,19 @@
 
 ### 安装简短的 `hkuvpn` 命令
 
-[快速上手](../README.zh-CN.md#快速上手)直接调用 `~/docker-vpn/bin/hkuvpn`。日常使用时，可以根据 Shell 安装更短的 `hkuvpn` 命令。
+[快速上手](../README.zh-CN.md#快速上手)直接调用 `~/hkuvpn/bin/hkuvpn`。日常使用时，可以根据 Shell 安装更短的 `hkuvpn` 命令。
 
 Zsh：
 
 ```bash
-printf '\nsource ~/docker-vpn/examples/hkuvpn.zsh\n' >> ~/.zshrc
+printf '\nsource ~/hkuvpn/examples/hkuvpn.zsh\n' >> ~/.zshrc
 source ~/.zshrc
 ```
 
 Bash：
 
 ```bash
-printf '\nsource ~/docker-vpn/examples/hkuvpn.zsh\n' >> ~/.bashrc
+printf '\nsource ~/hkuvpn/examples/hkuvpn.zsh\n' >> ~/.bashrc
 source ~/.bashrc
 ```
 
@@ -33,32 +33,42 @@ Fish：
 
 ```fish
 mkdir -p ~/.config/fish/functions
-cp ~/docker-vpn/examples/hkuvpn.fish ~/.config/fish/functions/hkuvpn.fish
+cp ~/hkuvpn/examples/hkuvpn.fish ~/.config/fish/functions/hkuvpn.fish
 fish -n ~/.config/fish/functions/hkuvpn.fish
 ```
 
 不要把 Zsh 函数直接贴进 Fish。Fish 不使用 `export`、`VAR=value command`、POSIX `case` 和 POSIX 函数语法。
 
-仓库不在 `~/docker-vpn` 时：
+Windows 侧 PowerShell 的等价封装见 `examples/hkuvpn.ps1`：把该文件路径加入 `$PROFILE` dot-source 即可，`hkuvpn`/`hku-status`/`hku-stop` 三个函数与 Shell 版语义一致。
+
+仓库不在 `~/hkuvpn` 时，设置 `HKUVPN_HOME`（旧的 `DOCKER_VPN_HOME` 仍然兼容）：
 
 ```bash
-export DOCKER_VPN_HOME=/path/to/docker-vpn        # Zsh/Bash
+export HKUVPN_HOME=/path/to/hkuvpn        # Zsh/Bash
 ```
 
 ```fish
-set -Ux DOCKER_VPN_HOME /path/to/docker-vpn      # Fish
+set -Ux HKUVPN_HOME /path/to/hkuvpn      # Fish
 ```
 
 ### 日常命令
 
 ```bash
-hkuvpn              # 连接官方 vpn2fa.hku.hk 服务器
-hkuvpn --status
+hkuvpn              # 智能连接：预检→后台启动→提示输入 MFA→等隧道就绪→报告结果
+hkuvpn              # 已连接时再运行 = 直接报告当前状态（幂等）
+hkuvpn --check      # 只预检（Docker/配置/PIN/镜像/端口/时钟），退出码 0 即就绪
+hkuvpn -f           # 经典前台模式：在 Response: 提示处输 MFA，Ctrl+C 断开
+hkuvpn -d           # 后台连接但不提示，用 hkuvpn --mfa <code> 交付（脚本场景）
+hkuvpn --mfa 123456 # 向后台容器发送六位验证码
+hkuvpn --status     # 分层健康检查（docker/容器/隧道/代理/端到端）
+hkuvpn --logs       # 持续查看容器日志
 hkuvpn --stop
-hkuvpn --recover    # 只修复 Docker/Colima，不发起 MFA
+hkuvpn --recover    # 只修复 Docker 后端，不发起 MFA
 ```
 
-出现 `Response:` 后输入 Authenticator 当前六位验证码。使用期间保持终端开启；按 `Ctrl+C` 可停止前台容器。
+默认（无参数）即智能模式：已连接则直接报告状态；否则静默预检、后台启动、等到 MFA 提示出现后再让你输入验证码（不浪费有效期），发送后自动等待隧道建立并做端到端确认，成功才返回。**验证码输错或过期会当场重新提示，无需重来**。无终端 stdin（脚本/管道调用）时自动退化为 `-d` 手动模式。
+
+`--status` 逐层检查并返回可脚本化的退出码：`0` 全部正常，`1` Docker 不可用，`2` 容器未运行，`3` 隧道未建立，`4` 本地代理端口无监听，`5` 端到端探测失败。其中隧道层检查容器内默认路由是否经 `tun0`——只有路由已切换，后续代理流量才真正走 HKU 隧道。
 
 所有地区都使用 `vpn2fa.hku.hk`。旧命令 `hkuvpn hk` 和配置项 `HKU_ENDPOINT=hk` 仍作为兼容写法保留，但连接的也是同一个官方服务。如果证书获取或 TLS 失败，请检查现有代理客户端为控制连接选择的路径；从中国大陆连接时，稍后重试或改用其他合规网络可能会有帮助。
 
@@ -98,7 +108,7 @@ HKU_HTTP_PORT=11088
 
 ### 接入规则客户端
 
-Docker-VPN 只提供本地 HKU 上游。规则客户端并非必需，也不限于某一个产品；Clash Verge Rev、Surge、sing-box、Quantumult X、Loon，以及其他支持本地 SOCKS5/HTTP 出站和有序规则的客户端都可以使用。请先启动 `hkuvpn` 并确认 `1080/1088` 已经监听，再启用这些配置。
+hkuvpn 只提供本地 HKU 上游。规则客户端并非必需，也不限于某一个产品；Clash Verge Rev、Surge、sing-box、Quantumult X、Loon，以及其他支持本地 SOCKS5/HTTP 出站和有序规则的客户端都可以使用。请先启动 `hkuvpn` 并确认 `1080/1088` 已经监听，再启用这些配置。
 
 所有客户端都必须保持相同的规则顺序：
 
@@ -263,6 +273,8 @@ autossh -M 0 -N campus-host-tunnel
 
 容器入口现在启用详细时间戳和 30 分钟重连窗口。断连仍可能以 `CSTP Dead Peer Detection detected dead peer`、TLS read error、`Host is unreachable` 或 cookie 被拒绝结束。
 
+启动器默认在每次连接前通过 DoH（`1.1.1.1`，备用 `8.8.8.8`，均按 IP 直连）现查 `vpn2fa`、`vpn2fa-a`、`vpn2fa-b` 的真实地址并为本次会话固定（`HKU_AUTO_RESOLVE=0` 关闭）。这同时解决了下面手动 `HKU_RESOLVE` 针对的问题：控制连接不再经过本地解析器，也就不受宿主规则客户端 fake-IP DNS 的影响。查到的地址每次都是现值，不存在过期问题。
+
 如果首次跳转或重连后出现 TLS 失败、`401 Unauthorized` 或 cookie rejected，可能是 DNS 把会话切到了另一个 HKU 后端。高级用户可以在单次会话同时固定入口和两个官方跳转后端：
 
 ```ini
@@ -281,6 +293,8 @@ HKU_RESOLVE=vpn2fa.hku.hk:REAL_IP,vpn2fa-a.hku.hk:REAL_IP,vpn2fa-b.hku.hk:REAL_I
 
 `colima delete` 会删除本地镜像和容器，应当是最后手段，不是默认排查命令。
 
+Linux/WSL 上没有 Colima 一层：`--recover` 会尝试 `sudo -n systemctl start docker`（或 `service docker start`），无免密 sudo 时会打印需要手动执行的命令。WSL 开启 systemd 且 docker.service 为 enabled 时，发行版启动即自动拉起 Docker，通常无需手动 recover。
+
 #### 不依赖规则客户端
 
 便携启动器不会默认执行某个规则客户端的自动重载或策略切换，因为用户也可能使用其他客户端，或者完全不使用规则客户端。自行自动化时应保持三条约束：
@@ -288,6 +302,19 @@ HKU_RESOLVE=vpn2fa.hku.hk:REAL_IP,vpn2fa-a.hku.hk:REAL_IP,vpn2fa-b.hku.hk:REAL_I
 - HKU 隧道失效时，把 HKU 流量切到明确的 fallback，例如 `DIRECT` 或已有香港线路。
 - `vpn2fa.hku.hk`、`vpn2fa-a.hku.hk` 和 `vpn2fa-b.hku.hk` 绝不能进入 `HKU-SOCKS5`。
 - 只有 `1080/1088` 监听和 VPN 隧道都确认健康后，才恢复 HKU 组。
+
+### Windows / WSL
+
+> 原生方案：不想开 WSL 的话，[windows 原生移植](../windows/README.zh-CN.md)（实验性）用官方 OpenConnect Windows 版 + gost 直接在 Windows 上运行，无需 Docker/WSL。注意其分流模型与容器版略有差异。
+
+Docker 运行在 WSL 内（Docker Engine，推荐开启 systemd）时，除上面的通用内容外还需要注意：
+
+- **fake-IP DNS 污染**：Windows 上的规则客户端（Surge Enhanced Mode、Clash fake-IP 等）会劫持 DNS，其结果经 WSL 的 resolv.conf 传导进容器——`vpn2fa.hku.hk` 可能被解析成 `198.18.x.x` 假地址，导致控制连接隐式依赖规则客户端的转发行为。启动器默认的 DoH 自动固定（见上文）就是为了绕开这一点；也请确认规则客户端对 `vpn2fa*` 三个域名使用 DIRECT/HKU-CONTROL，避免环路。
+- **时钟漂移**：Windows 睡眠唤醒后 WSL 时钟可能偏差数分钟，导致 openconnect 报出难以理解的证书/TLS 错误。启动器会预检（偏差超过 120 秒时拒绝连接并提示）；修复方法是在 WSL 内执行 `sudo hwclock -s`，或等待系统自动重新对时。
+- **Windows 侧封装**：`examples/hkuvpn.ps1` 提供 PowerShell 函数（`hkuvpn`、`hku-status`、`hku-stop`），MFA 交互可透传；退出码语义见 `--status`。
+- **SSH 到校园主机**：`examples/ssh_config.wsl.example` 是 Windows 侧 `~/.ssh/config` 的标准写法——ProxyCommand 经 `wsl.exe` 在发行版内运行 ncat，再连 `127.0.0.1:1080`。该写法在任何 WSL 网络模式下都成立（不依赖回环互通），且 SOCKS5 远程解析让校园主机名在容器内、经 HKU 隧道解析，不受 Windows DNS 影响。
+- **回环互通模式的安全边界**：新式 WSL 网络模式（mirrored 及更新的共享回环模式）下，`127.0.0.1:1080/1088` 对整个 Windows 用户会话可见——安全边界是"本 Windows 用户"，而不只是 WSL 内。单用户机器可以接受，但不要把它理解成"仅本 WSL 可见"。
+- **`--recover`**：在 WSL/Linux 上会尝试用 `sudo -n systemctl start docker`（或 `service docker start`）拉起 Docker；无免密 sudo 时会给出明确提示。WSL 开启 systemd 且 docker.service 为 enabled 时，发行版启动即自动拉起 Docker，通常无需手动 recover。
 
 ### 常见故障
 
@@ -309,7 +336,20 @@ hkuvpn --recover
 rm ~/.vpn/pin-hk.cache
 ```
 
+前台连接时若因证书/TLS 错误失败，启动器会询问是否自动重取 pin 并重试一次（防止 HKU 轮换证书后留下过期的 pin cache）。
+
+#### WSL 中证书/TLS 错误（时钟漂移）
+
+Windows 睡眠唤醒后 WSL 时钟可能偏差数分钟，openconnect 会报证书类错误。启动器已预检（偏差超过 120 秒直接提示并停止），若手动排查：
+
+```bash
+curl -fsSI https://1.1.1.1 | grep -i ^date   # 对比本地时间
+sudo hwclock -s                               # 修复
+```
+
 #### 端口被占用
+
+`hkuvpn --check` 会直接探测端口占用并给出改端口的方法。手动排查：
 
 ```bash
 lsof -nP -iTCP:1080 -sTCP:LISTEN
@@ -330,23 +370,32 @@ ssh -G campus-host | grep -E 'proxycommand|hostname|port'
 
 仅看到 `autossh` 进程或 `colima status` 正常，不构成端到端成功证据。
 
+如果 `--status` 显示 tunnel up 但 e2e 失败，并提示"session looks frozen"（150 秒无心跳）：说明 **DTLS/UDP 数据通道在这条网络路径上不通**，openconnect 的 MTU 探测可能把会话卡死（tun0 存在、路由在、TCP 控制通道还活着，但零数据流动）。WSL 里 Windows 规则客户端对 UDP 的处理随节点/策略变化，是常见诱因。处理：
+
+```bash
+hkuvpn --stop
+# 在 ~/.vpn/hku.env 加 HKU_DTLS=0（或临时 HKU_DTLS=0 hkuvpn），强制走 TCP 通道后重连
+```
+
+SSH 等交互场景不受 TCP 通道的速度影响；需要大吞吐时再改回 DTLS 默认值。
+
 ### 安全说明
 
-- 本地代理只绑定主机回环地址。没有认证和防火墙时不要发布到 `0.0.0.0`。
+- 本地代理只绑定主机回环地址。没有认证和防火墙时不要发布到 `0.0.0.0`。注意：WSL 共享回环的网络模式下，回环端口对整个 Windows 用户会话可见（见上文 Windows / WSL 一节）。
 - Remote Forward 也只绑定远端回环地址；本场景不要启用 `GatewayPorts yes`。
-- `~/.vpn/hku.pass` 是明文，权限应为 `600`，电脑应启用全盘加密。
-- 有 Docker 权限的用户可查看容器环境变量，应把 Docker 权限视为高权限。
-- 容器需要 `NET_ADMIN` 和 `/dev/net/tun`，重建前应审查代码，不使用来历不明的镜像。
+- `~/.vpn/hku.pass` 是明文，权限应为 `600`，电脑应启用全盘加密。启动器通过只读单文件挂载把它送进容器（`/run/hku-pass`），PIN 不会出现在 `docker run` 参数、宿主机进程列表或 `docker inspect` 的环境变量里。
+- 有 Docker 权限的用户可查看容器配置，应把 Docker 权限视为高权限。
+- 容器按最小权限运行：`--cap-drop ALL --cap-add NET_ADMIN`（tun 和路由操作）与 `DAC_READ_SEARCH`（读取只读 PIN 挂载所需）、`--security-opt no-new-privileges`、pids/memory 上限，并直通 `/dev/net/tun`。重建前应审查代码，不使用来历不明的镜像。
 - 不要在 issue 或 commit 中提交真实校园主机、账号、证书 cache、日志、订阅 URL 和 SSH 私钥。
 
 ## 项目参考
 
 ### 工作原理
 
-1. 先运行 `hkuvpn`。容器建立 OpenConnect 隧道，并开放仅本机可访问的 SOCKS5 和 HTTP 监听端口。
+1. 先运行 `hkuvpn`。容器建立 OpenConnect 隧道，gost 以单进程开放仅本机可访问的 SOCKS5 和 HTTP 监听端口。
 2. 监听端口就绪后，再把其中一个地址填入应用、SSH 配置、浏览器或可选的分流客户端。
 3. 实际使用时，被配置选中的请求到达 `1080` 或 `1088`，进入容器，再通过 HKU AnyConnect 隧道传输。
-4. 分流客户端可以同时把所有非 HKU 请求发到 `DIRECT`、现有代理或 VPN，以及其他任意策略。除非用户明确为这些请求选择 HKU 上游，否则它们不会经过 Docker-VPN。
+4. 分流客户端可以同时把所有非 HKU 请求发到 `DIRECT`、现有代理或 VPN，以及其他任意策略。除非用户明确为这些请求选择 HKU 上游，否则它们不会经过 hkuvpn。
 
 这里的 Cisco AnyConnect 指服务端协议。HKU 连接并不启动 Cisco 官方桌面客户端，而是由容器内的 OpenConnect 建立，因此不会修改主机的全局默认路由。
 
@@ -356,12 +405,13 @@ ssh -G campus-host | grep -E 'proxycommand|hostname|port'
 |---|---|
 | macOS 容器环境 | Colima 或 Docker Desktop |
 | Linux 容器环境 | Docker Engine |
-| Windows | Docker Desktop + WSL2；由社区测试 |
-| Shell | Zsh、Bash 和 Fish |
+| Windows | Docker Desktop + WSL2，或 WSL 内原生 Docker Engine；详见[Windows / WSL](#windows--wsl) |
+| Shell | Zsh、Bash 和 Fish；Windows 侧提供 PowerShell 封装（`examples/hkuvpn.ps1`） |
 | 规则代理客户端 | 提供 Clash Verge Rev/Mihomo 和 Surge 示例；sing-box 等可采用同一分流模型 |
+| 镜像内本地代理 | gost 3.3.0（静态 Go 单二进制，单进程提供 SOCKS5 与 HTTP 监听） |
 | 当前 `alpine:3.23` 镜像内 OpenConnect | 9.21 |
 
-OpenConnect 在镜像内运行，因此不会使用主机上通过 Homebrew 安装的 OpenConnect。由于 Alpine 3.23 软件包仍是旧版，Dockerfile 会从官方发布源码构建 OpenConnect 9.21。构建在编译前同时校验固定的 SHA-256 摘要，以及与 OpenConnect 官方发布密钥指纹匹配的 PGP 签名。排查版本相关问题或准备升级版本时，请查看 [OpenConnect 官方 Releases](https://gitlab.com/openconnect/openconnect/-/releases)。
+OpenConnect 在镜像内运行，因此不会使用主机上通过 Homebrew 安装的 OpenConnect。由于 Alpine 3.23 软件包仍是旧版，Dockerfile 会从官方发布源码构建 OpenConnect 9.21。构建在编译前同时校验固定的 SHA-256 摘要，以及与 OpenConnect 官方发布密钥指纹匹配的 PGP 签名。编译配置只保留 HKU 用到的认证方式（表单密码 + 网页 MFA），不含 GSSAPI、SecurID（stoken）、OATH 与智能卡支持。排查版本相关问题或准备升级版本时，请查看 [OpenConnect 官方 Releases](https://gitlab.com/openconnect/openconnect/-/releases)。
 
 需要确认本地镜像实际安装的版本时执行：
 
@@ -369,14 +419,19 @@ OpenConnect 在镜像内运行，因此不会使用主机上通过 Homebrew 安�
 docker run --rm --entrypoint openconnect local/vpn --version
 ```
 
+除 OpenConnect 外，镜像的每一层构建输入同样有固定校验：`alpine` 基础镜像按 digest 固定；`vpnc-script` 不再在构建时拉取上游 master，而是 vendor 进仓库并在构建期校验 SHA-256（来源：openconnect/vpnc-scripts commit `ce9e961b`）；本地代理 gost 以 GitHub Releases 官方 checksums 固定版本与哈希（v3.3.0）。整个构建没有任何"拉最新"的外部输入，可复现。
+
 ### 便携核心与可选自动化
 
-Docker-VPN 的便携核心包括启动器、Shell 包装函数、路由示例和容器入口，不依赖规则客户端、tmux 或某一个特定终端应用。
+hkuvpn 的便携核心包括启动器、Shell 包装函数、路由示例和容器入口，不依赖规则客户端、tmux 或某一个特定终端应用。
 
 需要无人值守或长期运行时，可以按实际环境加入代理客户端 CLI 自动化、tmux 监控、macOS LaunchAgent 等系统服务，以及 `~/.vpn/logs/` 诊断日志。这些集成应保持可选和机器相关，确保基础 HKU 代理仍能配合其他代理客户端和 Docker 环境使用。
 
 ### 来源与许可证
 
-本项目基于 [ethack/docker-vpn](https://github.com/ethack/docker-vpn)，针对 HKU、OpenConnect MFA 和本机回环代理进行了改造。
+本项目基于 [ethack/docker-vpn](https://github.com/ethack/docker-vpn)，经由
+[rqhu1995/docker-vpn](https://github.com/rqhu1995/docker-vpn) 的 HKU 版改造而来，
+并针对 HKU、OpenConnect MFA、本机回环代理、授权资源自动路由，以及免 WSL/Docker
+的 Windows 原生运行做了进一步适配。
 
 仓库目前没有明确的 `LICENSE` 文件。Fork 并不自动产生授权；维护者应在邀请重新分发或外部贡献前选择兼容许可证，并加入完整许可证文本。

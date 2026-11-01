@@ -1,10 +1,10 @@
-# <img src="docs/images/docker-vpn-icon.png" width="44" alt="Docker-VPN icon"> Docker-VPN (HKU Edition)
+# <img src="docs/images/hkuvpn-icon.png" width="44" alt="hkuvpn icon"> hkuvpn
 
 **Access HKU's campus network while keeping your usual Internet connection.**
 
-[English](Readme.md) · [简体中文](README.zh-CN.md) · [Project website](https://rqhu1995.github.io/docker-vpn/) · [Full guide](docs/guide.en.md)
+[English](Readme.md) · [简体中文](README.zh-CN.md) · [Project website](https://jialiangZ.github.io/hkuvpn/) · [Full guide](docs/guide.en.md)
 
-Need campus resources, lab SSH, or remote desktop while your browser and AI tools keep using their usual connection? Docker-VPN runs the HKU VPN inside Docker and exposes a local proxy. You choose which requests enter the campus network; your host's default route stays unchanged.
+Need campus resources, lab SSH, or remote desktop while your browser and AI tools keep using their usual connection? hkuvpn runs the HKU VPN inside Docker — or natively on Windows, without WSL — and exposes a local proxy. You choose which requests enter the campus network; your host's default route stays unchanged.
 
 ## What can you use it for?
 
@@ -14,7 +14,7 @@ Need campus resources, lab SSH, or remote desktop while your browser and AI tool
 | SSH or remote desktop into a campus computer | Send that host's connections through HKU |
 | Give campus development tools access to your local proxy | Share your existing proxy over reverse SSH (advanced) |
 
-![Campus requests reach HKU through Docker-VPN; other requests keep their existing network or proxy](docs/images/routing-flow-en.png)
+![Campus requests reach HKU through hkuvpn; other requests keep their existing network or proxy](docs/images/routing-flow-en.png)
 
 OpenConnect establishes the VPN inside the container, and local SOCKS5 / HTTP ports provide access to it. **Set a proxy directly in an application, or add Clash or Surge for automatic routing by domain or IP.**
 
@@ -41,8 +41,8 @@ Docker Desktop also works. Use Docker Engine on Linux. On Windows, enable Docker
 Check that `docker info` works, then run:
 
 ```bash
-git clone https://github.com/rqhu1995/docker-vpn.git ~/docker-vpn
-cd ~/docker-vpn
+git clone https://github.com/jialiangZ/hkuvpn.git ~/hkuvpn
+cd ~/hkuvpn
 docker build -t local/vpn .
 ```
 
@@ -50,7 +50,7 @@ docker build -t local/vpn .
 
 ```bash
 mkdir -p ~/.vpn
-cp ~/docker-vpn/examples/hku.env.example ~/.vpn/hku.env
+cp ~/hkuvpn/examples/hku.env.example ~/.vpn/hku.env
 nano ~/.vpn/hku.env
 ```
 
@@ -67,10 +67,10 @@ Enter only your **static Portal PIN**, not the changing Authenticator code. In N
 ### 3. Connect and verify
 
 ```bash
-~/docker-vpn/bin/hkuvpn
+~/hkuvpn/bin/hkuvpn
 ```
 
-At `Response:`, enter the current six-digit Authenticator code. Keep the terminal open; `Ctrl+C` disconnects.
+Run `hkuvpn`; when the `MFA code` prompt appears, enter the current six-digit Authenticator code and wait for `Connected` — the proxy is then ready. A mistyped or expired code simply re-prompts. The classic foreground mode is `hkuvpn -f` (keep the terminal open; `Ctrl+C` disconnects).
 
 Test from a **second terminal**:
 
@@ -89,16 +89,24 @@ HTTP response headers confirm that the proxy request works; access to individual
 | Automatic routing with Clash Verge Rev / Mihomo | [Example](examples/clash-verge.yaml) · [Setup](docs/guide.en.md#clash-verge-rev--mihomo) |
 | Automatic routing with Surge | [Example](examples/surge.conf) · [Setup](docs/guide.en.md#surge) |
 | SSH / remote desktop | [Connect to a campus computer](docs/guide.en.md#ssh-and-remote-desktop) |
+| Windows / WSL | [PowerShell wrapper](examples/hkuvpn.ps1) · [SSH example](examples/ssh_config.wsl.example) · [Setup](docs/guide.en.md#windows--wsl) |
+| Windows native, no WSL | [Experimental port](windows/README.md) |
 
-The proxies listen on localhost and forward TCP traffic; `socks5h` also resolves DNS through the proxy. With a rules client, **the VPN servers themselves must use a direct connection or an existing proxy**, to avoid routing back into Docker-VPN. The examples include these rules.
+The proxies listen on localhost and forward TCP traffic; `socks5h` also resolves DNS through the proxy. With a rules client, **the VPN servers themselves must use a direct connection or an existing proxy**, to avoid routing back into hkuvpn. The examples include these rules.
 
 Everyday commands:
 
 ```bash
-~/docker-vpn/bin/hkuvpn            # connect
-~/docker-vpn/bin/hkuvpn --status   # check status
-~/docker-vpn/bin/hkuvpn --stop     # stop
-~/docker-vpn/bin/hkuvpn --recover  # repair Docker / Colima without MFA
+~/hkuvpn/bin/hkuvpn              # smart connect: prompts for MFA, waits for the tunnel
+~/hkuvpn/bin/hkuvpn              # run again while connected: reports status
+~/hkuvpn/bin/hkuvpn --check      # pre-flight check (exit 0 = ready)
+~/hkuvpn/bin/hkuvpn -f           # classic foreground connect
+~/hkuvpn/bin/hkuvpn -d           # background connect (waits for MFA readiness)
+~/hkuvpn/bin/hkuvpn --mfa <code> # deliver the code to the detached container
+~/hkuvpn/bin/hkuvpn --status     # layered health check (scriptable exit codes)
+~/hkuvpn/bin/hkuvpn --logs       # follow the container logs
+~/hkuvpn/bin/hkuvpn --stop       # stop
+~/hkuvpn/bin/hkuvpn --recover    # repair the Docker backend without MFA
 ```
 
 [Install the short `hkuvpn` command](docs/guide.en.md#install-the-short-hkuvpn-command) · [Change the default ports](docs/guide.en.md#use-a-proxy-directly)
@@ -115,4 +123,4 @@ Keep the HKU VPN, SSH tunnel, and existing local proxy running. This step is unn
 
 More: [Troubleshooting](docs/guide.en.md#troubleshooting) · [Security](docs/guide.en.md#security) · [Compatibility and versions](docs/guide.en.md#compatibility-and-versions)
 
-Adapted from [ethack/docker-vpn](https://github.com/ethack/docker-vpn). This repository has no `LICENSE` file; see [Credits and licensing](docs/guide.en.md#credits-and-licensing).
+Adapted from [ethack/docker-vpn](https://github.com/ethack/docker-vpn) via the HKU edition by [rqhu1995/docker-vpn](https://github.com/rqhu1995/docker-vpn). This repository has no `LICENSE` file; see [Credits and licensing](docs/guide.en.md#credits-and-licensing).

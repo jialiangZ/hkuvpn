@@ -1,0 +1,23 @@
+# Windows-side SSH config: merge into C:\Users\<you>\.ssh\config
+#
+# Routes campus SSH through the hkuvpn SOCKS5 proxy running inside WSL.
+# ncat itself executes inside the distro (where 127.0.0.1:1080 lives), so this
+# works in every WSL networking mode (NAT, mirrored, and shared-loopback
+# variants) without exposing the proxy on non-loopback addresses.
+#
+# ncat sends the campus hostname to the SOCKS5 proxy (remote resolution):
+# research32.saas.hku.hk is resolved inside the container through the HKU
+# tunnel, never by Windows or WSL DNS. That also makes it immune to fake-IP
+# results from a rule client (Surge/Clash) on the Windows host.
+#
+# Requires ncat inside the distro: sudo apt install nmap
+
+Host campus-host
+  HostName research32.saas.hku.hk
+  User yourname
+  IdentityFile ~/.ssh/research32_key
+  IdentitiesOnly yes
+  ProxyCommand C:/Windows/System32/wsl.exe -d Ubuntu -- ncat --proxy 127.0.0.1:1080 --proxy-type socks5 %h %p
+  ServerAliveInterval 30
+  ServerAliveCountMax 3
+  TCPKeepAlive yes

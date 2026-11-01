@@ -2,14 +2,34 @@
 
 set timeout -1
 
-foreach var {HKU_PASSWORD OC_USER OC_HOST OC_SERVERCERT} {
+foreach var {OC_USER OC_HOST OC_SERVERCERT} {
     if {![info exists env($var)]} {
         puts stderr "ERROR: environment variable $var is not set"
         exit 1
     }
 }
 
-set password $env(HKU_PASSWORD)
+# The PIN arrives through a read-only single-file mount (/run/hku-pass, backed
+# by ~/.vpn/hku.pass), so it never appears in `docker run` arguments,
+# `docker inspect`, or the host process list. HKU_PASSWORD remains supported
+# as a legacy fallback (e.g. for the poc/ variant). Re-read on every form
+# round so a restarted auth form can be answered again.
+proc load_pin {} {
+    if {[file exists /run/hku-pass]} {
+        set fh [open /run/hku-pass r]
+        set pin [string trim [read $fh]]
+        close $fh
+        if {$pin ne ""} { return $pin }
+        puts stderr "ERROR: /run/hku-pass is empty"
+    } elseif {[info exists env(HKU_PASSWORD)]} {
+        return $env(HKU_PASSWORD)
+    } else {
+        puts stderr "ERROR: no PIN available (expected the /run/hku-pass mount or HKU_PASSWORD)"
+    }
+    exit 1
+}
+set password [load_pin]
+
 set user $env(OC_USER)
 set host $env(OC_HOST)
 set servercert $env(OC_SERVERCERT)
@@ -101,12 +121,23 @@ proc wait_for_mfa_response {path} {
     }
 }
 
-# Start supervisord in background (manages pproxy: SOCKS:1080 / HTTP:1088)
-exec /usr/bin/supervisord --configuration=/etc/supervisord.conf --logfile=/dev/null >/dev/null 2>/dev/null &
+# gost in the background provides both listeners (SOCKS5 :1080 / HTTP :1088);
+# the shell loop restarts it within a second if it ever exits unexpectedly.
+exec /bin/sh -c {while :; do /usr/local/bin/gost -L socks5://:1080 -L http://:1088 >/dev/null 2>/dev/null; sleep 1; done} >/dev/null 2>/dev/null &
+
+# Optional OC_NO_DTLS=1 (HKU_DTLS=0 in ~/.vpn/hku.env) forces all data over
+# the CSTP/TCP channel: slower for bulk transfers, but immune to UDP-hostile
+# paths (e.g. a rules client mishandling UDP) that leave DTLS dead and can
+# wedge the session.
+set dtls_args {}
+if {[info exists env(OC_NO_DTLS)] && [string trim $env(OC_NO_DTLS)] eq "1"} {
+    set dtls_args {--no-dtls}
+}
 
 # Foreground: spawn openconnect with credentials from env
 spawn openconnect $host \
     {*}$resolve_args \
+    {*}$dtls_args \
     --user=$user \
     --useragent=AnyConnect \
     --servercert $servercert \
@@ -115,40 +146,57 @@ spawn openconnect $host \
     --reconnect-timeout=1800 \
     --no-external-auth
 
-expect {
-    -nocase "Password:" {
-        send "$password\r"
-    }
-    eof {
-        finish_with_openconnect_status "waiting for password prompt"
-    }
-}
-
-expect {
-    -nocase "Response:" {
-        if {$mfa_mode eq "terminal"} {
+if {$mfa_mode eq "terminal"} {
+    expect {
+        -nocase "Password:" {
+            send "$password\r"
             unset password
+        }
+        eof {
+            finish_with_openconnect_status "waiting for password prompt"
+        }
+    }
+    expect {
+        -nocase "Response:" {
             puts stderr "Enter the current MFA code at the Response prompt."
             interact
             finish_with_openconnect_status "interactive session"
-        } else {
-            set response [wait_for_mfa_response $response_file]
-            send "$response\r"
-            unset response
-            unset password
-            expect {
-                -nocase "CSTP connected" {
-                    enable_session_log
-                    expect eof
-                    finish_with_openconnect_status "connected session"
-                }
-                eof {
-                    finish_with_openconnect_status "waiting for tunnel after 2FA"
-                }
-            }
+        }
+        eof {
+            finish_with_openconnect_status "waiting for 2FA response prompt"
         }
     }
-    eof {
-        finish_with_openconnect_status "waiting for 2FA response prompt"
+} else {
+    # File mode: answer the auth form in a loop, so a rejected code (expired,
+    # typo) or a restarted form is handled without restarting the container.
+    expect {
+        -nocase "Password:" {
+            send "$password\r"
+        }
+        eof {
+            finish_with_openconnect_status "waiting for password prompt"
+        }
+    }
+    while {1} {
+        expect {
+            -nocase "Password:" {
+                send "$password\r"
+                exp_continue
+            }
+            -nocase "Response:" {
+                set response [wait_for_mfa_response $response_file]
+                send "$response\r"
+                unset response
+                exp_continue
+            }
+            -nocase "CSTP connected" {
+                enable_session_log
+                expect eof
+                finish_with_openconnect_status "connected session"
+            }
+            eof {
+                finish_with_openconnect_status "waiting for tunnel after 2FA"
+            }
+        }
     }
 }

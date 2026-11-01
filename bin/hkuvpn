@@ -2,22 +2,35 @@
 
 set -u
 
-VPN_HOME="${DOCKER_VPN_HOME:-$HOME/docker-vpn}"
+VPN_HOME="${HKUVPN_HOME:-${DOCKER_VPN_HOME:-$HOME/hkuvpn}}"
 CONFIG_DIR="${HKU_CONFIG_DIR:-$HOME/.vpn}"
 ENV_FILE="$CONFIG_DIR/hku.env"
 PASS_FILE="$CONFIG_DIR/hku.pass"
+PASS_MOUNT="/run/hku-pass"
 CONTAINER_NAME="vpn-hku"
 IMAGE_NAME="${HKU_IMAGE:-local/vpn}"
 EMPTY_SHA256_PIN="47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU="
+VPN_HOST="vpn2fa.hku.hk"
+CONTROL_HOSTS=("$VPN_HOST" vpn2fa-a.hku.hk vpn2fa-b.hku.hk)
 
 usage() {
     cat <<'EOF'
-Usage: hkuvpn [hk|--recover|--status|--stop]
+Usage: hkuvpn [hk|-f|--foreground|-d|--detach|--mfa CODE|--check|--status|--logs|--stop|--recover]
 
-  hk           Compatibility alias for the official HKUVPN server
-  --recover   Repair the Colima/Docker backend without requesting MFA
-  --status    Show container, proxy-port, and OpenConnect status
-  --stop      Stop the VPN container
+  (no arg) / hk   Smart connect: pre-flight, start in the background, prompt
+                  for the MFA code, wait until the tunnel is up. Running it
+                  again while connected just reports the status
+  -f, --foreground  Classic foreground connect (terminal MFA prompt; Ctrl+C stops)
+  -d, --detach    Background connect without prompting; deliver the code with
+                  'hkuvpn --mfa <code>' (for scripts; no-tty default)
+  --mfa CODE      Send the 6-digit Authenticator code to a detached container
+  --check         Pre-flight check (docker, config, PIN file, image, ports,
+                  clock). Exit 0 = ready to connect
+  --status        Layered health check. Exit codes: 0 all ok, 1 docker down,
+                  2 container down, 3 tunnel down, 4 proxy down, 5 e2e failed
+  --logs          Follow the container logs (docker logs -f vpn-hku)
+  --stop          Stop and remove the VPN container
+  --recover       Start the Docker backend (Colima or systemd service), no MFA
 EOF
 }
 
@@ -34,40 +47,103 @@ wait_for_docker() {
 recover_docker() {
     docker info >/dev/null 2>&1 && return 0
 
-    if ! command -v colima >/dev/null 2>&1; then
-        echo "Docker is unavailable and Colima is not installed." >&2
+    if command -v colima >/dev/null 2>&1; then
+        echo "Docker is unavailable; starting Colima..."
+        colima start --cpu 2 --memory 2 --disk 20 --vm-type vz --mount-type virtiofs || true
+        wait_for_docker && return 0
+        echo "Docker is still unavailable; restarting Colima..."
+        colima restart || return 1
+        wait_for_docker
+        return $?
+    fi
+
+    if command -v systemctl >/dev/null 2>&1; then
+        echo "Docker is unavailable; trying to start docker.service (needs passwordless sudo)..."
+        if sudo -n systemctl start docker >/dev/null 2>&1; then
+            wait_for_docker && return 0
+        fi
+        echo "Could not start docker.service automatically. Run: sudo systemctl start docker" >&2
         return 1
     fi
 
-    echo "Docker is unavailable; starting Colima..."
-    colima start --cpu 2 --memory 2 --disk 20 --vm-type vz --mount-type virtiofs || true
-    wait_for_docker && return 0
+    if command -v service >/dev/null 2>&1; then
+        echo "Docker is unavailable; trying 'service docker start' (needs passwordless sudo)..."
+        if sudo -n service docker start >/dev/null 2>&1; then
+            wait_for_docker && return 0
+        fi
+        echo "Could not start docker automatically. Run: sudo service docker start" >&2
+        return 1
+    fi
 
-    echo "Docker is still unavailable; restarting Colima..."
-    colima restart || return 1
-    wait_for_docker
+    echo "Docker is unavailable and no supported backend was found." >&2
+    return 1
 }
 
-show_status() {
-    if ! docker info >/dev/null 2>&1; then
-        echo "Docker: unavailable"
+doh_resolve() {
+    # DNS-over-HTTPS against IP-literal endpoints, so a polluted local
+    # resolver (e.g. a fake-IP rule client on the Windows host leaking into
+    # WSL) is never consulted. Prints the first IPv4 answer, or fails.
+    local host="$1" endpoint ip resp
+    for endpoint in "1.1.1.1/dns-query" "8.8.8.8/resolve"; do
+        resp=$(curl -fsS -m 6 "https://${endpoint}?name=${host}&type=A" \
+            -H 'accept: application/dns-json' 2>/dev/null) || continue
+        ip=$(printf '%s' "$resp" \
+            | grep -oE '"data":"[0-9]{1,3}(\.[0-9]{1,3}){3}"' \
+            | head -n1 | grep -oE '[0-9]{1,3}(\.[0-9]{1,3}){3}')
+        [[ -n "$ip" ]] && { printf '%s\n' "$ip"; return 0; }
+    done
+    return 1
+}
+
+auto_resolve_control_hosts() {
+    # Prints "host:ip,host:ip,..." for every control host that resolves now;
+    # fresh lookups per run, so nothing goes stale.
+    local out="" host ip
+    for host in "${CONTROL_HOSTS[@]}"; do
+        if ip=$(doh_resolve "$host"); then
+            out="${out:+$out,}$host:$ip"
+        else
+            echo "DoH: could not resolve $host" >&2
+        fi
+    done
+    printf '%s' "$out"
+}
+
+check_clock_sync() {
+    # WSL clocks drift after the Windows host sleeps; the resulting TLS
+    # failures look like certificate errors. Compare against an HTTP Date
+    # header fetched by IP literal; skip silently when it cannot be checked.
+    local http_date now_remote now_local drift
+    http_date=$(curl -fsSI -m 5 https://1.1.1.1 2>/dev/null \
+        | awk 'tolower($1)=="date:"{sub(/^[Dd]ate:[ \t]*/,"");print;exit}')
+    [[ -n "$http_date" ]] || return 0
+    now_remote=$(date -u -d "$http_date" +%s 2>/dev/null) || return 0
+    now_local=$(date -u +%s)
+    if ((now_remote > now_local)); then
+        drift=$((now_remote - now_local))
+    else
+        drift=$((now_local - now_remote))
+    fi
+    if ((drift > 120)); then
+        echo "ERROR: system clock is ${drift}s off from internet time (common in WSL after the Windows host sleeps)." >&2
+        echo "TLS will fail until it is fixed. Inside WSL run: sudo hwclock -s" >&2
         return 1
     fi
-
-    docker ps -a --filter "name=^/${CONTAINER_NAME}$" \
-        --format 'container={{.Names}} status={{.Status}} ports={{.Ports}}'
-    if docker ps --filter "name=^/${CONTAINER_NAME}$" --format '{{.Names}}' | grep -qx "$CONTAINER_NAME"; then
-        docker exec "$CONTAINER_NAME" openconnect --version 2>&1 | head -n 1
-    fi
+    return 0
 }
 
 fetch_certificate_pin() {
-    local host="$1"
-    local cache_file="$2"
-    local cert_file pin
+    # $1 = hostname (used for SNI), $2 = optional IP to connect to (avoids
+    # polluted local DNS), $3 = cache file.
+    local host="$1" connect_ip="${2:-}" cache_file="$3" cert_file pin target
+    if [[ -n "$connect_ip" ]]; then
+        target="${connect_ip}:443"
+    else
+        target="${host}:443"
+    fi
 
     cert_file=$(mktemp "$CONFIG_DIR/hku-cert.XXXXXX") || return 1
-    if ! echo | openssl s_client -connect "$host:443" -servername "$host" \
+    if ! echo | openssl s_client -connect "$target" -servername "$host" \
         >"$cert_file" 2>/dev/null; then
         rm -f "$cert_file"
         return 1
@@ -85,6 +161,191 @@ fetch_certificate_pin() {
 
     printf 'pin-sha256:%s\n' "$pin" >"$cache_file"
     chmod 600 "$cache_file"
+}
+
+show_status() {
+    local socks_port=1080 env_port http_code rc
+
+    if ! docker info >/dev/null 2>&1; then
+        echo "docker   : unavailable"
+        return 1
+    fi
+    echo "docker   : ok"
+
+    if ! docker ps --filter "name=^/${CONTAINER_NAME}$" --format '{{.Names}}' \
+        | grep -qx "$CONTAINER_NAME"; then
+        echo "container: not running"
+        docker ps -a --filter "name=^/${CONTAINER_NAME}$" \
+            --format 'container={{.Names}} status={{.Status}}' >&2 || true
+        return 2
+    fi
+    echo "container: up"
+
+    # A default route via tun0 proves the tunnel carries proxied traffic;
+    # without it, pproxy would forward straight out of the container.
+    if ! docker exec "$CONTAINER_NAME" ip route show default 2>/dev/null \
+        | grep -q 'dev tun0'; then
+        echo "tunnel   : down (no default route via tun0; still authenticating, or the session failed)"
+        return 3
+    fi
+    echo "tunnel   : up (default route via tun0)"
+
+    if [[ -r "$ENV_FILE" ]]; then
+        env_port=$(grep -E '^HKU_SOCKS_PORT=' "$ENV_FILE" | tail -n1 | cut -d= -f2)
+        [[ -n "$env_port" ]] && socks_port="$env_port"
+    fi
+
+    http_code=$(curl -s -m 10 -x "socks5h://127.0.0.1:${socks_port}" \
+        -o /dev/null -w '%{http_code}' https://www.hku.hk/ 2>/dev/null)
+    rc=$?
+    if ((rc == 7 || rc == 111)); then
+        echo "proxy    : down (nothing listening on 127.0.0.1:${socks_port})"
+        return 4
+    fi
+    if [[ "$http_code" =~ ^[23] ]]; then
+        echo "proxy    : ok (127.0.0.1:${socks_port})"
+        echo "e2e      : ok (https://www.hku.hk -> HTTP ${http_code} through the HKU tunnel)"
+        return 0
+    fi
+    echo "e2e      : failed (curl rc=${rc}, http=${http_code:-none})"
+    if ! docker logs --since 150s "$CONTAINER_NAME" 2>&1 \
+        | grep -qE 'Keepalive|DPD'; then
+        echo "           the session looks frozen (no keepalives for 150s) - a dead"
+        echo "           DTLS/UDP path can wedge it. Stop, then reconnect with:"
+        echo "           HKU_DTLS=0 hkuvpn   (or set HKU_DTLS=0 in ~/.vpn/hku.env)"
+    fi
+    return 5
+}
+
+container_running() {
+    docker ps --filter "name=^/${CONTAINER_NAME}$" --format '{{.Names}}' \
+        | grep -qx "$CONTAINER_NAME"
+}
+
+tunnel_up() {
+    docker exec "$CONTAINER_NAME" ip route show default 2>/dev/null \
+        | grep -q 'dev tun0'
+}
+
+send_mfa() {
+    local code="$1"
+    if [[ ! "$code" =~ ^[0-9]{6}$ ]]; then
+        echo "MFA code must be exactly 6 digits." >&2
+        return 2
+    fi
+    if ! docker ps --filter "name=^/${CONTAINER_NAME}$" --format '{{.Names}}' \
+        | grep -qx "$CONTAINER_NAME"; then
+        echo "Container $CONTAINER_NAME is not running. Start it first: hkuvpn -d" >&2
+        return 1
+    fi
+    if ! docker exec "$CONTAINER_NAME" sh -c \
+        'printf %s "$1" > /run/hkuvpn-response.tmp && mv /run/hkuvpn-response.tmp /run/hkuvpn-response' \
+        sh "$code"; then
+        echo "Could not deliver the MFA code to the container." >&2
+        return 1
+    fi
+    echo "MFA code delivered to $CONTAINER_NAME."
+    return 0
+}
+
+port_is_free() {
+    # $1 = port. curl exit 7 (connection refused) means nothing listens;
+    # a live listener answers, garbles, or times out - all non-7.
+    local rc
+    curl -s -m 1 -o /dev/null "http://127.0.0.1:${1}/" 2>/dev/null
+    rc=$?
+    ((rc == 7))
+}
+
+run_preflight() {
+    local failures=0 user ports socks_port http_port perm
+    local container_running=no
+    socks_port=1080
+    http_port=1088
+
+    if ! docker info >/dev/null 2>&1; then
+        echo "docker   : unavailable (try: hkuvpn --recover)" >&2
+        return 1
+    fi
+    echo "docker   : ok"
+
+    if [[ ! -r "$ENV_FILE" ]]; then
+        echo "config   : missing ($ENV_FILE)" >&2
+        failures=$((failures + 1))
+    elif ! bash -c 'source "$1"' _ "$ENV_FILE" 2>/dev/null; then
+        echo "config   : syntax error in $ENV_FILE" >&2
+        failures=$((failures + 1))
+    else
+        user=$(bash -c 'set -a; source "$1" 2>/dev/null; printf "%s" "${HKU_USER:-}"' _ "$ENV_FILE")
+        ports=$(bash -c 'set -a; source "$1" 2>/dev/null; printf "%s %s" "${HKU_SOCKS_PORT:-1080}" "${HKU_HTTP_PORT:-1088}"' _ "$ENV_FILE")
+        socks_port=${ports% *}
+        http_port=${ports#* }
+        if [[ -n "$user" && "$user" != youruid@* ]]; then
+            echo "config   : ok (HKU_USER=$user)"
+        else
+            echo "config   : HKU_USER missing or still the placeholder in $ENV_FILE" >&2
+            failures=$((failures + 1))
+        fi
+    fi
+
+    if [[ -r "$PASS_FILE" ]]; then
+        if [[ -s "$PASS_FILE" ]]; then
+            perm=$(stat -c '%a' "$PASS_FILE" 2>/dev/null || stat -f '%Lp' "$PASS_FILE" 2>/dev/null)
+            if [[ "$perm" == "600" ]]; then
+                echo "pin file : ok (mode 600)"
+            else
+                echo "pin file : WARNING - mode ${perm:-unknown}, expected 600 (chmod 600 $PASS_FILE)"
+            fi
+        else
+            echo "pin file : empty ($PASS_FILE)" >&2
+            failures=$((failures + 1))
+        fi
+    else
+        echo "pin file : missing ($PASS_FILE)" >&2
+        failures=$((failures + 1))
+    fi
+
+    if docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
+        echo "image    : ok ($IMAGE_NAME)"
+    else
+        echo "image    : missing - build it: docker build -t $IMAGE_NAME $VPN_HOME" >&2
+        failures=$((failures + 1))
+    fi
+
+    if docker ps --filter "name=^/${CONTAINER_NAME}$" --format '{{.Names}}' \
+        | grep -qx "$CONTAINER_NAME"; then
+        container_running=yes
+    fi
+    if [[ "$container_running" == yes ]]; then
+        echo "ports    : 127.0.0.1:${socks_port}/${http_port} held by the running $CONTAINER_NAME (hkuvpn --status verifies health)"
+    elif port_is_free "$socks_port" && port_is_free "$http_port"; then
+        echo "ports    : 127.0.0.1:${socks_port} and ${http_port} free"
+    else
+        port_is_free "$socks_port" \
+            || echo "ports    : 127.0.0.1:${socks_port} in use (set HKU_SOCKS_PORT in $ENV_FILE)" >&2
+        port_is_free "$http_port" \
+            || echo "ports    : 127.0.0.1:${http_port} in use (set HKU_HTTP_PORT in $ENV_FILE)" >&2
+        failures=$((failures + 1))
+    fi
+
+    if check_clock_sync; then
+        echo "clock    : ok"
+    else
+        failures=$((failures + 1))
+    fi
+
+    if [[ -r "$CONFIG_DIR/pin-hk.cache" ]]; then
+        echo "cert pin : cached (reused at connect)"
+    else
+        echo "cert pin : not cached (fetched at connect)"
+    fi
+
+    if ((failures > 0)); then
+        echo "result   : NOT ready - ${failures} problem(s) listed above" >&2
+        return 1
+    fi
+    echo "result   : ready to connect (hkuvpn or hkuvpn -d)"
+    return 0
 }
 
 command_name="${1:-}"
@@ -105,9 +366,24 @@ case "$command_name" in
         show_status
         exit $?
         ;;
+    --check)
+        run_preflight
+        exit $?
+        ;;
+    --logs)
+        exec docker logs -f "$CONTAINER_NAME"
+        ;;
     --stop)
         docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
         echo "HKU VPN stopped."
+        exit 0
+        ;;
+    --mfa)
+        if [[ $# -lt 2 ]]; then
+            echo "Usage: hkuvpn --mfa <6-digit-code>" >&2
+            exit 2
+        fi
+        send_mfa "$2" || exit $?
         exit 0
         ;;
     cn)
@@ -115,7 +391,7 @@ case "$command_name" in
         echo "Run hkuvpn without an endpoint to use vpn2fa.hku.hk." >&2
         exit 2
         ;;
-    ""|hk)
+    ""|hk|-d|--detach|-f|--foreground)
         ;;
     *)
         echo "Unknown argument: $command_name" >&2
@@ -124,10 +400,34 @@ case "$command_name" in
         ;;
 esac
 
+mode=smart
+case "$command_name" in
+    -d|--detach) mode=detach ;;
+    -f|--foreground) mode=foreground ;;
+esac
+if [[ "$mode" == smart && ! -t 0 ]]; then
+    mode=detach
+fi
+
+if [[ "$mode" == smart ]]; then
+    if status_out=$(show_status 2>/dev/null); then
+        echo "Already connected:"
+        echo "$status_out"
+        exit 0
+    fi
+fi
+
 recover_docker || {
-    echo "Unable to reach Docker. Run 'hkuvpn --recover' and inspect 'colima status'." >&2
+    echo "Unable to reach Docker. Run 'hkuvpn --recover' and inspect 'docker info'." >&2
     exit 1
 }
+
+if [[ "$mode" == smart ]]; then
+    pre=$(run_preflight 2>&1) || {
+        printf '%s\n' "$pre" >&2
+        exit 1
+    }
+fi
 
 if [[ ! -r "$ENV_FILE" ]]; then
     echo "Missing configuration: $ENV_FILE" >&2
@@ -138,10 +438,14 @@ if [[ ! -r "$PASS_FILE" ]]; then
     echo "Missing password file: $PASS_FILE" >&2
     exit 1
 fi
+case "$PASS_FILE" in
+    /*) ;;
+    *) PASS_FILE="$PWD/$PASS_FILE" ;;
+esac
 
 # The template contains simple KEY=VALUE assignments only.
-# shellcheck disable=SC1090
 set -a
+# shellcheck disable=SC1090
 if ! source "$ENV_FILE"; then
     set +a
     echo "Could not load $ENV_FILE." >&2
@@ -154,28 +458,47 @@ if [[ -z "${HKU_USER:-}" ]] || [[ "$HKU_USER" == youruid@* ]]; then
     exit 1
 fi
 
-endpoint="${command_name:-${HKU_ENDPOINT:-hk}}"
-case "$endpoint" in
-    hk) host="vpn2fa.hku.hk" ;;
+case "${HKU_ENDPOINT:-hk}" in
+    hk) ;;
     *)
         echo "Only the official HKUVPN server vpn2fa.hku.hk is supported." >&2
         echo "Remove the HKU_ENDPOINT setting from $ENV_FILE and run hkuvpn again." >&2
         exit 2
         ;;
 esac
+host="$VPN_HOST"
 
 socks_port="${HKU_SOCKS_PORT:-1080}"
 http_port="${HKU_HTTP_PORT:-1088}"
-pin_cache="$CONFIG_DIR/pin-$endpoint.cache"
-servercert=""
+pin_cache="$CONFIG_DIR/pin-hk.cache"
 
+check_clock_sync || exit 1
+
+resolve_spec="${HKU_RESOLVE:-}"
+if [[ -z "$resolve_spec" ]] && [[ "${HKU_AUTO_RESOLVE:-1}" != "0" ]]; then
+    echo "Resolving HKU control endpoints over DoH (immune to local fake-IP DNS)..."
+    resolve_spec=$(auto_resolve_control_hosts)
+    if [[ -n "$resolve_spec" ]]; then
+        echo "Pinned for this session: $resolve_spec"
+    else
+        echo "DoH resolution failed everywhere; continuing with normal DNS." >&2
+    fi
+fi
+
+primary_ip=""
+if [[ "$resolve_spec" == "${VPN_HOST}:"* ]]; then
+    primary_ip="${resolve_spec#"${VPN_HOST}:"}"
+    primary_ip="${primary_ip%%,*}"
+fi
+
+servercert=""
 if [[ -r "$pin_cache" ]]; then
     servercert=$(tr -d '\r\n' <"$pin_cache")
 fi
 if [[ ! "$servercert" =~ ^pin-sha256:[A-Za-z0-9+/]{43}=$ ]] \
     || [[ "$servercert" == "pin-sha256:$EMPTY_SHA256_PIN" ]]; then
     echo "Fetching the certificate pin for $host..."
-    if ! fetch_certificate_pin "$host" "$pin_cache"; then
+    if ! fetch_certificate_pin "$host" "$primary_ip" "$pin_cache"; then
         echo "Could not obtain a valid certificate from $host." >&2
         echo "Check the route or inspect your proxy-client control rule." >&2
         exit 1
@@ -183,26 +506,171 @@ if [[ ! "$servercert" =~ ^pin-sha256:[A-Za-z0-9+/]{43}=$ ]] \
     servercert=$(tr -d '\r\n' <"$pin_cache")
 fi
 
-resolve_args=()
-if [[ -n "${HKU_RESOLVE:-}" ]]; then
-    resolve_args=(-e "OC_RESOLVE=$HKU_RESOLVE")
+# The PIN travels as a read-only single-file mount: it never appears in the
+# `docker run` command line, the host process list, or `docker inspect` env.
+# DAC_READ_SEARCH is required to read that 0600 host-owned file as container
+# root; NET_ADMIN covers the tun device and route setup inside the tunnel.
+docker_args=(
+    --name "$CONTAINER_NAME"
+    --hostname "$CONTAINER_NAME"
+    --cap-drop ALL
+    --cap-add NET_ADMIN
+    --cap-add DAC_READ_SEARCH
+    --security-opt no-new-privileges
+    --pids-limit 128
+    --memory 256m
+    --device /dev/net/tun
+    --publish "127.0.0.1:$socks_port:1080"
+    --publish "127.0.0.1:$http_port:1088"
+    --volume "$PASS_FILE:$PASS_MOUNT:ro"
+    -e "OC_USER=$HKU_USER"
+    -e "OC_HOST=$host"
+    -e "OC_SERVERCERT=$servercert"
+)
+if [[ -n "$resolve_spec" ]]; then
+    docker_args+=(-e "OC_RESOLVE=$resolve_spec")
+fi
+if [[ "${HKU_DTLS:-1}" == "0" ]]; then
+    docker_args+=(-e OC_NO_DTLS=1)
 fi
 
 echo "Server: $host"
 echo "Local proxies: SOCKS5=127.0.0.1:$socks_port HTTP=127.0.0.1:$http_port"
 
 docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
-exec docker run --rm -it \
-    --name "$CONTAINER_NAME" \
-    --hostname "$CONTAINER_NAME" \
-    --cap-add NET_ADMIN \
-    --device /dev/net/tun \
-    --publish "127.0.0.1:$socks_port:1080" \
-    --publish "127.0.0.1:$http_port:1088" \
-    -e "HKU_PASSWORD=$(cat "$PASS_FILE")" \
-    -e "OC_USER=$HKU_USER" \
-    -e "OC_HOST=$host" \
-    -e "OC_SERVERCERT=$servercert" \
-    -e "OC_MFA_MODE=terminal" \
-    ${resolve_args[@]+"${resolve_args[@]}"} \
-    "$IMAGE_NAME"
+
+if [[ "$mode" != foreground ]]; then
+    if ! docker run -d -e OC_MFA_MODE=file "${docker_args[@]}" "$IMAGE_NAME" >/dev/null; then
+        echo "Failed to start the container." >&2
+        exit 1
+    fi
+
+    if [[ "$mode" == detach ]]; then
+        printf 'Waiting for the MFA prompt'
+        ready=0
+        for _ in $(seq 1 30); do
+            if docker logs "$CONTAINER_NAME" 2>&1 \
+                | grep -q 'HKUVPN_MFA_RESPONSE_REQUIRED'; then
+                ready=1
+                break
+            fi
+            printf '.'
+            sleep 0.5
+        done
+        echo ""
+        if ((ready)); then
+            echo "Ready: $CONTAINER_NAME is waiting for the MFA code."
+            echo "  Send code   : hkuvpn --mfa <6-digit-code> (generate it now)"
+        else
+            echo "The MFA prompt did not appear within 15s; the login may have failed early."
+            echo "  Inspect     : docker logs -f $CONTAINER_NAME"
+        fi
+        echo "  Follow logs : hkuvpn --logs"
+        echo "  Stop        : hkuvpn --stop"
+        exit 0
+    fi
+
+    # smart mode: interactive MFA delivery, then wait for the tunnel
+    echo "Started $CONTAINER_NAME; waiting for the MFA prompt..."
+    mfa_ready=0
+    for ((i = 0; i < 30; i++)); do
+        if docker logs "$CONTAINER_NAME" 2>&1 \
+            | grep -q 'HKUVPN_MFA_RESPONSE_REQUIRED'; then
+            mfa_ready=1
+            break
+        fi
+        container_running || break
+        sleep 0.5
+    done
+    if ((mfa_ready == 0)); then
+        echo "The MFA prompt did not appear; recent logs:" >&2
+        docker logs --tail 15 "$CONTAINER_NAME" 1>&2 || true
+        exit 1
+    fi
+
+    while :; do
+        code=""
+        while [[ ! "$code" =~ ^[0-9]{6}$ ]]; do
+            printf 'MFA code (6 digits from Authenticator): '
+            read -r code || {
+                printf '\nInput closed - deliver the code later with: hkuvpn --mfa <code>\n'
+                exit 0
+            }
+            [[ "$code" =~ ^[0-9]{6}$ ]] || echo "Need exactly 6 digits, try again." >&2
+        done
+        sent_at=$(date +%s)
+        send_mfa "$code" >/dev/null || exit 1
+        echo "Code sent; waiting for the tunnel..."
+        outcome=timeout
+        for ((i = 0; i < 30; i++)); do
+            container_running || { outcome=died; break; }
+            tunnel_up && { outcome=tunnel; break; }
+            if docker logs --since "$sent_at" "$CONTAINER_NAME" 2>&1 \
+                | grep -q 'HKUVPN_MFA_RESPONSE_REQUIRED'; then
+                outcome=again
+                break
+            fi
+            sleep 1
+        done
+        case "$outcome" in
+            tunnel)
+                http_code=$(curl -s -m 10 -x "socks5h://127.0.0.1:${socks_port}" \
+                    -o /dev/null -w '%{http_code}' https://www.hku.hk/ 2>/dev/null)
+                echo ""
+                echo "Connected - tunnel up and proxying (e2e HTTP ${http_code:-000})."
+                echo "  Check : hkuvpn --status"
+                echo "  Logs  : hkuvpn --logs"
+                echo "  Stop  : hkuvpn --stop"
+                exit 0
+                ;;
+            again)
+                echo "That code was rejected or expired; enter a fresh one." >&2
+                ;;
+            died)
+                echo "The connection exited; recent logs:" >&2
+                docker logs --tail 15 "$CONTAINER_NAME" 1>&2 || true
+                exit 1
+                ;;
+            *)
+                echo "No progress within 30s; inspect with: hkuvpn --logs" >&2
+                exit 1
+                ;;
+        esac
+    done
+fi
+
+attempt=1
+while :; do
+    session_log=$(mktemp "${TMPDIR:-/tmp}/hkuvpn-session.XXXXXX")
+    docker run --rm -it -e OC_MFA_MODE=terminal "${docker_args[@]}" "$IMAGE_NAME" 2>&1 | tee "$session_log"
+    rc=${PIPESTATUS[0]}
+
+    if ((rc == 0)) || ((attempt >= 2)); then
+        rm -f "$session_log"
+        exit "$rc"
+    fi
+    attempt=$((attempt + 1))
+
+    if ! tail -n 25 "$session_log" | grep -qiE 'certificate|SSL|TLS'; then
+        rm -f "$session_log"
+        exit "$rc"
+    fi
+    rm -f "$session_log"
+    echo "" >&2
+    echo "The connection failed with a certificate/TLS error; the pinned HKU certificate may have changed." >&2
+    printf 'Refresh the pin and retry once? [y/N] '
+    read -r answer
+    if [[ ! "$answer" =~ ^[Yy] ]]; then
+        exit "$rc"
+    fi
+    rm -f "$pin_cache"
+    if ! fetch_certificate_pin "$host" "$primary_ip" "$pin_cache"; then
+        echo "Could not fetch a new certificate pin." >&2
+        exit "$rc"
+    fi
+    servercert=$(tr -d '\r\n' <"$pin_cache")
+    for i in "${!docker_args[@]}"; do
+        [[ "${docker_args[$i]}" == "OC_SERVERCERT="* ]] && docker_args[i]="OC_SERVERCERT=$servercert"
+    done
+    echo "Certificate pin refreshed; retrying..."
+done

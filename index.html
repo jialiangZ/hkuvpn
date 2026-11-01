@@ -7,39 +7,39 @@
     <meta name="robots" content="index, follow, max-image-preview:large">
     <meta name="theme-color" content="#047857">
 
-    <title>Docker VPN for HKU | OpenConnect Split Tunneling</title>
-    <meta name="description" content="Run HKU VPN inside Docker with OpenConnect and MFA, then use loopback-only SOCKS5 and HTTP proxies for HKU Library, campus SSH, and remote desktop.">
-    <link rel="canonical" href="https://rqhu1995.github.io/docker-vpn/">
-    <link rel="icon" type="image/png" href="docs/images/docker-vpn-icon.png">
+    <title>hkuvpn — HKU campus VPN | OpenConnect Split Tunneling</title>
+    <meta name="description" content="Run HKU VPN inside Docker or natively on Windows with OpenConnect and MFA, then use loopback-only SOCKS5 and HTTP proxies for HKU Library, campus SSH, and remote desktop.">
+    <link rel="canonical" href="https://jialiangZ.github.io/hkuvpn/">
+    <link rel="icon" type="image/png" href="docs/images/hkuvpn-icon.png">
 
     <meta property="og:type" content="website">
     <meta property="og:locale" content="en_US">
-    <meta property="og:site_name" content="Docker-VPN (HKU Edition)">
-    <meta property="og:title" content="Docker VPN for HKU">
+    <meta property="og:site_name" content="hkuvpn">
+    <meta property="og:title" content="hkuvpn — HKU campus VPN">
     <meta property="og:description" content="Selective HKU VPN access through local SOCKS5 and HTTP proxies, without replacing the host default route.">
-    <meta property="og:url" content="https://rqhu1995.github.io/docker-vpn/">
-    <meta property="og:image" content="https://rqhu1995.github.io/docker-vpn/docs/images/routing-flow-en.png">
-    <meta property="og:image:alt" content="Docker-VPN routing flow from local applications to HKU resources">
+    <meta property="og:url" content="https://jialiangZ.github.io/hkuvpn/">
+    <meta property="og:image" content="https://jialiangZ.github.io/hkuvpn/docs/images/routing-flow-en.png">
+    <meta property="og:image:alt" content="hkuvpn routing flow from local applications to HKU resources">
 
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Docker VPN for HKU">
-    <meta name="twitter:description" content="OpenConnect MFA in Docker with local SOCKS5 and HTTP split-tunneling proxies.">
-    <meta name="twitter:image" content="https://rqhu1995.github.io/docker-vpn/docs/images/routing-flow-en.png">
+    <meta name="twitter:title" content="hkuvpn — HKU campus VPN">
+    <meta name="twitter:description" content="OpenConnect MFA (Docker or native Windows) with local SOCKS5 and HTTP split-tunneling proxies.">
+    <meta name="twitter:image" content="https://jialiangZ.github.io/hkuvpn/docs/images/routing-flow-en.png">
 
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@type": "SoftwareSourceCode",
-        "name": "Docker-VPN (HKU Edition)",
-        "alternateName": "Docker VPN for HKU",
-        "description": "Run HKU VPN inside Docker with OpenConnect and Microsoft Authenticator MFA, then expose the tunnel as local SOCKS5 and HTTP proxies.",
-        "url": "https://rqhu1995.github.io/docker-vpn/",
-        "codeRepository": "https://github.com/rqhu1995/docker-vpn",
-        "sameAs": "https://github.com/rqhu1995/docker-vpn",
-        "programmingLanguage": ["Shell", "Dockerfile"],
-        "runtimePlatform": ["Docker", "macOS", "Linux", "Windows WSL2"],
+        "name": "hkuvpn",
+        "alternateName": "hkuvpn — HKU campus VPN",
+        "description": "Run HKU VPN inside Docker or natively on Windows with OpenConnect and Microsoft Authenticator MFA, then expose the tunnel as local SOCKS5 and HTTP proxies.",
+        "url": "https://jialiangZ.github.io/hkuvpn/",
+        "codeRepository": "https://github.com/jialiangZ/hkuvpn",
+        "sameAs": "https://github.com/jialiangZ/hkuvpn",
+        "programmingLanguage": ["Shell", "Dockerfile", "PowerShell"],
+        "runtimePlatform": ["Docker", "macOS", "Linux", "Windows WSL2", "Windows (native)"],
         "isAccessibleForFree": true,
-        "keywords": "HKU, Docker VPN, OpenConnect, Cisco AnyConnect, split tunneling, SOCKS5 proxy, HTTP proxy"
+        "keywords": "HKU, hkuvpn, OpenConnect, Cisco AnyConnect, split tunneling, SOCKS5 proxy, HTTP proxy"
       }
     </script>
 
@@ -555,14 +555,14 @@
   <body>
     <header class="site-header">
       <nav class="container nav" aria-label="Primary navigation">
-        <a class="brand" href="https://rqhu1995.github.io/docker-vpn/">
-          <img src="docs/images/docker-vpn-icon.png" width="38" height="38" alt="">
-          <span>Docker-VPN</span>
+        <a class="brand" href="https://jialiangZ.github.io/hkuvpn/">
+          <img src="docs/images/hkuvpn-icon.png" width="38" height="38" alt="">
+          <span>hkuvpn</span>
         </a>
         <div class="nav-links">
           <a href="#quick-start">Quick start</a>
-          <a href="https://github.com/rqhu1995/docker-vpn/blob/main/README.zh-CN.md">简体中文</a>
-          <a class="github-link" href="https://github.com/rqhu1995/docker-vpn">GitHub repository</a>
+          <a href="https://github.com/jialiangZ/hkuvpn/blob/main/README.zh-CN.md">简体中文</a>
+          <a class="github-link" href="https://github.com/jialiangZ/hkuvpn">GitHub repository</a>
         </div>
       </nav>
     </header>
@@ -571,7 +571,7 @@
       <section class="hero">
         <div class="container">
           <p class="eyebrow">HKU VPN in Docker</p>
-          <h1>Docker-VPN for HKU</h1>
+          <h1>hkuvpn — HKU campus VPN</h1>
           <p class="hero-copy">
             Run OpenConnect with Microsoft Authenticator MFA inside a Docker
             container, then use the HKU tunnel through local SOCKS5 and HTTP
@@ -579,7 +579,7 @@
             replacing your computer's default route.
           </p>
           <div class="hero-actions">
-            <a class="button primary" href="https://github.com/rqhu1995/docker-vpn">View source on GitHub</a>
+            <a class="button primary" href="https://github.com/jialiangZ/hkuvpn">View source on GitHub</a>
             <a class="button" href="#quick-start">Start the first connection</a>
           </div>
           <ul class="hero-facts" aria-label="Project facts">
@@ -595,13 +595,13 @@
         <div class="container">
           <h2 id="routing-title">One additional route, not another global VPN</h2>
           <p class="section-intro">
-            Docker-VPN establishes HKU as a local upstream first. Applications
+            hkuvpn establishes HKU as a local upstream first. Applications
             can use it directly, or a compatible rules client can send only HKU
             destinations to it while every other policy stays unchanged.
           </p>
           <figure class="routing-figure">
-            <img src="docs/images/routing-flow-en.png" width="2000" height="872" alt="Campus requests reach HKU through Docker-VPN; other requests keep their existing network or proxy">
-            <figcaption>Docker-VPN owns only the HKU upstream shown in green.</figcaption>
+            <img src="docs/images/routing-flow-en.png" width="2000" height="872" alt="Campus requests reach HKU through hkuvpn; other requests keep their existing network or proxy">
+            <figcaption>hkuvpn owns only the HKU upstream shown in green.</figcaption>
           </figure>
         </div>
       </section>
@@ -632,8 +632,8 @@ docker info</code></pre>
             <li>
               <h3>Clone and build</h3>
               <p>Build the local image directly from the public repository.</p>
-              <pre><code>git clone https://github.com/rqhu1995/docker-vpn.git ~/docker-vpn
-cd ~/docker-vpn
+              <pre><code>git clone https://github.com/jialiangZ/hkuvpn.git ~/hkuvpn
+cd ~/hkuvpn
 docker build -t local/vpn .</code></pre>
             </li>
 
@@ -646,7 +646,7 @@ docker build -t local/vpn .</code></pre>
               </p>
               <div class="config-grid">
                 <pre><code>mkdir -p ~/.vpn
-cp ~/docker-vpn/examples/hku.env.example ~/.vpn/hku.env
+cp ~/hkuvpn/examples/hku.env.example ~/.vpn/hku.env
 printf '%s' 'YOUR_PORTAL_PIN' &gt; ~/.vpn/hku.pass
 chmod 600 ~/.vpn/hku.pass</code></pre>
                 <pre><code>HKU_USER=youruid@connect.hku.hk</code></pre>
@@ -655,20 +655,27 @@ chmod 600 ~/.vpn/hku.pass</code></pre>
 
             <li>
               <h3>Connect</h3>
-              <p>Connect to the official HKUVPN server, then enter the current six-digit code at <code>Response:</code>.</p>
-              <pre><code>~/docker-vpn/bin/hkuvpn</code></pre>
+              <p>Connect to the official HKUVPN server, then enter the current six-digit code at <code>Response:</code> — or run detached and send the code with <code>--mfa</code>.</p>
+              <pre><code>~/hkuvpn/bin/hkuvpn
+
+# background alternative
+~/hkuvpn/bin/hkuvpn -d
+~/hkuvpn/bin/hkuvpn --mfa 123456</code></pre>
             </li>
 
             <li>
               <h3>Verify from a second terminal</h3>
               <p>Keep the VPN terminal open while running this test.</p>
               <pre><code>curl -x socks5h://127.0.0.1:1080 \
-  -I https://www.hku.hk/</code></pre>
+  -I https://www.hku.hk/
+
+# layered health check (exit 0 = all ok)
+~/hkuvpn/bin/hkuvpn --status</code></pre>
             </li>
           </ol>
 
           <p class="next-link">
-            <a href="https://github.com/rqhu1995/docker-vpn#quick-start">Read the complete Quick Start and troubleshooting guide on GitHub</a>.
+            <a href="https://github.com/jialiangZ/hkuvpn#quick-start">Read the complete Quick Start and troubleshooting guide on GitHub</a>.
           </p>
         </div>
       </section>
@@ -684,17 +691,17 @@ chmod 600 ~/.vpn/hku.pass</code></pre>
             <article class="use-card">
               <h3>Direct application proxy</h3>
               <p>Enter SOCKS5 port 1080 or HTTP port 1088 in one browser, command, or application.</p>
-              <a href="https://github.com/rqhu1995/docker-vpn#use-a-proxy-directly">Direct proxy guide</a>
+              <a href="https://github.com/jialiangZ/hkuvpn#use-a-proxy-directly">Direct proxy guide</a>
             </article>
             <article class="use-card">
               <h3>Clash, Surge, or another client</h3>
               <p>Add HKU as one local upstream and leave direct, AI, and other VPN policies unchanged.</p>
-              <a href="https://github.com/rqhu1995/docker-vpn#add-a-rules-client">Rules-client examples</a>
+              <a href="https://github.com/jialiangZ/hkuvpn#add-a-rules-client">Rules-client examples</a>
             </article>
             <article class="use-card">
               <h3>Campus SSH and remote tools</h3>
               <p>Reach a campus host through HKU, or reverse-forward an existing client proxy to a remote coding agent.</p>
-              <a href="https://github.com/rqhu1995/docker-vpn#remote-access">Remote-access guide</a>
+              <a href="https://github.com/jialiangZ/hkuvpn#remote-access">Remote-access guide</a>
             </article>
           </div>
         </div>
@@ -708,10 +715,10 @@ chmod 600 ~/.vpn/hku.pass</code></pre>
             and troubleshooting live with the source repository.
           </p>
           <div class="link-row">
-            <a class="button" href="https://github.com/rqhu1995/docker-vpn">GitHub repository</a>
-            <a class="button" href="https://github.com/rqhu1995/docker-vpn/blob/main/Readme.md">English README</a>
-            <a class="button" href="https://github.com/rqhu1995/docker-vpn/blob/main/README.zh-CN.md">简体中文 README</a>
-            <a class="button" href="https://github.com/rqhu1995/docker-vpn/issues">Issues</a>
+            <a class="button" href="https://github.com/jialiangZ/hkuvpn">GitHub repository</a>
+            <a class="button" href="https://github.com/jialiangZ/hkuvpn/blob/main/Readme.md">English README</a>
+            <a class="button" href="https://github.com/jialiangZ/hkuvpn/blob/main/README.zh-CN.md">简体中文 README</a>
+            <a class="button" href="https://github.com/jialiangZ/hkuvpn/issues">Issues</a>
           </div>
         </div>
       </section>
@@ -719,7 +726,7 @@ chmod 600 ~/.vpn/hku.pass</code></pre>
 
     <footer>
       <div class="container footer-row">
-        <p>Docker-VPN (HKU Edition)</p>
+        <p>hkuvpn</p>
         <p>OpenConnect MFA and selective HKU routing in Docker.</p>
       </div>
     </footer>

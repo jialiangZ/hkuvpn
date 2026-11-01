@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
-  <title id="title">Docker-VPN selective routing icon</title>
+  <title id="title">hkuvpn selective routing icon</title>
   <desc id="desc">A neutral route bypasses the tunnel while selected traffic follows a green route through it.</desc>
 
   <rect x="8" y="8" width="240" height="240" rx="52" fill="#0f172a"/>

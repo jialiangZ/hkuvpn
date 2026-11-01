@@ -1,4 +1,4 @@
-# Docker-VPN guide
+# hkuvpn guide
 
 [← README](../Readme.md) · [简体中文](guide.zh-CN.md)
 
@@ -13,20 +13,20 @@
 
 ### Install the Short `hkuvpn` Command
 
-[Quick Start](../Readme.md#quick-start) calls `~/docker-vpn/bin/hkuvpn` directly. For everyday use, install
+[Quick Start](../Readme.md#quick-start) calls `~/hkuvpn/bin/hkuvpn` directly. For everyday use, install
 the shorter `hkuvpn` command for your shell.
 
 Zsh:
 
 ```bash
-printf '\nsource ~/docker-vpn/examples/hkuvpn.zsh\n' >> ~/.zshrc
+printf '\nsource ~/hkuvpn/examples/hkuvpn.zsh\n' >> ~/.zshrc
 source ~/.zshrc
 ```
 
 Bash:
 
 ```bash
-printf '\nsource ~/docker-vpn/examples/hkuvpn.zsh\n' >> ~/.bashrc
+printf '\nsource ~/hkuvpn/examples/hkuvpn.zsh\n' >> ~/.bashrc
 source ~/.bashrc
 ```
 
@@ -34,34 +34,57 @@ Fish:
 
 ```fish
 mkdir -p ~/.config/fish/functions
-cp ~/docker-vpn/examples/hkuvpn.fish ~/.config/fish/functions/hkuvpn.fish
+cp ~/hkuvpn/examples/hkuvpn.fish ~/.config/fish/functions/hkuvpn.fish
 fish -n ~/.config/fish/functions/hkuvpn.fish
 ```
 
 Do not paste the Zsh function into Fish. Fish does not use `export`,
 `VAR=value command`, POSIX `case`, or POSIX function syntax.
 
-If the clone is elsewhere, set `DOCKER_VPN_HOME`:
+A matching PowerShell wrapper for Windows is provided in
+`examples/hkuvpn.ps1` — dot-source it from your `$PROFILE`; the
+`hkuvpn`/`hku-status`/`hku-stop` functions mirror the shell versions.
+
+If the clone is elsewhere, set `HKUVPN_HOME` (the older `DOCKER_VPN_HOME`
+name is still honored):
 
 ```bash
-export DOCKER_VPN_HOME=/path/to/docker-vpn        # Zsh/Bash
+export HKUVPN_HOME=/path/to/hkuvpn        # Zsh/Bash
 ```
 
 ```fish
-set -Ux DOCKER_VPN_HOME /path/to/docker-vpn      # Fish
+set -Ux HKUVPN_HOME /path/to/hkuvpn      # Fish
 ```
 
 ### Daily Commands
 
 ```bash
-hkuvpn              # connect to the official vpn2fa.hku.hk server
-hkuvpn --status
+hkuvpn              # smart connect: preflight, background start, MFA prompt,
+                    #   wait for the tunnel, report the result
+hkuvpn              # run again while connected: just reports status (idempotent)
+hkuvpn --check      # pre-flight only (docker/config/PIN/image/ports/clock)
+hkuvpn -f           # classic foreground connect; type MFA at Response:, Ctrl+C stops
+hkuvpn -d           # background connect without prompting; code via hkuvpn --mfa
+hkuvpn --mfa 123456 # send the six-digit code to the detached container
+hkuvpn --status     # layered health check (docker/container/tunnel/proxy/e2e)
+hkuvpn --logs       # follow the container logs
 hkuvpn --stop
-hkuvpn --recover    # repair Docker/Colima only; does not request MFA
+hkuvpn --recover    # repair the Docker backend only; does not request MFA
 ```
 
-At `Response:`, enter the current six-digit Authenticator code. Keep the
-terminal open while using the proxies. `Ctrl+C` stops the foreground container.
+The default (no arguments) is smart mode: when already connected it just
+reports the status; otherwise it silently pre-flights, starts in the
+background, waits until the MFA prompt is ready before asking for the code
+(none of its validity window is wasted), then waits for the tunnel and
+confirms end-to-end before returning. **A rejected or expired code re-prompts
+immediately — no restart needed.** Without a terminal stdin (scripts/pipes)
+it automatically falls back to the `-d` manual mode.
+
+`--status` checks layer by layer and returns a scriptable exit code: `0` all
+ok, `1` Docker down, `2` container down, `3` tunnel down, `4` proxy port down,
+`5` end-to-end probe failed. The tunnel layer verifies the container's default
+route goes via `tun0` — only then does proxied traffic actually traverse the
+HKU tunnel.
 
 All locations use `vpn2fa.hku.hk`. The older `hkuvpn hk` command and
 `HKU_ENDPOINT=hk` setting remain accepted for compatibility, but they select
@@ -106,7 +129,7 @@ HKU_HTTP_PORT=11088
 
 ### Add a Rules Client
 
-Docker-VPN only provides the local HKU upstream. A rules client is optional and
+hkuvpn only provides the local HKU upstream. A rules client is optional and
 may be Clash Verge Rev, Surge, sing-box, Quantumult X, Loon, or another client
 that supports a local SOCKS5/HTTP outbound and ordered rules. Start `hkuvpn` and
 confirm that `1080/1088` are listening before enabling these entries.
@@ -313,6 +336,13 @@ The entrypoint uses verbose timestamps and a 30-minute reconnect window. Recent
 failures can still end with `CSTP Dead Peer Detection detected dead peer`, TLS
 read errors, `Host is unreachable`, or a rejected cookie.
 
+Before every connect, the launcher resolves `vpn2fa`, `vpn2fa-a`, and
+`vpn2fa-b` over DoH (`1.1.1.1`, fallback `8.8.8.8`, both by IP literal) and
+pins them for the session (`HKU_AUTO_RESOLVE=0` disables this). The control
+connection therefore never consults the local resolver — including fake-IP
+results from a rule client on the Windows host leaking into WSL — and the
+lookups are fresh each run, so nothing goes stale.
+
 A `401 Unauthorized`, a rejected cookie, or a TLS failure after the initial
 redirect can mean that DNS selected a different HKU backend. Advanced users
 can pin the entry point and both official redirect backends for the session:
@@ -340,11 +370,17 @@ when HKU changes infrastructure; a stale pin prevents connection.
 Deleting the Colima VM is a last resort because it removes local images and
 containers. It is not the first troubleshooting command.
 
+On Linux/WSL there is no Colima layer: `--recover` instead tries
+`sudo -n systemctl start docker` (or `service docker start`) and prints the
+command to run manually when passwordless sudo is unavailable. With systemd
+enabled and docker.service enabled, starting the distro brings Docker up
+automatically, so manual recovery is rarely needed.
+
 #### Rules-Client Independence
 
 Client-specific automatic reload and policy switching are intentionally not in
 the portable launcher. Users of any rules client, or no rules client, must still
-be able to use Docker-VPN. If you automate a client, keep these rules:
+be able to use hkuvpn. If you automate a client, keep these rules:
 
 - On HKU tunnel failure, move HKU traffic to an explicit fallback such as
   `DIRECT` or an existing Hong Kong route.
@@ -352,6 +388,46 @@ be able to use Docker-VPN. If you automate a client, keep these rules:
   `HKU-SOCKS5`.
 - Restore the HKU group only after the local `1080/1088` listener and tunnel are
   confirmed healthy.
+
+### Windows / WSL
+
+> Going native: if you would rather not run WSL at all, the
+> [native Windows port](../windows/README.md) (experimental) runs the
+> official OpenConnect Windows build + gost directly on Windows, without
+> Docker/WSL. Note its split-routing model differs slightly from the
+> container edition.
+
+When Docker runs inside WSL (Docker Engine, preferably with systemd enabled):
+
+- **Fake-IP DNS pollution**: a rules client on the Windows host (Surge Enhanced
+  Mode, Clash fake-IP, ...) hijacks DNS, and its answers reach the container
+  through the WSL `resolv.conf` — `vpn2fa.hku.hk` may resolve to a `198.18.x.x`
+  fake address, silently making the control connection depend on the rules
+  client. The launcher's default DoH pinning (see OpenConnect Reconnects above)
+  bypasses this; also confirm the rules client sends the three `vpn2fa*` domains
+  via DIRECT/HKU-CONTROL to avoid a routing loop.
+- **Clock drift**: after the Windows host sleeps, the WSL clock can drift by
+  minutes and OpenConnect reports confusing certificate/TLS errors. The launcher
+  pre-checks this (it refuses to connect past 120 s of drift); fix it inside WSL
+  with `sudo hwclock -s` or wait for the automatic resync.
+- **Windows-side wrapper**: `examples/hkuvpn.ps1` provides PowerShell functions
+  (`hkuvpn`, `hku-status`, `hku-stop`); interactive MFA entry passes through,
+  and `--status` exit codes stay scriptable.
+- **SSH to campus hosts**: `examples/ssh_config.wsl.example` is the canonical
+  Windows-side `~/.ssh/config` pattern — the ProxyCommand runs ncat inside the
+  distro via `wsl.exe`, then targets `127.0.0.1:1080`. It works in every WSL
+  networking mode (no shared-loopback requirement), and SOCKS5 remote resolution
+  resolves the campus hostname inside the container through the HKU tunnel,
+  independent of Windows DNS.
+- **Loopback-sharing security boundary**: in newer WSL networking modes
+  (mirrored and later shared-loopback modes), `127.0.0.1:1080/1088` is visible
+  to the whole Windows user session — the boundary is "this Windows user", not
+  "this WSL distro". Fine on single-user machines, but do not treat the proxy
+  as visible only inside WSL.
+- **`--recover`**: on WSL/Linux it attempts `sudo -n systemctl start docker`
+  (or `service docker start`) and prints a clear instruction without
+  passwordless sudo. With systemd enabled and docker.service enabled, starting
+  the distro brings Docker up automatically.
 
 ### Troubleshooting
 
@@ -376,7 +452,24 @@ and routes, remove only the certificate cache:
 rm ~/.vpn/pin-hk.cache
 ```
 
+On a foreground failure with a certificate/TLS error, the launcher offers to
+re-fetch the pin and retry once (covering HKU rotating its server certificate).
+
+#### Certificate/TLS Errors inside WSL (Clock Drift)
+
+After the Windows host sleeps, the WSL clock can drift by minutes and
+OpenConnect reports certificate errors. The launcher pre-checks this (it stops
+past 120 s of drift); to inspect manually:
+
+```bash
+curl -fsSI https://1.1.1.1 | grep -i ^date   # compare with local time
+sudo hwclock -s                               # fix
+```
+
 #### Port Already in Use
+
+`hkuvpn --check` probes the ports directly and tells you how to change them.
+To investigate manually:
 
 ```bash
 lsof -nP -iTCP:1080 -sTCP:LISTEN
@@ -398,17 +491,41 @@ ssh -G campus-host | grep -E 'proxycommand|hostname|port'
 
 Do not treat `autossh` or `colima status` alone as an end-to-end health check.
 
+If `--status` shows the tunnel up but e2e failed with a "session looks frozen"
+hint (no keepalives for 150 s), the **DTLS/UDP data channel is dead on the
+current network path** and OpenConnect's MTU probing may have wedged the
+session — tun0 exists, routes are set, the TCP control channel stays alive,
+but zero data flows. A rules client on the Windows host changing how it
+handles UDP (node/policy switch) is a common trigger inside WSL. Fix:
+
+```bash
+hkuvpn --stop
+# add HKU_DTLS=0 to ~/.vpn/hku.env (or run: HKU_DTLS=0 hkuvpn) and reconnect
+```
+
+This forces all data over the CSTP/TCP channel (`--no-dtls`). Interactive
+SSH use is unaffected by the speed trade-off; restore the default when you
+need bulk throughput again.
+
 ### Security
 
 - Proxies bind to host loopback only. Do not publish them on `0.0.0.0` without
-  authentication and a firewall.
+  authentication and a firewall. Note that WSL shared-loopback networking modes
+  expose loopback ports to the whole Windows user session (see Windows / WSL
+  above).
 - Reverse forwarding also binds to remote loopback only. Do not enable
   `GatewayPorts yes` for this use case.
 - `~/.vpn/hku.pass` is plaintext. Set mode `600` and enable disk encryption.
-- Docker environment variables can be inspected by a user with Docker access.
+  The launcher delivers it into the container as a read-only single-file mount
+  (`/run/hku-pass`); the PIN never appears in `docker run` arguments, the host
+  process list, or `docker inspect` environment variables.
+- Container configuration can be inspected by a user with Docker access.
   Treat Docker access as privileged.
-- The container needs `NET_ADMIN` and `/dev/net/tun`. Review changes before
-  rebuilding and do not use untrusted images.
+- The container runs with least privilege: `--cap-drop ALL --cap-add NET_ADMIN`
+  (tun and routing) plus `DAC_READ_SEARCH` (reading the read-only PIN mount),
+  `--security-opt no-new-privileges`, pids/memory limits, and a `/dev/net/tun`
+  device passthrough. Review changes before rebuilding and do not use untrusted
+  images.
 - Keep private hostnames, campus IPs, account names, certificate caches, logs,
   subscription URLs, and SSH keys out of issues and commits.
 
@@ -417,14 +534,15 @@ Do not treat `autossh` or `colima status` alone as an end-to-end health check.
 ### How It Works
 
 1. Run `hkuvpn` first. The container establishes the OpenConnect tunnel and
-   exposes the loopback SOCKS5 and HTTP listeners.
+   exposes the loopback SOCKS5 and HTTP listeners, both served by gost — a
+   single static Go binary.
 2. After the listeners are ready, enter one of those addresses in an
    application, SSH configuration, browser, or optional rules client.
 3. During use, requests selected by that configuration reach `1080` or `1088`,
    enter the container, and travel through the HKU AnyConnect tunnel.
 4. A rules client can simultaneously send every non-HKU request to `DIRECT`, an
    existing proxy or VPN, or another policy. Those paths do not pass through
-   Docker-VPN unless the user explicitly selects the HKU upstream for them.
+   hkuvpn unless the user explicitly selects the HKU upstream for them.
 
 Cisco AnyConnect is the server protocol in this design. The official Cisco
 desktop client is not started for this connection; OpenConnect runs inside the
@@ -436,16 +554,20 @@ container so it cannot replace the host default route.
 |---|---|
 | macOS container runtime | Colima or Docker Desktop |
 | Linux container runtime | Docker Engine |
-| Windows | Docker Desktop with WSL2; community-tested |
-| Shell | Zsh, Bash, and Fish |
+| Windows | Docker Desktop with WSL2, or a native Docker Engine inside WSL; see [Windows / WSL](#windows--wsl) |
+| Shell | Zsh, Bash, and Fish; a PowerShell wrapper is provided for Windows (`examples/hkuvpn.ps1`) |
 | Rule-based proxy clients | Clash Verge Rev/Mihomo and Surge examples included; the same routing model applies to sing-box and similar clients |
+| Local proxy inside the image | gost 3.3.0 (static Go binary; one process serves both SOCKS5 and HTTP) |
 | OpenConnect in the current `alpine:3.23` image | 9.21 |
 
 OpenConnect runs inside the image, so a Homebrew OpenConnect installation on the
 host is not used. Because Alpine 3.23 still packages an older release, the
 Dockerfile builds OpenConnect 9.21 from the official release tarball. The build
 checks both the pinned SHA-256 digest and the upstream PGP signature against the
-documented OpenConnect release-key fingerprint before compiling. Check the
+documented OpenConnect release-key fingerprint before compiling. The configure
+flags keep only the auth methods HKU uses (form password + web-form MFA);
+GSSAPI/Kerberos, SecurID (stoken), OATH, and smart-card support are omitted.
+Check the
 [official OpenConnect releases](https://gitlab.com/openconnect/openconnect/-/releases)
 when investigating version-specific behavior or preparing a version bump.
 
@@ -455,10 +577,17 @@ Confirm the version actually installed in a locally built image:
 docker run --rm --entrypoint openconnect local/vpn --version
 ```
 
+Every other build input is pinned and verified the same way: the `alpine` base
+image is digest-pinned; `vpnc-script` is vendored into the repository and
+SHA-256-verified at build time (from openconnect/vpnc-scripts commit
+`ce9e961b`) instead of fetching the moving master branch; the gost proxy is
+pinned to v3.3.0 and verified against the official GitHub release checksums.
+No build step fetches a moving target, so builds are reproducible.
+
 ### Portable Core and Optional Automation
 
 The launcher, shell wrappers, routing examples, and container entrypoint are the
-portable core of Docker-VPN. They do not require a rules client, tmux, or a
+portable core of hkuvpn. They do not require a rules client, tmux, or a
 particular terminal application.
 
 Users who need unattended or long-running operation can add proxy-client CLI
@@ -469,8 +598,10 @@ clients and Docker environments.
 
 ### Credits and Licensing
 
-Derived from [ethack/docker-vpn](https://github.com/ethack/docker-vpn) and
-adapted for HKU, OpenConnect MFA, and loopback proxy export.
+Derived from [ethack/docker-vpn](https://github.com/ethack/docker-vpn) via
+the HKU edition by [rqhu1995/docker-vpn](https://github.com/rqhu1995/docker-vpn),
+then adapted for HKU, OpenConnect MFA, loopback proxy export, automatic
+licensed-resource routing, and a native Windows port without WSL or Docker.
 
 This repository currently has no explicit `LICENSE` file. Do not assume that a
 fork automatically grants a license. The maintainer should select a compatible

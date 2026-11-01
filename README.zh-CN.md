@@ -1,10 +1,10 @@
-# <img src="docs/images/docker-vpn-icon.png" width="44" alt="Docker-VPN 图标"> Docker-VPN（HKU 版）
+# <img src="docs/images/hkuvpn-icon.png" width="44" alt="hkuvpn 图标"> hkuvpn
 
 **访问港大校园网，同时继续使用你原来的上网线路。**
 
-[English](Readme.md) · [简体中文](README.zh-CN.md) · [项目网站](https://rqhu1995.github.io/docker-vpn/) · [详细指南](docs/guide.zh-CN.md)
+[English](Readme.md) · [简体中文](README.zh-CN.md) · [项目网站](https://jialiangZ.github.io/hkuvpn/) · [详细指南](docs/guide.zh-CN.md)
 
-查校内资源、SSH 到实验室、远程控制学校电脑时，还想让浏览器和 AI 工具继续走原来的网络？Docker-VPN 把 HKU VPN 放进 Docker，提供本地代理，由你选择哪些请求进入校园网，主机默认路由保持不变。
+查校内资源、SSH 到实验室、远程控制学校电脑时，还想让浏览器和 AI 工具继续走原来的网络？hkuvpn 把 HKU VPN 放进 Docker（Windows 也可免 WSL 原生运行），提供本地代理，由你选择哪些请求进入校园网，主机默认路由保持不变。
 
 ## 能帮你做什么
 
@@ -14,7 +14,7 @@
 | SSH / 远程桌面连接学校电脑 | 让目标主机的连接走 HKU |
 | 学校电脑上的开发工具需要本机代理 | 通过反向 SSH 借用本机已有代理（进阶） |
 
-![校园请求经 Docker-VPN 到 HKU；其他请求继续使用原有网络或代理](docs/images/routing-flow-zh.png)
+![校园请求经 hkuvpn 到 HKU；其他请求继续使用原有网络或代理](docs/images/routing-flow-zh.png)
 
 容器内由 OpenConnect 建立 VPN，本机通过 SOCKS5 / HTTP 端口使用隧道。**应用可以直接设置代理；按网站或 IP 自动分流时，再接入 Clash 或 Surge。**
 
@@ -41,8 +41,8 @@ colima start --cpu 2 --memory 2 --disk 20 --vm-type vz --mount-type virtiofs
 确认 `docker info` 正常，再执行：
 
 ```bash
-git clone https://github.com/rqhu1995/docker-vpn.git ~/docker-vpn
-cd ~/docker-vpn
+git clone https://github.com/jialiangZ/hkuvpn.git ~/hkuvpn
+cd ~/hkuvpn
 docker build -t local/vpn .
 ```
 
@@ -50,7 +50,7 @@ docker build -t local/vpn .
 
 ```bash
 mkdir -p ~/.vpn
-cp ~/docker-vpn/examples/hku.env.example ~/.vpn/hku.env
+cp ~/hkuvpn/examples/hku.env.example ~/.vpn/hku.env
 nano ~/.vpn/hku.env
 ```
 
@@ -67,10 +67,10 @@ nano ~/.vpn/hku.pass
 ### 3. 连接并验证
 
 ```bash
-~/docker-vpn/bin/hkuvpn
+~/hkuvpn/bin/hkuvpn
 ```
 
-出现 `Response:` 时输入 Authenticator 当前六位验证码。保持终端开启；`Ctrl+C` 断开连接。
+运行 `hkuvpn`，出现 `MFA code` 提示时输入 Authenticator 当前六位验证码，看到 `Connected` 即代理就绪；验证码输错会直接重新提示。经典前台模式用 `hkuvpn -f`（保持终端开启，`Ctrl+C` 断开）。
 
 在**第二个终端**测试：
 
@@ -89,16 +89,24 @@ curl -x socks5h://127.0.0.1:1080 -I https://www.hku.hk/
 | Clash Verge Rev / Mihomo 自动分流 | [配置示例](examples/clash-verge.yaml) · [接入步骤](docs/guide.zh-CN.md#clash-verge-rev--mihomo) |
 | Surge 自动分流 | [配置示例](examples/surge.conf) · [接入步骤](docs/guide.zh-CN.md#surge) |
 | SSH / 远程桌面 | [连接学校电脑](docs/guide.zh-CN.md#ssh-与远程桌面) |
+| Windows / WSL | [PowerShell 封装](examples/hkuvpn.ps1) · [SSH 示例](examples/ssh_config.wsl.example) · [接入步骤](docs/guide.zh-CN.md#windows--wsl) |
+| Windows 原生（免 WSL） | [实验性移植](windows/README.zh-CN.md) |
 
-代理默认只供本机使用，提供 TCP 转发；`socks5h` 会把 DNS 查询也交给代理。使用分流客户端时，**VPN 服务器自身必须走直连或已有代理**，避免绕回 Docker-VPN；示例已包含相应规则。
+代理默认只供本机使用，提供 TCP 转发；`socks5h` 会把 DNS 查询也交给代理。使用分流客户端时，**VPN 服务器自身必须走直连或已有代理**，避免绕回 hkuvpn；示例已包含相应规则。
 
 日常操作：
 
 ```bash
-~/docker-vpn/bin/hkuvpn            # 连接
-~/docker-vpn/bin/hkuvpn --status   # 查看状态
-~/docker-vpn/bin/hkuvpn --stop     # 停止
-~/docker-vpn/bin/hkuvpn --recover  # 修复 Docker / Colima，不触发 MFA
+~/hkuvpn/bin/hkuvpn              # 智能连接：提示输入 MFA，等隧道就绪
+~/hkuvpn/bin/hkuvpn              # 已连接时运行 = 报告状态
+~/hkuvpn/bin/hkuvpn --check      # 连接前预检（退出码 0 即就绪）
+~/hkuvpn/bin/hkuvpn -f           # 经典前台模式
+~/hkuvpn/bin/hkuvpn -d           # 后台连接（等 MFA 提示就绪后返回）
+~/hkuvpn/bin/hkuvpn --mfa <code> # 交付后台容器的验证码
+~/hkuvpn/bin/hkuvpn --status     # 分层健康检查（退出码可脚本化）
+~/hkuvpn/bin/hkuvpn --logs       # 跟随容器日志
+~/hkuvpn/bin/hkuvpn --stop       # 停止
+~/hkuvpn/bin/hkuvpn --recover    # 修复 Docker 后端，不触发 MFA
 ```
 
 [安装简短的 `hkuvpn` 命令](docs/guide.zh-CN.md#安装简短的-hkuvpn-命令) · [修改默认端口](docs/guide.zh-CN.md#直接使用本地代理)
@@ -115,4 +123,4 @@ curl -x socks5h://127.0.0.1:1080 -I https://www.hku.hk/
 
 更多内容：[故障排查](docs/guide.zh-CN.md#常见故障) · [安全说明](docs/guide.zh-CN.md#安全说明) · [兼容性与版本](docs/guide.zh-CN.md#兼容性与版本)
 
-基于 [ethack/docker-vpn](https://github.com/ethack/docker-vpn) 改造。仓库尚未提供 `LICENSE`，详见[来源与许可证](docs/guide.zh-CN.md#来源与许可证)。
+基于 [ethack/docker-vpn](https://github.com/ethack/docker-vpn)，经由 [rqhu1995/docker-vpn](https://github.com/rqhu1995/docker-vpn) 的 HKU 版改造。仓库尚未提供 `LICENSE`，详见[来源与许可证](docs/guide.zh-CN.md#来源与许可证)。

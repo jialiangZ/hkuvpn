@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1000" height="436" viewBox="0 0 1000 436" role="img" aria-labelledby="title desc">
 <title id="title">Campus access via HKU. Everything else as usual.</title>
-<desc id="desc">Campus requests selected by application settings or routing rules use Docker-VPN. Other requests keep their existing network or proxy.</desc>
+<desc id="desc">Campus requests selected by application settings or routing rules use hkuvpn. Other requests keep their existing network or proxy.</desc>
 <g font-family="-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Noto Sans CJK SC', 'Segoe UI', sans-serif">
 <rect x="1" y="1" width="998" height="434" rx="18" fill="#fff" stroke="#dce3eb"/>
 <text x="36" y="53" font-size="30" font-weight="700" fill="#0f172a" text-anchor="start">Campus access via HKU. Everything else as usual.</text>
@@ -9,8 +9,8 @@
 <text x="56" y="160" font-size="23" font-weight="650" fill="#047857" text-anchor="start">Campus requests</text>
 <text x="56" y="192" font-size="16" font-weight="400" fill="#475569" text-anchor="start">Browser / SSH / desktop</text>
 <rect x="364" y="120" width="280" height="108" rx="14" fill="#ecfdf5" stroke="#a7d9c2"/>
-<text x="384" y="160" font-size="23" font-weight="650" fill="#047857" text-anchor="start">Docker-VPN</text>
-<text x="384" y="192" font-size="16" font-weight="400" fill="#475569" text-anchor="start">OpenConnect inside Docker</text>
+<text x="384" y="160" font-size="23" font-weight="650" fill="#047857" text-anchor="start">hkuvpn</text>
+<text x="384" y="192" font-size="16" font-weight="400" fill="#475569" text-anchor="start">OpenConnect tunnel (Docker/native)</text>
 <rect x="720" y="120" width="244" height="108" rx="14" fill="#ecfdf5" stroke="#a7d9c2"/>
 <text x="740" y="160" font-size="23" font-weight="650" fill="#047857" text-anchor="start">HKU network</text>
 <text x="740" y="192" font-size="16" font-weight="400" fill="#475569" text-anchor="start">Campus sites &amp; computers</text>
