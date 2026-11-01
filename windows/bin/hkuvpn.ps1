@@ -554,7 +554,7 @@ function Initialize-AutoRoutes {
         return
     }
     $lrn = @{ TunIdx = [int]$idx; TunIp = $tunip; Cfg = $Cfg; Seen = @{};
-              Entries = @(); Covered = @() }
+              Entries = @(); Covered = @(); Resolved = @{} }
 
     # The campus subnets the server pushed are always covered.
     foreach ($line in @(Get-Content $Script:StateFile -ErrorAction SilentlyContinue)) {
@@ -602,16 +602,58 @@ function Initialize-AutoRoutes {
     Write-Marker ("HKUVPN_AUTOROUTE_ON entries={0} prefix=/{1}" -f $lrn.Entries.Count, $Cfg.RoutePrefix)
 }
 
+function Resolve-HostToIps {
+    # Resolves a host name to IPv4 addresses, with a short timeout so the
+    # worker loop is not blocked for long. Results are cached per session.
+    param([string]$HostName, $Lrn, [int]$TimeoutMs = 1500)
+    if (-not $HostName -or -not $Lrn) { return @() }
+    if (-not $Lrn.Resolved) { $Lrn.Resolved = @{} }
+    if ($Lrn.Resolved.ContainsKey($HostName)) { return @($Lrn.Resolved[$HostName]) }
+    $ips = @()
+    try {
+        $task = [Net.Dns]::GetHostAddressesAsync($HostName)
+        if ($task.Wait($TimeoutMs)) {
+            $ips = @($task.Result | ForEach-Object { $_.IPAddressToString } |
+                     Where-Object { $_ -match '^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$' })
+        }
+    } catch {}
+    # An empty answer is not cached: the next attempt may succeed.
+    if ($ips.Count -gt 0) { $Lrn.Resolved[$HostName] = $ips }
+    return $ips
+}
+
 function Learn-FromGostLine {
-    # gost (info level) logs each completed proxy connection as JSON with
-    # "msg":"<client> <-> <target>" and the resolved "dst":"ip:port".
+    # gost logs every proxy connection in two shapes that matter here:
+    #
+    #   info  "<client> <-> <target>"  with  "dst":"<ip>:<port>"
+    #         -> the resolved destination of an ESTABLISHED connection
+    #   debug "dial <target>/tcp"
+    #         -> the destination BEFORE the connection is attempted
+    #
+    # The debug line is what makes licensed resources work: a resource that
+    # is only reachable through the campus exit never establishes, so without
+    # it its route would never be learned and the request could never
+    # succeed. For a host name the debug line carries the name, not the
+    # address, so the name is resolved here.
     param([string]$Line)
     if (-not $Script:Lrn) { return }
-    if ($Line -notmatch ' <-> ') { return }
-    if ($Line -notmatch '"dst"\s*:\s*"((?:\d{1,3}\.){3}\d{1,3}):\d+"') { return }
-    $ip = $Matches[1]
-    $label = $ip
-    if ($Line -match '"host"\s*:\s*"([^"]+)"') { if ($Matches[1]) { $label = $Matches[1] } }
+    $ip = $null
+    $label = $null
+    if ($Line -match '"dst"\s*:\s*"((?:\d{1,3}\.){3}\d{1,3}):\d+"') {
+        $ip = $Matches[1]
+        if ($Line -match '"host"\s*:\s*"([^"]+)"') { $label = $Matches[1] }
+    } elseif ($Line -match 'dial\s+((?:\d{1,3}\.){3}\d{1,3}):\d+/tcp') {
+        $ip = $Matches[1]
+    } elseif ($Line -match 'dial\s+([A-Za-z0-9][A-Za-z0-9._-]*):\d+/tcp') {
+        $hostName = $Matches[1]
+        foreach ($r in (Resolve-HostToIps -HostName $hostName -Lrn $Script:Lrn)) {
+            $null = Add-LearnedTarget -Ip $r -Label $hostName -Lrn $Script:Lrn
+        }
+        return
+    } else {
+        return
+    }
+    if (-not $label) { $label = $ip }
     $null = Add-LearnedTarget -Ip $ip -Label $label -Lrn $Script:Lrn
 }
 
@@ -1070,9 +1112,13 @@ function Invoke-TunnelWorker {
     Write-Info ("Local proxies: SOCKS5=127.0.0.1:{0} HTTP=127.0.0.1:{1}" -f $Cfg.SocksPort, $Cfg.HttpPort)
 
     # gost: both proxy listeners in one process, bound to loopback only.
+    # Debug mode is required: it logs "dial <target>/tcp" before the
+    # connection is attempted, which is the only place a destination appears
+    # when the connection never completes (licensed resources that are only
+    # reachable through the campus exit). The auto-route learner needs it.
     $gostPsi = New-Object System.Diagnostics.ProcessStartInfo
     $gostPsi.FileName = $Cfg.Gost
-    $gostPsi.Arguments = ('-L socks5://127.0.0.1:{0} -L http://127.0.0.1:{1}' -f $Cfg.SocksPort, $Cfg.HttpPort)
+    $gostPsi.Arguments = ('-D -L socks5://127.0.0.1:{0} -L http://127.0.0.1:{1}' -f $Cfg.SocksPort, $Cfg.HttpPort)
     $gostPsi.UseShellExecute = $false
     $gostPsi.CreateNoWindow = $true
     $gostPsi.RedirectStandardOutput = $true
