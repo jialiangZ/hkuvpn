@@ -45,6 +45,22 @@ A matching PowerShell wrapper for Windows is provided in
 `examples/shells/hkuvpn.ps1` — dot-source it from your `$PROFILE`; the
 `hkuvpn`/`hku-status`/`hku-stop` functions mirror the shell versions.
 
+> **Upgrading from v1.0.x?** The Docker edition moved into `docker/` in
+> v1.1.0 and the shell wrappers into `examples/shells/`. Update the paths
+> you reference:
+>
+> | Was | Now |
+> |---|---|
+> | `~/hkuvpn/bin/hkuvpn` | `~/hkuvpn/docker/bin/hkuvpn` |
+> | `source ~/hkuvpn/examples/hkuvpn.zsh` | `source ~/hkuvpn/examples/shells/hkuvpn.zsh` |
+> | `cp ~/hkuvpn/examples/hkuvpn.fish …` | `cp ~/hkuvpn/examples/shells/hkuvpn.fish …` |
+> | `docker build -t local/vpn .` | `docker build -t local/vpn docker/` |
+> | `~/hkuvpn/examples/hku.env.example` | `~/hkuvpn/docker/examples/hku.env.example` |
+>
+> Re-run the `printf` line above once to fix the path in your shell
+> profile. `~/.vpn/` keeps your credentials, and `HKUVPN_HOME` still points
+> at the repository root.
+
 If the clone is elsewhere, set `HKUVPN_HOME` (the older `DOCKER_VPN_HOME`
 name is still honored):
 
@@ -392,10 +408,12 @@ be able to use hkuvpn. If you automate a client, keep these rules:
 ### Windows / WSL
 
 > Going native: if you would rather not run WSL at all, the
-> [native Windows port](../windows/README.md) (experimental) runs the
-> official OpenConnect Windows build + gost directly on Windows, without
-> Docker/WSL. Note its split-routing model differs slightly from the
-> container edition.
+> [native Windows port](../windows/README.md) runs the official OpenConnect
+> Windows build + gost directly on Windows, without Docker/WSL. It needs no
+> WSL, but it is a different routing model: HKU's gateway pushes no split
+> routes, so the native port routes destinations on demand and only routes
+> what you send through its proxy (see its
+> [automatic routing section](../windows/README.md#automatic-routing-for-licensed-resources)).
 
 When Docker runs inside WSL (Docker Engine, preferably with systemd enabled):
 
@@ -559,6 +577,8 @@ container so it cannot replace the host default route.
 | Rule-based proxy clients | Clash Verge Rev/Mihomo and Surge examples included; the same routing model applies to sing-box and similar clients |
 | Local proxy inside the image | gost 3.3.0 (static Go binary; one process serves both SOCKS5 and HTTP) |
 | OpenConnect in the current `alpine:3.23` image | 9.21 |
+| OpenConnect in the [native Windows port](../windows/README.md) | 9.21 (official GitLab CI build of the v9.21 tag, SHA-256 pinned; the installer also ships the Wintun driver) |
+| gost in the native Windows port | 3.3.0 (windows/amd64, SHA-256 pinned) |
 
 OpenConnect runs inside the image, so a Homebrew OpenConnect installation on the
 host is not used. Because Alpine 3.23 still packages an older release, the

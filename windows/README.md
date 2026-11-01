@@ -1,14 +1,17 @@
-# hkuvpn — Native Windows port (experimental)
+# hkuvpn — Native Windows port
 
 Run the HKU VPN **directly on Windows** — no WSL, no Docker. This port keeps
 the design goal of the main project: your default route and everyday
 Internet stay untouched; only the traffic you send through the local proxy
 enters the campus network.
 
-> **Status: experimental.** The pieces are standard (official OpenConnect
-> Windows build, official gost release), but the glue is new and needs
-> field testing on real HKU accounts. Keep the Docker/WSL edition as a
-> fallback. See [Known differences](#known-differences-vs-the-wsldocker-edition).
+> **Status: field-tested, still young.** The pieces are standard (official
+> OpenConnect Windows build, official gost release), and a full session has
+> been run against a real HKU account on Windows 11 with PowerShell 5.1 —
+> connect, routing, licensed-resource routing and a clean shutdown. It is
+> still much newer than the container edition, so keep the Docker/WSL
+> edition as a fallback. See
+> [Known differences](#known-differences-vs-the-wsldocker-edition).
 
 Working on this port for the first time? Work through the
 [validation checklist](VALIDATION.md) — it walks through every step from
@@ -20,7 +23,7 @@ each command.
 ```
 Application ──► 127.0.0.1:1080 (SOCKS5) / :1088 (HTTP) ──► gost
                                                             │
-        Windows routing table: campus subnets ──────────────┴─► tun (wintun) ──► HKU
+        Windows routing table: on-demand routes ─────────────┴─► tun (wintun) ──► HKU
         everything else ───────────────────────────────────────► your normal NIC
 ```
 
@@ -133,6 +136,13 @@ Smart mode stays attached to your console: closing the window (or Ctrl+C)
 disconnects the VPN, like `hkuvpn -f` in the Docker edition. Use `-d` for a
 hidden background worker when you want the terminal back.
 
+**Enter the code as soon as you are prompted.** An Authenticator code is
+only valid for about 30 seconds, and the gateway rejects an expired one. If
+that happens the launcher says so — `The previous MFA code was rejected;
+enter the current one` — and asks again, so just type the code that is
+showing now. In `-d` mode the same applies to `hkuvpn --mfa <code>`: deliver
+the code that is current at that moment, not one you copied earlier.
+
 Use the proxies exactly as in the Docker edition: SOCKS5 `127.0.0.1:1080`,
 HTTP `127.0.0.1:1088`, and point Clash Verge / Surge at them with the same
 "VPN servers must be DIRECT" rule from the main guide.
@@ -141,9 +151,10 @@ HTTP `127.0.0.1:1088`, and point Clash Verge / Surge at them with the same
 
 | Topic | Docker edition | Native port |
 |---|---|---|
-| What goes through HKU | **All** proxied traffic (container default route = tun) | Proxied destinations: campus subnets + auto-learned routes (`HKU_AUTO_ROUTES`) + `HKU_EXTRA_ROUTES` |
-| Campus-external HKU-licensed sites (library databases etc.) | work through the proxy | learned automatically (first request triggers it, refresh once); pre-seed via `HKU_PROXY_DOMAINS` |
-| `socks5h` DNS resolution | inside the container, via the tunnel | `*.hku.hk` via NRPT; other names via Windows DNS |
+| What goes through HKU | **All** proxied traffic (container default route = tun) | Only what you send through the proxy, routed on demand: learned routes (`HKU_AUTO_ROUTES`) + `HKU_EXTRA_ROUTES`. The gateway pushes no split routes, so there is nothing else to route |
+| Where the traffic exits | campus exit for everything the container sends | campus exit for the proxied destinations, via routes learned on demand |
+| Campus-external HKU-licensed sites (library databases etc.) | work through the proxy | learned automatically, **including when the first attempt fails** (the dial is logged before the connection is attempted); pre-seed via `HKU_PROXY_DOMAINS` |
+| `socks5h` DNS resolution | inside the container, via the tunnel | resolved by the proxy through the host resolver; `*.hku.hk` via an NRPT rule — which is only added when the gateway's resolvers are reachable through the tunnel (with HKU they are not, so the rule is skipped) |
 | Isolation | container sandbox, cap-dropped | processes run as your elevated user |
 | PIN file security | chmod 600 in WSL | file under `%USERPROFILE%\.vpn`; protect with NTFS ACLs if needed |
 | Prerequisite | Docker runtime (WSL) | nothing but the tools above; no WSL |

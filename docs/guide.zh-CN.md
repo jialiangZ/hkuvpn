@@ -41,6 +41,18 @@ fish -n ~/.config/fish/functions/hkuvpn.fish
 
 Windows 侧 PowerShell 的等价封装见 `examples/shells/hkuvpn.ps1`：把该文件路径加入 `$PROFILE` dot-source 即可，`hkuvpn`/`hku-status`/`hku-stop` 三个函数与 Shell 版语义一致。
 
+> **从 v1.0.x 升级？** v1.1.0 起 Docker 版整体移进了 `docker/` 目录，Shell 封装移进了 `examples/shells/`。请更新你引用的路径：
+>
+> | 原来 | 现在 |
+> |---|---|
+> | `~/hkuvpn/bin/hkuvpn` | `~/hkuvpn/docker/bin/hkuvpn` |
+> | `source ~/hkuvpn/examples/hkuvpn.zsh` | `source ~/hkuvpn/examples/shells/hkuvpn.zsh` |
+> | `cp ~/hkuvpn/examples/hkuvpn.fish …` | `cp ~/hkuvpn/examples/shells/hkuvpn.fish …` |
+> | `docker build -t local/vpn .` | `docker build -t local/vpn docker/` |
+> | `~/hkuvpn/examples/hku.env.example` | `~/hkuvpn/docker/examples/hku.env.example` |
+>
+> 把上面的 `printf` 命令重跑一次即可修正 shell 配置里的路径。`~/.vpn/` 里的凭据保持不变，`HKUVPN_HOME` 仍然指向仓库根目录。
+
 仓库不在 `~/hkuvpn` 时，设置 `HKUVPN_HOME`（旧的 `DOCKER_VPN_HOME` 仍然兼容）：
 
 ```bash
@@ -305,7 +317,7 @@ Linux/WSL 上没有 Colima 一层：`--recover` 会尝试 `sudo -n systemctl sta
 
 ### Windows / WSL
 
-> 原生方案：不想开 WSL 的话，[windows 原生移植](../windows/README.zh-CN.md)（实验性）用官方 OpenConnect Windows 版 + gost 直接在 Windows 上运行，无需 Docker/WSL。注意其分流模型与容器版略有差异。
+> 原生方案：不想开 WSL 的话，[windows 原生移植](../windows/README.zh-CN.md) 用官方 OpenConnect Windows 版 + gost 直接在 Windows 上运行，无需 Docker/WSL。但它的路由模型不同：港大网关不下发任何分流路由，所以原生版改为**按需路由**，且只路由你交给它代理的流量（详见[授权资源自动路由](../windows/README.zh-CN.md#授权资源自动路由)）。
 
 Docker 运行在 WSL 内（Docker Engine，推荐开启 systemd）时，除上面的通用内容外还需要注意：
 
@@ -410,6 +422,8 @@ SSH 等交互场景不受 TCP 通道的速度影响；需要大吞吐时再改�
 | 规则代理客户端 | 提供 Clash Verge Rev/Mihomo 和 Surge 示例；sing-box 等可采用同一分流模型 |
 | 镜像内本地代理 | gost 3.3.0（静态 Go 单二进制，单进程提供 SOCKS5 与 HTTP 监听） |
 | 当前 `alpine:3.23` 镜像内 OpenConnect | 9.21 |
+| [Windows 原生版](../windows/README.zh-CN.md) 的 OpenConnect | 9.21（官方 GitLab CI 的 v9.21 tag 构建，SHA-256 固定；安装包自带 Wintun 驱动） |
+| Windows 原生版的 gost | 3.3.0（windows/amd64，SHA-256 固定） |
 
 OpenConnect 在镜像内运行，因此不会使用主机上通过 Homebrew 安装的 OpenConnect。由于 Alpine 3.23 软件包仍是旧版，Dockerfile 会从官方发布源码构建 OpenConnect 9.21。构建在编译前同时校验固定的 SHA-256 摘要，以及与 OpenConnect 官方发布密钥指纹匹配的 PGP 签名。编译配置只保留 HKU 用到的认证方式（表单密码 + 网页 MFA），不含 GSSAPI、SecurID（stoken）、OATH 与智能卡支持。排查版本相关问题或准备升级版本时，请查看 [OpenConnect 官方 Releases](https://gitlab.com/openconnect/openconnect/-/releases)。
 

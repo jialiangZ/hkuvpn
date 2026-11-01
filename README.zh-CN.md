@@ -48,6 +48,18 @@ cd ~/hkuvpn
 docker build -t local/vpn docker/
 ```
 
+> **从 v1.0.x 升级？** v1.1.0 起 Docker 版整体移进了 `docker/` 目录。`git pull`
+> 之后改这四处：
+>
+> | 原来 | 现在 |
+> |---|---|
+> | `docker build -t local/vpn .` | `docker build -t local/vpn docker/` |
+> | `~/hkuvpn/bin/hkuvpn` | `~/hkuvpn/docker/bin/hkuvpn` |
+> | `~/hkuvpn/examples/hku.env.example` | `~/hkuvpn/docker/examples/hku.env.example` |
+> | `source ~/hkuvpn/examples/hkuvpn.zsh` | `source ~/hkuvpn/examples/shells/hkuvpn.zsh` |
+>
+> `~/.vpn/` 里的凭据不受影响；如果你留着旧版本目录，启动器也仍然能按旧布局工作。
+
 ### 2. 填写账号和 PIN
 
 ```bash
@@ -92,7 +104,7 @@ curl -x socks5h://127.0.0.1:1080 -I https://www.hku.hk/
 | Surge 自动分流 | [配置示例](examples/clients/surge.conf) · [接入步骤](docs/guide.zh-CN.md#surge) |
 | SSH / 远程桌面 | [连接学校电脑](docs/guide.zh-CN.md#ssh-与远程桌面) |
 | Windows / WSL | [PowerShell 封装](examples/shells/hkuvpn.ps1) · [SSH 示例](examples/clients/ssh_config.wsl.example) · [接入步骤](docs/guide.zh-CN.md#windows--wsl) |
-| Windows 原生（免 WSL） | [实验性移植](windows/README.zh-CN.md) · [验收清单](windows/VALIDATION.zh-CN.md) |
+| Windows 原生（免 WSL） | [原生移植](windows/README.zh-CN.md) · [验收清单](windows/VALIDATION.zh-CN.md) |
 
 代理默认只供本机使用，提供 TCP 转发；`socks5h` 会把 DNS 查询也交给代理。使用分流客户端时，**VPN 服务器自身必须走直连或已有代理**，避免绕回 hkuvpn；示例已包含相应规则。
 

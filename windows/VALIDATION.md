@@ -99,8 +99,16 @@ started openconnect (pid 12345) and gost (pid 12346)
 Portal PIN sent; waiting for the MFA prompt...
 ```
 
-Then enter the current six-digit Authenticator code. The window stays
-attached; `Ctrl+C` disconnects.
+Then enter the current six-digit Authenticator code — the one showing in the
+app **now**, because a code is only valid for about 30 seconds. If the
+gateway rejects it you will see:
+
+```text
+The previous MFA code was rejected; enter the current one.
+```
+
+That is not a failure of the port: type the code that is current now and
+the session continues. The window stays attached; `Ctrl+C` disconnects.
 
 ---
 

@@ -48,6 +48,19 @@ cd ~/hkuvpn
 docker build -t local/vpn docker/
 ```
 
+> **Upgrading from v1.0.x?** The Docker edition moved into `docker/` in
+> v1.1.0. After `git pull`, update these four places:
+>
+> | Was | Now |
+> |---|---|
+> | `docker build -t local/vpn .` | `docker build -t local/vpn docker/` |
+> | `~/hkuvpn/bin/hkuvpn` | `~/hkuvpn/docker/bin/hkuvpn` |
+> | `~/hkuvpn/examples/hku.env.example` | `~/hkuvpn/docker/examples/hku.env.example` |
+> | `source ~/hkuvpn/examples/hkuvpn.zsh` | `source ~/hkuvpn/examples/shells/hkuvpn.zsh` |
+>
+> Your `~/.vpn/` credentials are untouched, and the launcher still finds the
+> old layout if you keep an older checkout.
+
 ### 2. Set your account and PIN
 
 ```bash
@@ -92,7 +105,7 @@ HTTP response headers confirm that the proxy request works; access to individual
 | Automatic routing with Surge | [Example](examples/clients/surge.conf) · [Setup](docs/guide.en.md#surge) |
 | SSH / remote desktop | [Connect to a campus computer](docs/guide.en.md#ssh-and-remote-desktop) |
 | Windows / WSL | [PowerShell wrapper](examples/shells/hkuvpn.ps1) · [SSH example](examples/clients/ssh_config.wsl.example) · [Setup](docs/guide.en.md#windows--wsl) |
-| Windows native, no WSL | [Experimental port](windows/README.md) · [Validation checklist](windows/VALIDATION.md) |
+| Windows native, no WSL | [Native port](windows/README.md) · [Validation checklist](windows/VALIDATION.md) |
 
 The proxies listen on localhost and forward TCP traffic; `socks5h` also resolves DNS through the proxy. With a rules client, **the VPN servers themselves must use a direct connection or an existing proxy**, to avoid routing back into hkuvpn. The examples include these rules.
 

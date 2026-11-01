@@ -92,7 +92,13 @@ started openconnect (pid 12345) and gost (pid 12346)
 Portal PIN sent; waiting for the MFA prompt...
 ```
 
-然后输入当前的六位动态验证码。窗口保持前台连接，`Ctrl+C` 断开。
+然后输入当前的六位动态验证码 —— 要输入**此刻** App 上显示的那一个，因为验证码只有约 30 秒有效期。若被网关拒绝，你会看到：
+
+```text
+The previous MFA code was rejected; enter the current one.
+```
+
+这不是移植的故障：输入当前有效的码即可继续。窗口保持前台连接，`Ctrl+C` 断开。
 
 ---
 

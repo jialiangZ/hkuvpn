@@ -1,8 +1,8 @@
-# hkuvpn — 原生 Windows 版（实验性）
+# hkuvpn — 原生 Windows 版
 
 **直接在 Windows 上运行 HKU VPN** —— 无需 WSL、无需 Docker。本移植保留主项目的核心设计目标：默认路由和日常上网完全不受影响，只有你主动走本地代理的流量才进入校园网。
 
-> **状态：实验性。** 所用组件均为官方构建（OpenConnect 官方 Windows 版、gost 官方发行包），但整套胶水层是新写的，需要在真实 HKU 账号上做实地验证。建议保留 Docker/WSL 版本作为后备。差异详见[已知差异](#与-wsldocker-版的已知差异)。
+> **状态：已实地验证，但还年轻。** 所用组件均为官方构建（OpenConnect 官方 Windows 版、gost 官方发行包），并已在真实 HKU 账号 + Windows 11 + PowerShell 5.1 上跑通完整会话（连接、路由、授权资源路由、干净退出）。它仍比容器版新很多，建议保留 Docker/WSL 版本作为后备。差异详见[已知差异](#与-wsldocker-版的已知差异)。
 
 第一次在本移植上动手？先按[验收清单](VALIDATION.zh-CN.md)走一遍 —— 从 `--check`
 到"主机上没有任何残留"，每一步都写明了期望输出。
@@ -12,7 +12,7 @@
 ```
 应用程序 ──► 127.0.0.1:1080 (SOCKS5) / :1088 (HTTP) ──► gost
                                                         │
-      Windows 路由表：校园网段 ─────────────────────────┴─► tun (wintun) ──► HKU
+      Windows 路由表：按需路由的目标 ─────────────────────┴─► tun (wintun) ──► HKU
       其他所有流量 ────────────────────────────────────────► 物理网卡（正常上网）
 ```
 
@@ -87,6 +87,8 @@ hkuvpn --logs       # 跟踪 OpenConnect 日志
 hkuvpn --stop       # 停止并清理分流路由和 NRPT 规则
 ```
 
+**提示后立刻输入动态码。** Authenticator 的码只有约 30 秒有效期，过期后网关会拒绝。若被拒绝，启动器会明确提示 `The previous MFA code was rejected; enter the current one` 并重新询问 —— 此时输入**当前显示**的码即可。`-d` 后台模式同理：投递给 worker 的必须是**当下**有效的码，而不是提前抄下来的旧码。
+
 智能模式会保持挂在当前控制台：关闭窗口（或 Ctrl+C）即断开 VPN，行为类似 Docker 版的 `hkuvpn -f`。想拿回终端就用 `-d` 切换到隐藏后台 worker。
 
 代理使用方式与 Docker 版完全一致：SOCKS5 `127.0.0.1:1080`、HTTP
@@ -97,9 +99,10 @@ hkuvpn --stop       # 停止并清理分流路由和 NRPT 规则
 
 | 主题 | Docker 版 | 原生版 |
 |---|---|---|
-| 哪些流量走 HKU | 代理的**全部**流量（容器默认路由 = tun） | 代理目标：校园网段 + 自动学习路由（`HKU_AUTO_ROUTES`）+ `HKU_EXTRA_ROUTES` |
-| 校外托管的 HKU 授权资源（图书馆数据库等） | 经代理可直接用 | 自动学习（首次请求触发，刷新一次即可）；可用 `HKU_PROXY_DOMAINS` 预置 |
-| `socks5h` 域名解析 | 容器内经隧道解析 | `*.hku.hk` 走 NRPT；其他域名走 Windows DNS |
+| 哪些流量走 HKU | 代理的**全部**流量（容器默认路由 = tun） | 只有你交给代理的流量，且**按需路由**：自动学习到的路由（`HKU_AUTO_ROUTES`）+ `HKU_EXTRA_ROUTES`。网关不下发分流路由，没有别的可路由 |
+| 流量从哪里出网 | 容器发出的流量都走校园出口 | 代理的目标经按需学到的路由走校园出口 |
+| 校外托管的 HKU 授权资源（图书馆数据库等） | 经代理可直接用 | 自动学习，**首次尝试失败也能学到**（目标在拨号瞬间就被记录）；可用 `HKU_PROXY_DOMAINS` 预置 |
+| `socks5h` 域名解析 | 容器内经隧道解析 | 由代理用主机解析器解析；`*.hku.hk` 走 NRPT 规则 —— 但只有网关的 DNS 经隧道可达时才加（港大这边不可达，故主动跳过） |
 | 隔离性 | 容器沙箱、剥离 capabilities | 以提权用户身份直接运行 |
 | PIN 文件安全 | WSL 内 chmod 600 | 位于 `%USERPROFILE%\.vpn`；需要时用 NTFS ACL 加固 |
 | 前置条件 | Docker 运行时（WSL） | 只要装好上述工具；不需要 WSL |
