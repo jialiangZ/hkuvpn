@@ -1049,14 +1049,21 @@ function Drain-PendingRead {
     }
 }
 
-function Find-AndConsume {
+function Find-TrailingPrompt {
+    # Detects an interactive prompt ("Password:", "Response:") in a child's
+    # output buffer.
+    #
+    # OpenConnect writes those prompts WITHOUT a trailing newline, so a real
+    # prompt is always at the END of the buffer. Matching anywhere would also
+    # hit the log line
+    #   "Got HTTP response: ... Enter Your Microsoft verification code Response:"
+    # which is not a prompt at all - and reacting to it makes the worker ask
+    # for another MFA code after the tunnel is already up.
     param([System.Text.StringBuilder]$Buffer, [string]$Pattern)
-    $s = $Buffer.ToString()
-    $i = $s.IndexOf($Pattern, [StringComparison]::OrdinalIgnoreCase)
-    if ($i -lt 0) { return $false }
-    $rest = $s.Substring($i + $Pattern.Length)
+    if (-not $Buffer) { return $false }
+    $s = $Buffer.ToString().TrimEnd()
+    if (-not $s.EndsWith($Pattern, [StringComparison]::OrdinalIgnoreCase)) { return $false }
     $null = $Buffer.Clear()
-    [void]$Buffer.Append($rest)
     return $true
 }
 
@@ -1202,8 +1209,8 @@ function Invoke-TunnelWorker {
             # Portal PIN prompt (also re-answered when the auth form restarts).
             # Consume from BOTH streams: a leftover match in the other buffer
             # would re-trigger and send the PIN twice.
-            $pwOut = Find-AndConsume $outBuf 'Password:'
-            $pwErr = Find-AndConsume $errBuf 'Password:'
+            $pwOut = Find-TrailingPrompt $outBuf 'Password:'
+            $pwErr = Find-TrailingPrompt $errBuf 'Password:'
             if ($pwOut -or $pwErr) {
                 $oc.StandardInput.WriteLine($Cfg.Pin)
                 $oc.StandardInput.Flush()
@@ -1211,8 +1218,8 @@ function Invoke-TunnelWorker {
             }
 
             # MFA prompt; may reappear when a code was rejected or expired.
-            $rsOut = Find-AndConsume $outBuf 'Response:'
-            $rsErr = Find-AndConsume $errBuf 'Response:'
+            $rsOut = Find-TrailingPrompt $outBuf 'Response:'
+            $rsErr = Find-TrailingPrompt $errBuf 'Response:'
             if ($rsOut -or $rsErr) {
                 if ($mfaAttempts -gt 0) {
                     # The gateway rejected the previous code - most often it

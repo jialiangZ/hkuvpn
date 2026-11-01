@@ -115,8 +115,13 @@ Get-Content $env:TEMP\hkuvpn\openconnect.log | Select-String 'connect done'
 Expected — one line per session:
 
 ```text
-2026/11/1 18:20:11 [vpnc] connect done: 6 v4 route(s), 0 v6 route(s), dns=[147.8.4.4 147.8.80.4]
+2026/11/1 18:20:11 [vpnc] connect done: 0 v4 route(s), 0 v6 route(s), dns=[147.8.2.254 147.8.145.254]
 ```
+
+`0 v4 route(s)` is expected with HKU: its gateway is a full-tunnel gateway
+that pushes no split routes, so the native port routes destinations on
+demand instead (see the automatic routing section). The DNS servers are
+recorded either way.
 
 If this line is missing, the vpnc script never ran. Check that
 `--script="…\windows\etc\vpnc-script-win.js"` appears in the OpenConnect

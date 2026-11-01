@@ -107,8 +107,11 @@ Get-Content $env:TEMP\hkuvpn\openconnect.log | Select-String 'connect done'
 期望每次会话出现一行：
 
 ```text
-2026/11/1 18:20:11 [vpnc] connect done: 6 v4 route(s), 0 v6 route(s), dns=[147.8.4.4 147.8.80.4]
+2026/11/1 18:20:11 [vpnc] connect done: 0 v4 route(s), 0 v6 route(s), dns=[147.8.2.254 147.8.145.254]
 ```
+
+`0 v4 route(s)` 是港大网关的正常表现：它是 full-tunnel 网关，不下发任何分流路由，
+原生版因此改为按需路由（见"授权资源自动路由"一节）。DNS 服务器无论如何都会记录。
 
 **没有**这一行，说明 vpnc 脚本压根没跑。检查 OpenConnect 命令行里有没有
 `--script="…\windows\etc\vpnc-script-win.js"`，以及 `cscript.exe` 是否可用。

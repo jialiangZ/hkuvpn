@@ -34,10 +34,17 @@ Application ──► 127.0.0.1:1080 (SOCKS5) / :1088 (HTTP) ──► gost
 The critical difference from the stock OpenConnect script: ours **never
 installs a default route through the tunnel**. It adds only the subnets the
 VPN server pushes (`CISCO_SPLIT_INC_*`) plus your `HKU_EXTRA_ROUTES`, so
-Windows keeps using your physical adapter for everything else. Campus-only
-DNS is handled with an NRPT rule that resolves `*.hku.hk` through the VPN's
-own resolvers (added only when those resolvers are reachable via a pushed
-route).
+Windows keeps using your physical adapter for everything else.
+
+HKU's gateway is a **full-tunnel gateway that pushes no split routes at all**
+(`connect done: 0 v4 route(s)` in the log is normal, not a failure). The
+gateway carries public destinations through the tunnel, so the native port
+routes destinations **on demand** — see below. Campus-only DNS is handled
+with an NRPT rule that resolves `*.hku.hk` through the VPN's own resolvers;
+the rule is only added when those resolvers are actually reachable through
+the tunnel. With HKU they are not, so the rule is skipped on purpose
+(`HKUVPN_NRPT_SKIPPED dns-not-routed`) — a rule pointing at an unreachable
+resolver would only black-hole the lookups.
 
 ## Automatic routing for licensed resources
 
@@ -45,11 +52,13 @@ Windows has no per-process routing, but the native port closes the gap to
 the Docker edition with **auto-learned routes** (`HKU_AUTO_ROUTES=1`,
 default on):
 
-1. Every connection made through the local proxy is visible in gost's
-   connection log, including the resolved destination IP.
-2. When a proxied destination is **not** covered by the campus split
-   routes (e.g. a library database on an external network), its prefix
-   (default `/24`) is routed through the tunnel automatically.
+1. gost runs in debug mode and logs every destination the proxy dials —
+   **before** the connection is attempted, so a destination that never
+   answers is learned too (that is exactly the case of a resource that is
+   only reachable through the campus exit).
+2. When a proxied destination is **not** covered by the routes the server
+   pushed, its prefix (default `/24`) is routed through the tunnel
+   automatically.
 3. Learned routes persist in `%USERPROFILE%\.vpn\learned-routes.txt`,
    survive restarts (TTL 14 days, cap 512 entries), and are re-installed
    at the next connect.
