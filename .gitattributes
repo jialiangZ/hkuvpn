@@ -1,0 +1,14 @@
+# Line endings: the repository stores LF. Windows checkouts get CRLF for the
+# scripts that Windows itself executes, so PowerShell and cscript.exe see
+# their native convention.
+* text=auto eol=lf
+
+*.ps1 text eol=crlf
+*.js  text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+*.sh   text eol=lf
+*.zsh  text eol=lf
+*.fish text eol=lf
+*.exp  text eol=lf

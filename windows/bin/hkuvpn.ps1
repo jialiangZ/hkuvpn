@@ -1,6 +1,6 @@
 #Requires -Version 5.1
 <#
-hkuvpn.ps1 - Native Windows launcher for hkuvpn — HKU campus VPN.
+hkuvpn.ps1 - Native Windows launcher for hkuvpn - HKU campus VPN.
 
 Runs OpenConnect (Windows CLI build) + gost directly on Windows, without
 WSL or Docker. Mirrors docker/bin/hkuvpn of the Docker edition:
@@ -338,14 +338,16 @@ function Get-ServerCertPin {
 function Test-IpInPrefix {
     param([string]$Ip, [string]$Net, [int]$MaskLen)
     try {
+        if ($MaskLen -eq 0) { return $true }
         $ipBytes  = ([Net.IPAddress]::Parse($Ip)).GetAddressBytes()
         $netBytes = ([Net.IPAddress]::Parse($Net)).GetAddressBytes()
         [Array]::Reverse($ipBytes); [Array]::Reverse($netBytes)
         $ipU  = [BitConverter]::ToUInt32($ipBytes, 0)
         $netU = [BitConverter]::ToUInt32($netBytes, 0)
-        if ($MaskLen -eq 0) { return $true }
-        $mask = [uint32](0xFFFFFFFF) -shl (32 - $MaskLen)
-        return (($ipU -band $mask) -eq ($netU -band $mask))
+        # [uint64] of a positive literal is safe; [uint32] of 0xFFFFFFFF is
+        # not, because PowerShell parses 0xFFFFFFFF as [int]-1.
+        $mask = ([uint64]0xFFFFFFFF) -shl (32 - $MaskLen)
+        return (([uint64]$ipU -band $mask) -eq ([uint64]$netU -band $mask))
     } catch {
         return $false
     }
@@ -444,10 +446,11 @@ function Get-PrefixMaskDotted {
     param([int]$MaskLen)
     if ($MaskLen -le 0) { return '0.0.0.0' }
     if ($MaskLen -gt 32) { $MaskLen = 32 }
-    $full = 0xFFFFFFFF
-    if ($MaskLen -lt 32) { $full = [uint32](0xFFFFFFFF -shl (32 - $MaskLen)) }
-    return ('{0}.{1}.{2}.{3}' -f (($full -shr 24) -band 255),
-        (($full -shr 16) -band 255), (($full -shr 8) -band 255), ($full -band 255))
+    # NOTE: 0xFFFFFFFF is [int]-1 in PowerShell, and casting a negative value
+    # to [uint32] throws, so the mask is built in 64-bit arithmetic.
+    $mask = ([int64]0xFFFFFFFF) -shl (32 - $MaskLen)
+    return ('{0}.{1}.{2}.{3}' -f (($mask -shr 24) -band 255),
+        (($mask -shr 16) -band 255), (($mask -shr 8) -band 255), ($mask -band 255))
 }
 
 function Get-NetPrefixBase {
@@ -455,13 +458,13 @@ function Get-NetPrefixBase {
     if ($MaskLen -le 0) { return '0.0.0.0' }
     if ($MaskLen -gt 32) { $MaskLen = 32 }
     $b = ([Net.IPAddress]::Parse($Ip)).GetAddressBytes()
-    $full = 0xFFFFFFFF
-    if ($MaskLen -lt 32) { $full = [uint32](0xFFFFFFFF -shl (32 - $MaskLen)) }
-    $b[0] = [byte]($b[0] -band (($full -shr 24) -band 255))
-    $b[1] = [byte]($b[1] -band (($full -shr 16) -band 255))
-    $b[2] = [byte]($b[2] -band (($full -shr 8) -band 255))
-    $b[3] = [byte]($b[3] -band ($full -band 255))
-    return ($b -join '.')
+    # 64-bit arithmetic: [uint32] casts of a negative int throw in PowerShell.
+    $mask = ([int64]0xFFFFFFFF) -shl (32 - $MaskLen)
+    $v = (([int64]$b[0] -shl 24) -bor ([int64]$b[1] -shl 16) -bor
+          ([int64]$b[2] -shl 8) -bor ([int64]$b[3]))
+    $v = $v -band $mask
+    return ('{0}.{1}.{2}.{3}' -f (($v -shr 24) -band 255),
+        (($v -shr 16) -band 255), (($v -shr 8) -band 255), ($v -band 255))
 }
 
 function Get-LearnedRoutes {

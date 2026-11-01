@@ -1,4 +1,4 @@
-// vpnc-script-win.js — split-tunnel-only variant for the native Windows port
+// vpnc-script-win.js - split-tunnel-only variant for the native Windows port
 // of hkuvpn (HKU campus VPN).
 //
 // This is an ORIGINAL implementation written for this project. It speaks the
@@ -55,7 +55,7 @@ function myTrim(s) {
 }
 
 function run(cmd) {
-    // Synchronous cmd.exe execution; failure is logged, never fatal — a
+    // Synchronous cmd.exe execution; failure is logged, never fatal - a
     // duplicate `route add` on reconnect is harmless, and a missing DNS
     // entry must not tear down an otherwise working tunnel.
     var fullCmd = comspec + " /C \"" + cmd + "\" 2>&1";
