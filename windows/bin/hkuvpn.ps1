@@ -339,15 +339,17 @@ function Test-IpInPrefix {
     param([string]$Ip, [string]$Net, [int]$MaskLen)
     try {
         if ($MaskLen -eq 0) { return $true }
+        if ($MaskLen -gt 32) { $MaskLen = 32 }
         $ipBytes  = ([Net.IPAddress]::Parse($Ip)).GetAddressBytes()
         $netBytes = ([Net.IPAddress]::Parse($Net)).GetAddressBytes()
         [Array]::Reverse($ipBytes); [Array]::Reverse($netBytes)
-        $ipU  = [BitConverter]::ToUInt32($ipBytes, 0)
-        $netU = [BitConverter]::ToUInt32($netBytes, 0)
-        # [uint64] of a positive literal is safe; [uint32] of 0xFFFFFFFF is
-        # not, because PowerShell parses 0xFFFFFFFF as [int]-1.
-        $mask = ([uint64]0xFFFFFFFF) -shl (32 - $MaskLen)
-        return (([uint64]$ipU -band $mask) -eq ([uint64]$netU -band $mask))
+        $ipI  = [int64][BitConverter]::ToUInt32($ipBytes, 0)
+        $netI = [int64][BitConverter]::ToUInt32($netBytes, 0)
+        # Build the mask in positive 64-bit arithmetic. PowerShell's -shl
+        # operator narrows its operand to 32 bits, and casting 0xFFFFFFFF to
+        # [uint32] throws, so neither [uint32] nor -shl may be used here.
+        $mask = [int64]4294967295 - ([int64][math]::Pow(2, 32 - $MaskLen) - 1)
+        return (($ipI -band $mask) -eq ($netI -band $mask))
     } catch {
         return $false
     }
