@@ -752,7 +752,11 @@ function Invoke-Preflight {
     if ($curl) { Write-Info 'curl.exe : ok' }
     else { Write-Info 'curl.exe : missing (status e2e check disabled; Windows 10 1803+ has it)' }
 
-    if ((Get-Process -Id (Read-PidValue 'OPENCONNECT') -ErrorAction SilentlyContinue)) {
+    # NOTE: PID 0 is the Windows System Idle process and Get-Process returns
+    # it happily, so a missing pid file (Read-PidValue -> 0) must never be
+    # treated as a live session.
+    $ocPid = Read-PidValue 'OPENCONNECT'
+    if ($ocPid -gt 0 -and (Get-Process -Id $ocPid -ErrorAction SilentlyContinue)) {
         Write-Info 'ports    : session appears to be running (hkuvpn.ps1 --status verifies health)'
     } elseif ((Test-PortFree $socksPort) -and (Test-PortFree $httpPort)) {
         Write-Info ("ports    : 127.0.0.1:{0} and {1} free" -f $socksPort, $httpPort)
