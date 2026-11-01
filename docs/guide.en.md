@@ -58,8 +58,9 @@ A matching PowerShell wrapper for Windows is provided in
 > | `~/hkuvpn/examples/hku.env.example` | `~/hkuvpn/docker/examples/hku.env.example` |
 >
 > Re-run the `printf` line above once to fix the path in your shell
-> profile. `~/.vpn/` keeps your credentials, and `HKUVPN_HOME` still points
-> at the repository root.
+> profile — a stale `source` line makes every new terminal print
+> `No such file or directory`. `~/.vpn/` keeps your credentials, and
+> `HKUVPN_HOME` still points at the repository root.
 
 If the clone is elsewhere, set `HKUVPN_HOME` (the older `DOCKER_VPN_HOME`
 name is still honored):
@@ -71,6 +72,11 @@ export HKUVPN_HOME=/path/to/hkuvpn        # Zsh/Bash
 ```fish
 set -Ux HKUVPN_HOME /path/to/hkuvpn      # Fish
 ```
+
+The wrappers locate the repository **relative to their own file**, so the
+paths above are only needed if you copy a wrapper somewhere else (the Fish
+one is meant to be copied). The launcher itself also derives the
+repository root from its own location.
 
 ### Daily Commands
 

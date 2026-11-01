@@ -51,7 +51,9 @@ Windows 侧 PowerShell 的等价封装见 `examples/shells/hkuvpn.ps1`：把该�
 > | `docker build -t local/vpn .` | `docker build -t local/vpn docker/` |
 > | `~/hkuvpn/examples/hku.env.example` | `~/hkuvpn/docker/examples/hku.env.example` |
 >
-> 把上面的 `printf` 命令重跑一次即可修正 shell 配置里的路径。`~/.vpn/` 里的凭据保持不变，`HKUVPN_HOME` 仍然指向仓库根目录。
+> 把上面的 `printf` 命令重跑一次即可修正 shell 配置里的路径 —— 残留的 `source`
+> 行会让每个新终端都打印 `No such file or directory`。`~/.vpn/` 里的凭据保持不变，
+> `HKUVPN_HOME` 仍然指向仓库根目录。
 
 仓库不在 `~/hkuvpn` 时，设置 `HKUVPN_HOME`（旧的 `DOCKER_VPN_HOME` 仍然兼容）：
 
@@ -62,6 +64,8 @@ export HKUVPN_HOME=/path/to/hkuvpn        # Zsh/Bash
 ```fish
 set -Ux HKUVPN_HOME /path/to/hkuvpn      # Fish
 ```
+
+封装脚本会**按自身文件位置**定位仓库，所以只有把封装复制到别处时（Fish 版就是这种用法）才需要上面的路径。启动器本身同样按自身位置推导仓库根目录。
 
 ### 日常命令
 
