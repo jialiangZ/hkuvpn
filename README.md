@@ -134,6 +134,8 @@ Two editions live side by side, each self-contained:
 hkuvpn/
 ├── README.md                  # English README (this file)
 ├── README.zh-CN.md            # 简体中文说明
+├── LICENSE                    # MIT License
+├── NOTICE                     # Upstream attribution + third-party notices
 ├── index.html                 # Project website (GitHub Pages)
 ├── docker/                    # Docker edition: Linux / macOS / Windows-WSL
 │   ├── Dockerfile             # Image: OpenConnect + gost + MFA entrypoint

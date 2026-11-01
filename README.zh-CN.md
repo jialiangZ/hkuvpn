@@ -134,6 +134,8 @@ curl -x socks5h://127.0.0.1:1080 -I https://www.hku.hk/
 hkuvpn/
 ├── README.md                  # English README
 ├── README.zh-CN.md            # 简体中文说明（本文）
+├── LICENSE                    # MIT 许可证
+├── NOTICE                     # 上游署名与第三方声明
 ├── index.html                 # 项目网站（GitHub Pages）
 ├── docker/                    # Docker 版：Linux / macOS / Windows-WSL
 │   ├── Dockerfile             # 镜像：OpenConnect + gost + MFA 入口
