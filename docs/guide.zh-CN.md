@@ -452,9 +452,14 @@ hkuvpn 的便携核心包括启动器、Shell 包装函数、路由示例和容�
 
 ### 来源与许可证
 
+hkuvpn 以 [MIT 许可证](../LICENSE) 发布。
+
 本项目基于 [ethack/docker-vpn](https://github.com/ethack/docker-vpn)，经由
 [rqhu1995/docker-vpn](https://github.com/rqhu1995/docker-vpn) 的 HKU 版改造而来，
 并针对 HKU、OpenConnect MFA、本机回环代理、授权资源自动路由，以及免 WSL/Docker
-的 Windows 原生运行做了进一步适配。
+的 Windows 原生运行做了进一步适配。上述两个上游项目发布时均未附带明确许可证；
+本仓库发布的内容适用上述 MIT 条款，并完整保留上游署名。
 
-仓库目前没有明确的 `LICENSE` 文件。Fork 并不自动产生授权；维护者应在邀请重新分发或外部贡献前选择兼容许可证，并加入完整许可证文本。
+其中一个文件保留其自身许可证：`docker/etc/vpnc-script` 原样 vendored 自
+[openconnect/vpnc-scripts](https://gitlab.com/openconnect/openconnect/-/tree/master/vpnc-scripts)，
+仍按其文件头声明的 GNU General Public License v2 授权。

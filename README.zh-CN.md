@@ -1,5 +1,7 @@
 # <img src="docs/images/hkuvpn-icon.png" width="44" alt="hkuvpn 图标"> hkuvpn
 
+[![MIT 许可证](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **访问港大校园网，同时继续使用你原来的上网线路。**
 
 [English](README.md) · [简体中文](README.zh-CN.md) · [项目网站](https://jialiangZ.github.io/hkuvpn/) · [详细指南](docs/guide.zh-CN.md)
@@ -156,4 +158,4 @@ hkuvpn/
 
 更多内容：[故障排查](docs/guide.zh-CN.md#常见故障) · [安全说明](docs/guide.zh-CN.md#安全说明) · [兼容性与版本](docs/guide.zh-CN.md#兼容性与版本)
 
-基于 [ethack/docker-vpn](https://github.com/ethack/docker-vpn)，经由 [rqhu1995/docker-vpn](https://github.com/rqhu1995/docker-vpn) 的 HKU 版改造。仓库尚未提供 `LICENSE`，详见[来源与许可证](docs/guide.zh-CN.md#来源与许可证)。
+基于 [ethack/docker-vpn](https://github.com/ethack/docker-vpn)，经由 [rqhu1995/docker-vpn](https://github.com/rqhu1995/docker-vpn) 的 HKU 版改造。以 [MIT 许可证](LICENSE) 发布，保留上游署名。详见[来源与许可证](docs/guide.zh-CN.md#来源与许可证)。

@@ -1,5 +1,7 @@
 # <img src="docs/images/hkuvpn-icon.png" width="44" alt="hkuvpn icon"> hkuvpn
 
+[![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **Access HKU's campus network while keeping your usual Internet connection.**
 
 [English](README.md) · [简体中文](README.zh-CN.md) · [Project website](https://jialiangZ.github.io/hkuvpn/) · [Full guide](docs/guide.en.md)
@@ -156,4 +158,4 @@ hkuvpn/
 
 More: [Troubleshooting](docs/guide.en.md#troubleshooting) · [Security](docs/guide.en.md#security) · [Compatibility and versions](docs/guide.en.md#compatibility-and-versions)
 
-Adapted from [ethack/docker-vpn](https://github.com/ethack/docker-vpn) via the HKU edition by [rqhu1995/docker-vpn](https://github.com/rqhu1995/docker-vpn). This repository has no `LICENSE` file; see [Credits and licensing](docs/guide.en.md#credits-and-licensing).
+Adapted from [ethack/docker-vpn](https://github.com/ethack/docker-vpn) via the HKU edition by [rqhu1995/docker-vpn](https://github.com/rqhu1995/docker-vpn). Released under the [MIT License](LICENSE), with upstream attribution preserved. See [Credits and licensing](docs/guide.en.md#credits-and-licensing).
