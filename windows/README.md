@@ -10,6 +10,11 @@ enters the campus network.
 > field testing on real HKU accounts. Keep the Docker/WSL edition as a
 > fallback. See [Known differences](#known-differences-vs-the-wsldocker-edition).
 
+Working on this port for the first time? Work through the
+[validation checklist](VALIDATION.md) — it walks through every step from
+`--check` to "nothing left behind on the host", with the expected output of
+each command.
+
 ## How it works
 
 ```
