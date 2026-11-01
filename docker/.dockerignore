@@ -1,0 +1,9 @@
+# The Docker build context is the docker/ directory:
+#   docker build -t local/vpn docker/
+# Only etc/vpnc-script, keys/, and hku-connect.exp are copied into the image;
+# the host launcher (bin/), the config template (examples/), and the docs are
+# not part of the image.
+bin/
+examples/
+*.md
+.DS_Store

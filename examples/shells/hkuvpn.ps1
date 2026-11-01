@@ -10,7 +10,7 @@
 # wsl.exe forwards the terminal.
 
 $HkuvpnDistro  = "Ubuntu"                  # list with: wsl.exe -l -v
-$HkuvpnCommand = "~/hkuvpn/bin/hkuvpn" # path inside the distro
+$HkuvpnCommand = "~/hkuvpn/docker/bin/hkuvpn" # path inside the distro
 
 function hkuvpn {
     wsl.exe --distribution $HkuvpnDistro -- $HkuvpnCommand @args

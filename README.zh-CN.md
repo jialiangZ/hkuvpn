@@ -2,7 +2,7 @@
 
 **访问港大校园网，同时继续使用你原来的上网线路。**
 
-[English](Readme.md) · [简体中文](README.zh-CN.md) · [项目网站](https://jialiangZ.github.io/hkuvpn/) · [详细指南](docs/guide.zh-CN.md)
+[English](README.md) · [简体中文](README.zh-CN.md) · [项目网站](https://jialiangZ.github.io/hkuvpn/) · [详细指南](docs/guide.zh-CN.md)
 
 查校内资源、SSH 到实验室、远程控制学校电脑时，还想让浏览器和 AI 工具继续走原来的网络？hkuvpn 把 HKU VPN 放进 Docker（Windows 也可免 WSL 原生运行），提供本地代理，由你选择哪些请求进入校园网，主机默认路由保持不变。
 
@@ -43,14 +43,14 @@ colima start --cpu 2 --memory 2 --disk 20 --vm-type vz --mount-type virtiofs
 ```bash
 git clone https://github.com/jialiangZ/hkuvpn.git ~/hkuvpn
 cd ~/hkuvpn
-docker build -t local/vpn .
+docker build -t local/vpn docker/
 ```
 
 ### 2. 填写账号和 PIN
 
 ```bash
 mkdir -p ~/.vpn
-cp ~/hkuvpn/examples/hku.env.example ~/.vpn/hku.env
+cp ~/hkuvpn/docker/examples/hku.env.example ~/.vpn/hku.env
 nano ~/.vpn/hku.env
 ```
 
@@ -67,7 +67,7 @@ nano ~/.vpn/hku.pass
 ### 3. 连接并验证
 
 ```bash
-~/hkuvpn/bin/hkuvpn
+~/hkuvpn/docker/bin/hkuvpn
 ```
 
 运行 `hkuvpn`，出现 `MFA code` 提示时输入 Authenticator 当前六位验证码，看到 `Connected` 即代理就绪；验证码输错会直接重新提示。经典前台模式用 `hkuvpn -f`（保持终端开启，`Ctrl+C` 断开）。
@@ -86,10 +86,10 @@ curl -x socks5h://127.0.0.1:1080 -I https://www.hku.hk/
 |---|---|
 | 应用直接使用 SOCKS5 | `127.0.0.1:1080` |
 | 应用直接使用 HTTP 代理 | `127.0.0.1:1088` |
-| Clash Verge Rev / Mihomo 自动分流 | [配置示例](examples/clash-verge.yaml) · [接入步骤](docs/guide.zh-CN.md#clash-verge-rev--mihomo) |
-| Surge 自动分流 | [配置示例](examples/surge.conf) · [接入步骤](docs/guide.zh-CN.md#surge) |
+| Clash Verge Rev / Mihomo 自动分流 | [配置示例](examples/clients/clash-verge.yaml) · [接入步骤](docs/guide.zh-CN.md#clash-verge-rev--mihomo) |
+| Surge 自动分流 | [配置示例](examples/clients/surge.conf) · [接入步骤](docs/guide.zh-CN.md#surge) |
 | SSH / 远程桌面 | [连接学校电脑](docs/guide.zh-CN.md#ssh-与远程桌面) |
-| Windows / WSL | [PowerShell 封装](examples/hkuvpn.ps1) · [SSH 示例](examples/ssh_config.wsl.example) · [接入步骤](docs/guide.zh-CN.md#windows--wsl) |
+| Windows / WSL | [PowerShell 封装](examples/shells/hkuvpn.ps1) · [SSH 示例](examples/clients/ssh_config.wsl.example) · [接入步骤](docs/guide.zh-CN.md#windows--wsl) |
 | Windows 原生（免 WSL） | [实验性移植](windows/README.zh-CN.md) |
 
 代理默认只供本机使用，提供 TCP 转发；`socks5h` 会把 DNS 查询也交给代理。使用分流客户端时，**VPN 服务器自身必须走直连或已有代理**，避免绕回 hkuvpn；示例已包含相应规则。
@@ -97,16 +97,16 @@ curl -x socks5h://127.0.0.1:1080 -I https://www.hku.hk/
 日常操作：
 
 ```bash
-~/hkuvpn/bin/hkuvpn              # 智能连接：提示输入 MFA，等隧道就绪
-~/hkuvpn/bin/hkuvpn              # 已连接时运行 = 报告状态
-~/hkuvpn/bin/hkuvpn --check      # 连接前预检（退出码 0 即就绪）
-~/hkuvpn/bin/hkuvpn -f           # 经典前台模式
-~/hkuvpn/bin/hkuvpn -d           # 后台连接（等 MFA 提示就绪后返回）
-~/hkuvpn/bin/hkuvpn --mfa <code> # 交付后台容器的验证码
-~/hkuvpn/bin/hkuvpn --status     # 分层健康检查（退出码可脚本化）
-~/hkuvpn/bin/hkuvpn --logs       # 跟随容器日志
-~/hkuvpn/bin/hkuvpn --stop       # 停止
-~/hkuvpn/bin/hkuvpn --recover    # 修复 Docker 后端，不触发 MFA
+~/hkuvpn/docker/bin/hkuvpn              # 智能连接：提示输入 MFA，等隧道就绪
+~/hkuvpn/docker/bin/hkuvpn              # 已连接时运行 = 报告状态
+~/hkuvpn/docker/bin/hkuvpn --check      # 连接前预检（退出码 0 即就绪）
+~/hkuvpn/docker/bin/hkuvpn -f           # 经典前台模式
+~/hkuvpn/docker/bin/hkuvpn -d           # 后台连接（等 MFA 提示就绪后返回）
+~/hkuvpn/docker/bin/hkuvpn --mfa <code> # 交付后台容器的验证码
+~/hkuvpn/docker/bin/hkuvpn --status     # 分层健康检查（退出码可脚本化）
+~/hkuvpn/docker/bin/hkuvpn --logs       # 跟随容器日志
+~/hkuvpn/docker/bin/hkuvpn --stop       # 停止
+~/hkuvpn/docker/bin/hkuvpn --recover    # 修复 Docker 后端，不触发 MFA
 ```
 
 [安装简短的 `hkuvpn` 命令](docs/guide.zh-CN.md#安装简短的-hkuvpn-命令) · [修改默认端口](docs/guide.zh-CN.md#直接使用本地代理)
@@ -118,6 +118,39 @@ curl -x socks5h://127.0.0.1:1080 -I https://www.hku.hk/
 ![学校电脑上的开发工具经反向 SSH 使用本机已有代理访问外部服务](docs/images/reverse-proxy-flow-zh.png)
 
 本机需同时保持 HKU VPN、SSH 隧道和原有代理在线。只在本机浏览器使用 AI 网页时，无需这一步。[查看配置与验证步骤 →](docs/guide.zh-CN.md#通过反向-ssh-为学校电脑提供代理)
+
+## 仓库结构
+
+两个版本并列存放，各自自洽：
+
+| 版本 | 目录 | 适用平台 |
+|---|---|---|
+| Docker 版 | [`docker/`](docker/) | Linux、macOS、Windows（经 WSL2） |
+| Windows 原生版 | [`windows/`](windows/) | Windows 10/11，无需 WSL 与 Docker |
+
+```text
+hkuvpn/
+├── README.md                  # English README
+├── README.zh-CN.md            # 简体中文说明（本文）
+├── index.html                 # 项目网站（GitHub Pages）
+├── docker/                    # Docker 版：Linux / macOS / Windows-WSL
+│   ├── Dockerfile             # 镜像：OpenConnect + gost + MFA 入口
+│   ├── bin/hkuvpn             # 启动器：连接、--status、--stop 等
+│   ├── etc/vpnc-script        # 容器内执行的路由脚本
+│   ├── examples/              # 本版本的 hku.env 模板
+│   ├── hku-connect.exp        # 回答 MFA 表单的 expect 脚本
+│   └── keys/                  # OpenConnect 发布公钥（构建期校验）
+├── windows/                   # Windows 原生版：免 WSL、免 Docker
+│   ├── bin/hkuvpn.ps1         # 启动器：连接、--status、--stop 等
+│   ├── bin/get-tools.ps1      # 下载并校验 gost + OpenConnect
+│   ├── etc/vpnc-script-win.js # 仅分流、不改默认路由的路由脚本
+│   ├── examples/              # 本版本的 hku.env 模板
+│   └── README.md              # 本版本说明（英文 / 简体中文）
+├── examples/                  # 两个版本共用的接入示例
+│   ├── clients/               # Clash Verge Rev、Surge、SSH 配置
+│   └── shells/                # Zsh / Bash / Fish / PowerShell 封装
+└── docs/                      # 详细指南与配图
+```
 
 ---
 

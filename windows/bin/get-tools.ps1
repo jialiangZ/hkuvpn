@@ -4,7 +4,7 @@ get-tools.ps1 - fetch the native Windows dependencies for hkuvpn.ps1.
 
   1. gost v3.3.0 (windows/amd64) - the SOCKS5/HTTP proxy listeners.
      Download is verified against a SHA256 pinned from the official
-     go-gost checksums.txt, the same way the Dockerfile pins it.
+     go-gost checksums.txt, the same way docker/Dockerfile pins it.
   2. OpenConnect command-line installer (64-bit, GnuTLS build, includes
      the Wintun driver since OpenConnect v9.00). This is an automated
      GitLab CI build of the master branch, so its hash cannot be pinned;

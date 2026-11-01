@@ -12,7 +12,7 @@ foreach var {OC_USER OC_HOST OC_SERVERCERT} {
 # The PIN arrives through a read-only single-file mount (/run/hku-pass, backed
 # by ~/.vpn/hku.pass), so it never appears in `docker run` arguments,
 # `docker inspect`, or the host process list. HKU_PASSWORD remains supported
-# as a legacy fallback (e.g. for the poc/ variant). Re-read on every form
+# as a legacy fallback. Re-read on every form
 # round so a restarted auth form can be answered again.
 proc load_pin {} {
     if {[file exists /run/hku-pass]} {

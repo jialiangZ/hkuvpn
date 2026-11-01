@@ -570,13 +570,14 @@
     <main>
       <section class="hero">
         <div class="container">
-          <p class="eyebrow">HKU VPN in Docker</p>
+          <p class="eyebrow">HKU VPN for Docker and native Windows</p>
           <h1>hkuvpn — HKU campus VPN</h1>
           <p class="hero-copy">
             Run OpenConnect with Microsoft Authenticator MFA inside a Docker
-            container, then use the HKU tunnel through local SOCKS5 and HTTP
-            proxies. Access HKU Library, campus SSH, and remote desktop without
-            replacing your computer's default route.
+            container — or natively on Windows, without WSL — then use the HKU
+            tunnel through local SOCKS5 and HTTP proxies. Access HKU Library,
+            campus SSH, and remote desktop without replacing your computer's
+            default route.
           </p>
           <div class="hero-actions">
             <a class="button primary" href="https://github.com/jialiangZ/hkuvpn">View source on GitHub</a>
@@ -634,7 +635,7 @@ docker info</code></pre>
               <p>Build the local image directly from the public repository.</p>
               <pre><code>git clone https://github.com/jialiangZ/hkuvpn.git ~/hkuvpn
 cd ~/hkuvpn
-docker build -t local/vpn .</code></pre>
+docker build -t local/vpn docker/</code></pre>
             </li>
 
             <li class="wide">
@@ -646,7 +647,7 @@ docker build -t local/vpn .</code></pre>
               </p>
               <div class="config-grid">
                 <pre><code>mkdir -p ~/.vpn
-cp ~/hkuvpn/examples/hku.env.example ~/.vpn/hku.env
+cp ~/hkuvpn/docker/examples/hku.env.example ~/.vpn/hku.env
 printf '%s' 'YOUR_PORTAL_PIN' &gt; ~/.vpn/hku.pass
 chmod 600 ~/.vpn/hku.pass</code></pre>
                 <pre><code>HKU_USER=youruid@connect.hku.hk</code></pre>
@@ -656,11 +657,11 @@ chmod 600 ~/.vpn/hku.pass</code></pre>
             <li>
               <h3>Connect</h3>
               <p>Connect to the official HKUVPN server, then enter the current six-digit code at <code>Response:</code> — or run detached and send the code with <code>--mfa</code>.</p>
-              <pre><code>~/hkuvpn/bin/hkuvpn
+              <pre><code>~/hkuvpn/docker/bin/hkuvpn
 
 # background alternative
-~/hkuvpn/bin/hkuvpn -d
-~/hkuvpn/bin/hkuvpn --mfa 123456</code></pre>
+~/hkuvpn/docker/bin/hkuvpn -d
+~/hkuvpn/docker/bin/hkuvpn --mfa 123456</code></pre>
             </li>
 
             <li>
@@ -670,7 +671,7 @@ chmod 600 ~/.vpn/hku.pass</code></pre>
   -I https://www.hku.hk/
 
 # layered health check (exit 0 = all ok)
-~/hkuvpn/bin/hkuvpn --status</code></pre>
+~/hkuvpn/docker/bin/hkuvpn --status</code></pre>
             </li>
           </ol>
 
@@ -716,8 +717,9 @@ chmod 600 ~/.vpn/hku.pass</code></pre>
           </p>
           <div class="link-row">
             <a class="button" href="https://github.com/jialiangZ/hkuvpn">GitHub repository</a>
-            <a class="button" href="https://github.com/jialiangZ/hkuvpn/blob/main/Readme.md">English README</a>
+            <a class="button" href="https://github.com/jialiangZ/hkuvpn/blob/main/README.md">English README</a>
             <a class="button" href="https://github.com/jialiangZ/hkuvpn/blob/main/README.zh-CN.md">简体中文 README</a>
+            <a class="button" href="https://github.com/jialiangZ/hkuvpn/tree/main/windows">Native Windows</a>
             <a class="button" href="https://github.com/jialiangZ/hkuvpn/issues">Issues</a>
           </div>
         </div>
@@ -727,7 +729,7 @@ chmod 600 ~/.vpn/hku.pass</code></pre>
     <footer>
       <div class="container footer-row">
         <p>hkuvpn</p>
-        <p>OpenConnect MFA and selective HKU routing in Docker.</p>
+        <p>OpenConnect MFA and selective HKU routing, in Docker or natively on Windows.</p>
       </div>
     </footer>
   </body>

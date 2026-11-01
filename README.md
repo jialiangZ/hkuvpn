@@ -2,7 +2,7 @@
 
 **Access HKU's campus network while keeping your usual Internet connection.**
 
-[English](Readme.md) · [简体中文](README.zh-CN.md) · [Project website](https://jialiangZ.github.io/hkuvpn/) · [Full guide](docs/guide.en.md)
+[English](README.md) · [简体中文](README.zh-CN.md) · [Project website](https://jialiangZ.github.io/hkuvpn/) · [Full guide](docs/guide.en.md)
 
 Need campus resources, lab SSH, or remote desktop while your browser and AI tools keep using their usual connection? hkuvpn runs the HKU VPN inside Docker — or natively on Windows, without WSL — and exposes a local proxy. You choose which requests enter the campus network; your host's default route stays unchanged.
 
@@ -43,14 +43,14 @@ Check that `docker info` works, then run:
 ```bash
 git clone https://github.com/jialiangZ/hkuvpn.git ~/hkuvpn
 cd ~/hkuvpn
-docker build -t local/vpn .
+docker build -t local/vpn docker/
 ```
 
 ### 2. Set your account and PIN
 
 ```bash
 mkdir -p ~/.vpn
-cp ~/hkuvpn/examples/hku.env.example ~/.vpn/hku.env
+cp ~/hkuvpn/docker/examples/hku.env.example ~/.vpn/hku.env
 nano ~/.vpn/hku.env
 ```
 
@@ -67,7 +67,7 @@ Enter only your **static Portal PIN**, not the changing Authenticator code. In N
 ### 3. Connect and verify
 
 ```bash
-~/hkuvpn/bin/hkuvpn
+~/hkuvpn/docker/bin/hkuvpn
 ```
 
 Run `hkuvpn`; when the `MFA code` prompt appears, enter the current six-digit Authenticator code and wait for `Connected` — the proxy is then ready. A mistyped or expired code simply re-prompts. The classic foreground mode is `hkuvpn -f` (keep the terminal open; `Ctrl+C` disconnects).
@@ -86,10 +86,10 @@ HTTP response headers confirm that the proxy request works; access to individual
 |---|---|
 | SOCKS5 in an application | `127.0.0.1:1080` |
 | HTTP proxy in an application | `127.0.0.1:1088` |
-| Automatic routing with Clash Verge Rev / Mihomo | [Example](examples/clash-verge.yaml) · [Setup](docs/guide.en.md#clash-verge-rev--mihomo) |
-| Automatic routing with Surge | [Example](examples/surge.conf) · [Setup](docs/guide.en.md#surge) |
+| Automatic routing with Clash Verge Rev / Mihomo | [Example](examples/clients/clash-verge.yaml) · [Setup](docs/guide.en.md#clash-verge-rev--mihomo) |
+| Automatic routing with Surge | [Example](examples/clients/surge.conf) · [Setup](docs/guide.en.md#surge) |
 | SSH / remote desktop | [Connect to a campus computer](docs/guide.en.md#ssh-and-remote-desktop) |
-| Windows / WSL | [PowerShell wrapper](examples/hkuvpn.ps1) · [SSH example](examples/ssh_config.wsl.example) · [Setup](docs/guide.en.md#windows--wsl) |
+| Windows / WSL | [PowerShell wrapper](examples/shells/hkuvpn.ps1) · [SSH example](examples/clients/ssh_config.wsl.example) · [Setup](docs/guide.en.md#windows--wsl) |
 | Windows native, no WSL | [Experimental port](windows/README.md) |
 
 The proxies listen on localhost and forward TCP traffic; `socks5h` also resolves DNS through the proxy. With a rules client, **the VPN servers themselves must use a direct connection or an existing proxy**, to avoid routing back into hkuvpn. The examples include these rules.
@@ -97,16 +97,16 @@ The proxies listen on localhost and forward TCP traffic; `socks5h` also resolves
 Everyday commands:
 
 ```bash
-~/hkuvpn/bin/hkuvpn              # smart connect: prompts for MFA, waits for the tunnel
-~/hkuvpn/bin/hkuvpn              # run again while connected: reports status
-~/hkuvpn/bin/hkuvpn --check      # pre-flight check (exit 0 = ready)
-~/hkuvpn/bin/hkuvpn -f           # classic foreground connect
-~/hkuvpn/bin/hkuvpn -d           # background connect (waits for MFA readiness)
-~/hkuvpn/bin/hkuvpn --mfa <code> # deliver the code to the detached container
-~/hkuvpn/bin/hkuvpn --status     # layered health check (scriptable exit codes)
-~/hkuvpn/bin/hkuvpn --logs       # follow the container logs
-~/hkuvpn/bin/hkuvpn --stop       # stop
-~/hkuvpn/bin/hkuvpn --recover    # repair the Docker backend without MFA
+~/hkuvpn/docker/bin/hkuvpn              # smart connect: prompts for MFA, waits for the tunnel
+~/hkuvpn/docker/bin/hkuvpn              # run again while connected: reports status
+~/hkuvpn/docker/bin/hkuvpn --check      # pre-flight check (exit 0 = ready)
+~/hkuvpn/docker/bin/hkuvpn -f           # classic foreground connect
+~/hkuvpn/docker/bin/hkuvpn -d           # background connect (waits for MFA readiness)
+~/hkuvpn/docker/bin/hkuvpn --mfa <code> # deliver the code to the detached container
+~/hkuvpn/docker/bin/hkuvpn --status     # layered health check (scriptable exit codes)
+~/hkuvpn/docker/bin/hkuvpn --logs       # follow the container logs
+~/hkuvpn/docker/bin/hkuvpn --stop       # stop
+~/hkuvpn/docker/bin/hkuvpn --recover    # repair the Docker backend without MFA
 ```
 
 [Install the short `hkuvpn` command](docs/guide.en.md#install-the-short-hkuvpn-command) · [Change the default ports](docs/guide.en.md#use-a-proxy-directly)
@@ -118,6 +118,39 @@ Your development tools run on a campus computer, but the proxy they need is on y
 ![Development tools on a campus computer use reverse SSH to reach external services through your existing local proxy](docs/images/reverse-proxy-flow-en.png)
 
 Keep the HKU VPN, SSH tunnel, and existing local proxy running. This step is unnecessary for AI websites used in your local browser. [Configuration and verification →](docs/guide.en.md#reverse-ssh-for-a-campus-computer)
+
+## Repository layout
+
+Two editions live side by side, each self-contained:
+
+| Edition | Directory | Use it on |
+|---|---|---|
+| Docker | [`docker/`](docker/) | Linux, macOS, Windows via WSL2 |
+| Native Windows | [`windows/`](windows/) | Windows 10/11, without WSL or Docker |
+
+```text
+hkuvpn/
+├── README.md                  # English README (this file)
+├── README.zh-CN.md            # 简体中文说明
+├── index.html                 # Project website (GitHub Pages)
+├── docker/                    # Docker edition: Linux / macOS / Windows-WSL
+│   ├── Dockerfile             # Image: OpenConnect + gost + MFA entrypoint
+│   ├── bin/hkuvpn             # Launcher: connect, --status, --stop, …
+│   ├── etc/vpnc-script        # Routing script executed inside the container
+│   ├── examples/              # hku.env template for this edition
+│   ├── hku-connect.exp        # Expect script that answers the MFA form
+│   └── keys/                  # OpenConnect release key (build-time check)
+├── windows/                   # Native Windows edition: no WSL, no Docker
+│   ├── bin/hkuvpn.ps1         # Launcher: connect, --status, --stop, …
+│   ├── bin/get-tools.ps1      # Fetches and verifies gost + OpenConnect
+│   ├── etc/vpnc-script-win.js # Split-tunnel-only routing script
+│   ├── examples/              # hku.env template for this edition
+│   └── README.md              # Edition guide (English / 简体中文)
+├── examples/                  # Shared integration examples
+│   ├── clients/               # Clash Verge Rev, Surge, SSH configuration
+│   └── shells/                # Zsh / Bash / Fish / PowerShell wrappers
+└── docs/                      # Long-form guides and diagrams
+```
 
 ---
 

@@ -13,19 +13,19 @@
 
 ### 安装简短的 `hkuvpn` 命令
 
-[快速上手](../README.zh-CN.md#快速上手)直接调用 `~/hkuvpn/bin/hkuvpn`。日常使用时，可以根据 Shell 安装更短的 `hkuvpn` 命令。
+[快速上手](../README.zh-CN.md#快速上手)直接调用 `~/hkuvpn/docker/bin/hkuvpn`。日常使用时，可以根据 Shell 安装更短的 `hkuvpn` 命令。
 
 Zsh：
 
 ```bash
-printf '\nsource ~/hkuvpn/examples/hkuvpn.zsh\n' >> ~/.zshrc
+printf '\nsource ~/hkuvpn/examples/shells/hkuvpn.zsh\n' >> ~/.zshrc
 source ~/.zshrc
 ```
 
 Bash：
 
 ```bash
-printf '\nsource ~/hkuvpn/examples/hkuvpn.zsh\n' >> ~/.bashrc
+printf '\nsource ~/hkuvpn/examples/shells/hkuvpn.zsh\n' >> ~/.bashrc
 source ~/.bashrc
 ```
 
@@ -33,13 +33,13 @@ Fish：
 
 ```fish
 mkdir -p ~/.config/fish/functions
-cp ~/hkuvpn/examples/hkuvpn.fish ~/.config/fish/functions/hkuvpn.fish
+cp ~/hkuvpn/examples/shells/hkuvpn.fish ~/.config/fish/functions/hkuvpn.fish
 fish -n ~/.config/fish/functions/hkuvpn.fish
 ```
 
 不要把 Zsh 函数直接贴进 Fish。Fish 不使用 `export`、`VAR=value command`、POSIX `case` 和 POSIX 函数语法。
 
-Windows 侧 PowerShell 的等价封装见 `examples/hkuvpn.ps1`：把该文件路径加入 `$PROFILE` dot-source 即可，`hkuvpn`/`hku-status`/`hku-stop` 三个函数与 Shell 版语义一致。
+Windows 侧 PowerShell 的等价封装见 `examples/shells/hkuvpn.ps1`：把该文件路径加入 `$PROFILE` dot-source 即可，`hkuvpn`/`hku-status`/`hku-stop` 三个函数与 Shell 版语义一致。
 
 仓库不在 `~/hkuvpn` 时，设置 `HKUVPN_HOME`（旧的 `DOCKER_VPN_HOME` 仍然兼容）：
 
@@ -118,7 +118,7 @@ hkuvpn 只提供本地 HKU 上游。规则客户端并非必需，也不限于�
 
 #### Clash Verge Rev / Mihomo
 
-Clash Verge Rev 使用 Mihomo 内核，并支持 Merge 配置。为当前配置创建 Merge/扩展配置，加入 [examples/clash-verge.yaml](../examples/clash-verge.yaml) 的内容，并在每次修改后重新启用该配置。不要直接修改下载的订阅文件，否则订阅刷新时可能被覆盖。具体界面和语法可参考官方的 [Clash Verge Rev Merge 指南](https://clashvergerev.com/guide/merge)、[Mihomo SOCKS](https://wiki.metacubex.one/config/proxies/socks/) 和 [HTTP](https://wiki.metacubex.one/config/proxies/http/) 出站文档。
+Clash Verge Rev 使用 Mihomo 内核，并支持 Merge 配置。为当前配置创建 Merge/扩展配置，加入 [examples/clients/clash-verge.yaml](../examples/clients/clash-verge.yaml) 的内容，并在每次修改后重新启用该配置。不要直接修改下载的订阅文件，否则订阅刷新时可能被覆盖。具体界面和语法可参考官方的 [Clash Verge Rev Merge 指南](https://clashvergerev.com/guide/merge)、[Mihomo SOCKS](https://wiki.metacubex.one/config/proxies/socks/) 和 [HTTP](https://wiki.metacubex.one/config/proxies/http/) 出站文档。
 
 最小 Merge 配置如下：
 
@@ -155,7 +155,7 @@ prepend-rules:
 
 #### Surge
 
-把 [examples/surge.conf](../examples/surge.conf) 合并到现有配置，不要覆盖整份配置。对应的最小片段如下：
+把 [examples/clients/surge.conf](../examples/clients/surge.conf) 合并到现有配置，不要覆盖整份配置。对应的最小片段如下：
 
 ```ini
 [Proxy]
@@ -181,7 +181,7 @@ DOMAIN-SUFFIX,hku.edu.hk,HKU
 
 ### SSH 与远程桌面
 
-校内主机只能通过 HKU 到达时，合并并修改 [examples/ssh_config.example](../examples/ssh_config.example)。下方 `192.0.2.10` 属于 RFC 5737 TEST-NET-1，只用于文档，不可能是真实校园主机；必须替换为自己所用电脑的精确 IP。
+校内主机只能通过 HKU 到达时，合并并修改 [examples/clients/ssh_config.example](../examples/clients/ssh_config.example)。下方 `192.0.2.10` 属于 RFC 5737 TEST-NET-1，只用于文档，不可能是真实校园主机；必须替换为自己所用电脑的精确 IP。
 
 ```sshconfig
 Host campus-host
@@ -311,8 +311,8 @@ Docker 运行在 WSL 内（Docker Engine，推荐开启 systemd）时，除上�
 
 - **fake-IP DNS 污染**：Windows 上的规则客户端（Surge Enhanced Mode、Clash fake-IP 等）会劫持 DNS，其结果经 WSL 的 resolv.conf 传导进容器——`vpn2fa.hku.hk` 可能被解析成 `198.18.x.x` 假地址，导致控制连接隐式依赖规则客户端的转发行为。启动器默认的 DoH 自动固定（见上文）就是为了绕开这一点；也请确认规则客户端对 `vpn2fa*` 三个域名使用 DIRECT/HKU-CONTROL，避免环路。
 - **时钟漂移**：Windows 睡眠唤醒后 WSL 时钟可能偏差数分钟，导致 openconnect 报出难以理解的证书/TLS 错误。启动器会预检（偏差超过 120 秒时拒绝连接并提示）；修复方法是在 WSL 内执行 `sudo hwclock -s`，或等待系统自动重新对时。
-- **Windows 侧封装**：`examples/hkuvpn.ps1` 提供 PowerShell 函数（`hkuvpn`、`hku-status`、`hku-stop`），MFA 交互可透传；退出码语义见 `--status`。
-- **SSH 到校园主机**：`examples/ssh_config.wsl.example` 是 Windows 侧 `~/.ssh/config` 的标准写法——ProxyCommand 经 `wsl.exe` 在发行版内运行 ncat，再连 `127.0.0.1:1080`。该写法在任何 WSL 网络模式下都成立（不依赖回环互通），且 SOCKS5 远程解析让校园主机名在容器内、经 HKU 隧道解析，不受 Windows DNS 影响。
+- **Windows 侧封装**：`examples/shells/hkuvpn.ps1` 提供 PowerShell 函数（`hkuvpn`、`hku-status`、`hku-stop`），MFA 交互可透传；退出码语义见 `--status`。
+- **SSH 到校园主机**：`examples/clients/ssh_config.wsl.example` 是 Windows 侧 `~/.ssh/config` 的标准写法——ProxyCommand 经 `wsl.exe` 在发行版内运行 ncat，再连 `127.0.0.1:1080`。该写法在任何 WSL 网络模式下都成立（不依赖回环互通），且 SOCKS5 远程解析让校园主机名在容器内、经 HKU 隧道解析，不受 Windows DNS 影响。
 - **回环互通模式的安全边界**：新式 WSL 网络模式（mirrored 及更新的共享回环模式）下，`127.0.0.1:1080/1088` 对整个 Windows 用户会话可见——安全边界是"本 Windows 用户"，而不只是 WSL 内。单用户机器可以接受，但不要把它理解成"仅本 WSL 可见"。
 - **`--recover`**：在 WSL/Linux 上会尝试用 `sudo -n systemctl start docker`（或 `service docker start`）拉起 Docker；无免密 sudo 时会给出明确提示。WSL 开启 systemd 且 docker.service 为 enabled 时，发行版启动即自动拉起 Docker，通常无需手动 recover。
 
@@ -406,7 +406,7 @@ SSH 等交互场景不受 TCP 通道的速度影响；需要大吞吐时再改�
 | macOS 容器环境 | Colima 或 Docker Desktop |
 | Linux 容器环境 | Docker Engine |
 | Windows | Docker Desktop + WSL2，或 WSL 内原生 Docker Engine；详见[Windows / WSL](#windows--wsl) |
-| Shell | Zsh、Bash 和 Fish；Windows 侧提供 PowerShell 封装（`examples/hkuvpn.ps1`） |
+| Shell | Zsh、Bash 和 Fish；Windows 侧提供 PowerShell 封装（`examples/shells/hkuvpn.ps1`） |
 | 规则代理客户端 | 提供 Clash Verge Rev/Mihomo 和 Surge 示例；sing-box 等可采用同一分流模型 |
 | 镜像内本地代理 | gost 3.3.0（静态 Go 单二进制，单进程提供 SOCKS5 与 HTTP 监听） |
 | 当前 `alpine:3.23` 镜像内 OpenConnect | 9.21 |
@@ -426,6 +426,29 @@ docker run --rm --entrypoint openconnect local/vpn --version
 hkuvpn 的便携核心包括启动器、Shell 包装函数、路由示例和容器入口，不依赖规则客户端、tmux 或某一个特定终端应用。
 
 需要无人值守或长期运行时，可以按实际环境加入代理客户端 CLI 自动化、tmux 监控、macOS LaunchAgent 等系统服务，以及 `~/.vpn/logs/` 诊断日志。这些集成应保持可选和机器相关，确保基础 HKU 代理仍能配合其他代理客户端和 Docker 环境使用。
+
+### 仓库结构
+
+仓库包含两个互相独立的版本，以及两者共用的材料。
+
+| 路径 | 内容 |
+|---|---|
+| `docker/` | Docker 版：`Dockerfile`、启动器 `bin/hkuvpn`、容器内路由脚本 `etc/vpnc-script`、MFA 入口 `hku-connect.exp`、`examples/hku.env.example`，以及构建期校验签名所用的 OpenConnect 发布公钥 |
+| `windows/` | Windows 原生版：启动器 `bin/hkuvpn.ps1`、工具下载脚本 `bin/get-tools.ps1`、仅分流不改默认路由的 `etc/vpnc-script-win.js`、`examples/hku.env.example`，以及本版本说明 |
+| `examples/clients/` | 规则客户端与 SSH 的接入示例（Clash Verge Rev / Mihomo、Surge、`ssh_config`） |
+| `examples/shells/` | Zsh、Bash、Fish、PowerShell 的简短 `hkuvpn` 命令封装 |
+| `docs/` | 本指南与配图 |
+
+新增文件时的约定：
+
+- 版本目录保持自洽：某个版本运行时需要的文件都放在 `docker/` 或
+  `windows/` 下，两个版本之间不互相引用。
+- 真正被两个版本共用的内容放在 `examples/` 或 `docs/`。
+- Docker 构建上下文是 `docker/`，因此 `docker/.dockerignore` 决定哪些文件
+  进入镜像；构建输入（`docker/etc`、`docker/keys`、`docker/hku-connect.exp`）
+  不要写进忽略列表。
+- `HKUVPN_HOME`（旧名 `DOCKER_VPN_HOME`）指向仓库根目录；未设置时
+  `docker/bin/hkuvpn` 会根据自身位置推导根目录，不再假定是 `~/hkuvpn`。
 
 ### 来源与许可证
 

@@ -2,7 +2,20 @@
 
 set -u
 
-VPN_HOME="${HKUVPN_HOME:-${DOCKER_VPN_HOME:-$HOME/hkuvpn}}"
+# Repository layout: this launcher lives in <repo>/docker/bin/hkuvpn, so the
+# repository root is two levels up. HKUVPN_HOME (legacy name:
+# DOCKER_VPN_HOME) points at the repository root and overrides the detection.
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+DETECTED_HOME="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
+VPN_HOME="${HKUVPN_HOME:-${DOCKER_VPN_HOME:-$DETECTED_HOME}}"
+
+# Build context: the Dockerfile lives in docker/ since v1.1. Older clones kept
+# it at the repository root, so fall back to that layout when it is detected.
+if [[ -f "$VPN_HOME/docker/Dockerfile" ]]; then
+    DOCKER_DIR="$VPN_HOME/docker"
+else
+    DOCKER_DIR="$VPN_HOME"
+fi
 CONFIG_DIR="${HKU_CONFIG_DIR:-$HOME/.vpn}"
 ENV_FILE="$CONFIG_DIR/hku.env"
 PASS_FILE="$CONFIG_DIR/hku.pass"
@@ -308,7 +321,7 @@ run_preflight() {
     if docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
         echo "image    : ok ($IMAGE_NAME)"
     else
-        echo "image    : missing - build it: docker build -t $IMAGE_NAME $VPN_HOME" >&2
+        echo "image    : missing - build it: docker build -t $IMAGE_NAME $DOCKER_DIR" >&2
         failures=$((failures + 1))
     fi
 
@@ -431,7 +444,7 @@ fi
 
 if [[ ! -r "$ENV_FILE" ]]; then
     echo "Missing configuration: $ENV_FILE" >&2
-    echo "Copy $VPN_HOME/examples/hku.env.example and edit HKU_USER." >&2
+    echo "Copy $DOCKER_DIR/examples/hku.env.example and edit HKU_USER." >&2
     exit 1
 fi
 if [[ ! -r "$PASS_FILE" ]]; then

@@ -1,6 +1,6 @@
 # hkuvpn guide
 
-[← README](../Readme.md) · [简体中文](guide.zh-CN.md)
+[← README](../README.md) · [简体中文](guide.zh-CN.md)
 
 - [Everyday use](#everyday-use)
 - [Proxy clients](#add-a-rules-client)
@@ -13,20 +13,20 @@
 
 ### Install the Short `hkuvpn` Command
 
-[Quick Start](../Readme.md#quick-start) calls `~/hkuvpn/bin/hkuvpn` directly. For everyday use, install
+[Quick Start](../README.md#quick-start) calls `~/hkuvpn/docker/bin/hkuvpn` directly. For everyday use, install
 the shorter `hkuvpn` command for your shell.
 
 Zsh:
 
 ```bash
-printf '\nsource ~/hkuvpn/examples/hkuvpn.zsh\n' >> ~/.zshrc
+printf '\nsource ~/hkuvpn/examples/shells/hkuvpn.zsh\n' >> ~/.zshrc
 source ~/.zshrc
 ```
 
 Bash:
 
 ```bash
-printf '\nsource ~/hkuvpn/examples/hkuvpn.zsh\n' >> ~/.bashrc
+printf '\nsource ~/hkuvpn/examples/shells/hkuvpn.zsh\n' >> ~/.bashrc
 source ~/.bashrc
 ```
 
@@ -34,7 +34,7 @@ Fish:
 
 ```fish
 mkdir -p ~/.config/fish/functions
-cp ~/hkuvpn/examples/hkuvpn.fish ~/.config/fish/functions/hkuvpn.fish
+cp ~/hkuvpn/examples/shells/hkuvpn.fish ~/.config/fish/functions/hkuvpn.fish
 fish -n ~/.config/fish/functions/hkuvpn.fish
 ```
 
@@ -42,7 +42,7 @@ Do not paste the Zsh function into Fish. Fish does not use `export`,
 `VAR=value command`, POSIX `case`, or POSIX function syntax.
 
 A matching PowerShell wrapper for Windows is provided in
-`examples/hkuvpn.ps1` — dot-source it from your `$PROFILE`; the
+`examples/shells/hkuvpn.ps1` — dot-source it from your `$PROFILE`; the
 `hkuvpn`/`hku-status`/`hku-stop` functions mirror the shell versions.
 
 If the clone is elsewhere, set `HKUVPN_HOME` (the older `DOCKER_VPN_HOME`
@@ -145,7 +145,7 @@ Every client must preserve the same order:
 
 Clash Verge Rev uses the Mihomo core and supports Merge configurations. Create
 a Merge/extension configuration for the active profile, add the contents of
-[examples/clash-verge.yaml](../examples/clash-verge.yaml), then re-enable that
+[examples/clients/clash-verge.yaml](../examples/clients/clash-verge.yaml), then re-enable that
 configuration after editing it. Do not edit the downloaded subscription file;
 subscription refreshes may replace it. See the official
 [Clash Verge Rev Merge guide](https://clashvergerev.com/en/guide/merge) and
@@ -191,7 +191,7 @@ exact name of a working existing policy to `HKU-CONTROL`.
 
 #### Surge
 
-Merge [examples/surge.conf](../examples/surge.conf) into the existing profile; do
+Merge [examples/clients/surge.conf](../examples/clients/surge.conf) into the existing profile; do
 not replace the whole profile. The equivalent minimal fragment is:
 
 ```ini
@@ -224,7 +224,7 @@ and container networks commonly use that RFC 1918 range.
 ### SSH and Remote Desktop
 
 For a campus host that is reachable only through HKU, merge and edit
-[examples/ssh_config.example](../examples/ssh_config.example). The address
+[examples/clients/ssh_config.example](../examples/clients/ssh_config.example). The address
 `192.0.2.10` below belongs to RFC 5737 TEST-NET-1 and cannot be a real campus
 host; replace it with the exact IP assigned to the computer you use.
 
@@ -410,10 +410,10 @@ When Docker runs inside WSL (Docker Engine, preferably with systemd enabled):
   minutes and OpenConnect reports confusing certificate/TLS errors. The launcher
   pre-checks this (it refuses to connect past 120 s of drift); fix it inside WSL
   with `sudo hwclock -s` or wait for the automatic resync.
-- **Windows-side wrapper**: `examples/hkuvpn.ps1` provides PowerShell functions
+- **Windows-side wrapper**: `examples/shells/hkuvpn.ps1` provides PowerShell functions
   (`hkuvpn`, `hku-status`, `hku-stop`); interactive MFA entry passes through,
   and `--status` exit codes stay scriptable.
-- **SSH to campus hosts**: `examples/ssh_config.wsl.example` is the canonical
+- **SSH to campus hosts**: `examples/clients/ssh_config.wsl.example` is the canonical
   Windows-side `~/.ssh/config` pattern — the ProxyCommand runs ncat inside the
   distro via `wsl.exe`, then targets `127.0.0.1:1080`. It works in every WSL
   networking mode (no shared-loopback requirement), and SOCKS5 remote resolution
@@ -555,7 +555,7 @@ container so it cannot replace the host default route.
 | macOS container runtime | Colima or Docker Desktop |
 | Linux container runtime | Docker Engine |
 | Windows | Docker Desktop with WSL2, or a native Docker Engine inside WSL; see [Windows / WSL](#windows--wsl) |
-| Shell | Zsh, Bash, and Fish; a PowerShell wrapper is provided for Windows (`examples/hkuvpn.ps1`) |
+| Shell | Zsh, Bash, and Fish; a PowerShell wrapper is provided for Windows (`examples/shells/hkuvpn.ps1`) |
 | Rule-based proxy clients | Clash Verge Rev/Mihomo and Surge examples included; the same routing model applies to sing-box and similar clients |
 | Local proxy inside the image | gost 3.3.0 (static Go binary; one process serves both SOCKS5 and HTTP) |
 | OpenConnect in the current `alpine:3.23` image | 9.21 |
@@ -595,6 +595,32 @@ automation, tmux monitoring, system services such as a macOS LaunchAgent, and
 diagnostic logs under `~/.vpn/logs/`. These integrations should remain optional
 and machine-specific so the basic HKU proxy continues to work with other proxy
 clients and Docker environments.
+
+### Repository Layout
+
+The repository holds two independent editions plus the material they share.
+
+| Path | Contents |
+|---|---|
+| `docker/` | Docker edition: `Dockerfile`, launcher `bin/hkuvpn`, in-container routing script `etc/vpnc-script`, MFA entrypoint `hku-connect.exp`, `examples/hku.env.example`, and the OpenConnect release key used by the build-time signature check |
+| `windows/` | Native Windows edition: launcher `bin/hkuvpn.ps1`, tool fetcher `bin/get-tools.ps1`, split-only routing script `etc/vpnc-script-win.js`, `examples/hku.env.example`, and an edition README |
+| `examples/clients/` | Integration examples for rules clients and SSH (Clash Verge Rev / Mihomo, Surge, `ssh_config`) |
+| `examples/shells/` | Short `hkuvpn` command wrappers for Zsh, Bash, Fish, and PowerShell |
+| `docs/` | This guide and the diagrams |
+
+Rules of thumb when adding files:
+
+- An edition directory stays self-contained: everything an edition needs at
+  runtime lives under `docker/` or `windows/`, and the two editions never
+  import from each other.
+- Anything genuinely shared by both editions belongs in `examples/` or
+  `docs/`.
+- The Docker build context is `docker/`, so `docker/.dockerignore` decides
+  what enters the image. Keep the build inputs (`docker/etc`, `docker/keys`,
+  `docker/hku-connect.exp`) out of it.
+- `HKUVPN_HOME` (legacy name: `DOCKER_VPN_HOME`) points at the repository
+  root. When it is unset, `docker/bin/hkuvpn` derives the root from its own
+  location instead of assuming `~/hkuvpn`.
 
 ### Credits and Licensing
 

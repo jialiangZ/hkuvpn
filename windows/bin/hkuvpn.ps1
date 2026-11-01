@@ -3,7 +3,7 @@
 hkuvpn.ps1 - Native Windows launcher for hkuvpn — HKU campus VPN.
 
 Runs OpenConnect (Windows CLI build) + gost directly on Windows, without
-WSL or Docker. Mirrors bin/hkuvpn of the Docker edition:
+WSL or Docker. Mirrors docker/bin/hkuvpn of the Docker edition:
 
   (no arg)/hk   smart connect: pre-flight, start tunnel + proxy, prompt for
                 the MFA code, wait until connected. Stays attached; Ctrl+C
@@ -203,7 +203,7 @@ function Find-Gost {
     return $null
 }
 
-# --- certificate pin (mirrors fetch_certificate_pin in bin/hkuvpn) -----------
+# --- certificate pin (mirrors fetch_certificate_pin in docker/bin/hkuvpn) ---------
 
 function Get-DerLengthBytes {
     param([int]$Length)
@@ -306,7 +306,7 @@ function Get-CertPin {
 }
 
 function Get-ServerCertPin {
-    # Cache-or-fetch wrapper; writes $Script:PinCache like bin/hkuvpn.
+    # Cache-or-fetch wrapper; writes $Script:PinCache like docker/bin/hkuvpn.
     param([string]$PrimaryIp)
     $pin = $null
     if (Test-Path $Script:PinCache) {
