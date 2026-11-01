@@ -950,19 +950,60 @@ function Initialize-ConnectConfig {
 
 # --- the tunnel worker ------------------------------------------------------
 
-function Read-AvailableChars {
-    param($Reader, [System.Text.StringBuilder]$Buffer,
-          [System.Text.StringBuilder]$Log, [bool]$Echo)
-    $chunk = New-Object System.Text.StringBuilder
-    while ($Reader.Peek() -ge 0) {
-        $i = $Reader.Read()
-        if ($i -lt 0) { break }
-        [void]$Buffer.Append([char]$i)
-        [void]$chunk.Append([char]$i)
+function New-PendingRead {
+    # Starts a non-blocking read on a child's redirected stream.
+    #
+    # StreamReader.Peek()/Read() must NOT be used for this: on a redirected
+    # pipe, Peek() blocks as soon as the buffered data is consumed, so a
+    # "read everything available" loop never returns and the tunnel worker
+    # stalls before it can look at the other stream. OpenConnect prints its
+    # interactive prompts ("Password:", "Response:") on stderr, so a blocking
+    # stdout read hides them completely.
+    #
+    # ReadAsync() + polling the task is the only safe way to watch a child's
+    # output. Only one read may be in flight per stream, so the pending task
+    # is kept and re-armed after every completed read.
+    param($Reader)
+    $buf = New-Object char[] 8192
+    return @{
+        Reader = $Reader
+        Buf    = $buf
+        Task   = $Reader.ReadAsync($buf, 0, $buf.Length)
+        Eof    = $false
     }
-    if ($chunk.Length -gt 0) {
-        [void]$Log.Append($chunk.ToString())
-        if ($Echo) { Write-Host $chunk.ToString() -NoNewline }
+}
+
+function Read-PendingChars {
+    # Moves whatever the child has already written into the buffer. Never
+    # blocks: if the pending read has not completed, there is simply nothing
+    # to collect yet.
+    param($Pending, [System.Text.StringBuilder]$Buffer,
+          [System.Text.StringBuilder]$Log, [bool]$Echo)
+    if (-not $Pending -or $Pending.Eof) { return }
+    if (-not $Pending.Task.IsCompleted) { return }
+    try { $n = $Pending.Task.Result } catch { $Pending.Eof = $true; return }
+    if ($n -le 0) { $Pending.Eof = $true; return }
+    # Re-arm the next read before anything else, so the pipe keeps draining.
+    $Pending.Task = $Pending.Reader.ReadAsync($Pending.Buf, 0, $Pending.Buf.Length)
+    $chunk = New-Object System.Text.StringBuilder
+    [void]$chunk.Append($Pending.Buf, 0, $n)
+    $text = $chunk.ToString()
+    [void]$Buffer.Append($text)
+    [void]$Log.Append($text)
+    if ($Echo) { Write-Host $text -NoNewline }
+}
+
+function Drain-PendingRead {
+    # Collects the rest of a stream after the child exited (waits briefly).
+    param($Pending, [System.Text.StringBuilder]$Buffer,
+          [System.Text.StringBuilder]$Log, [bool]$Echo, [int]$TimeoutMs = 2000)
+    if (-not $Pending) { return }
+    if (-not $Pending.Eof -and $Pending.Task.IsCompleted) {
+        Read-PendingChars $Pending $Buffer $Log $Echo
+    }
+    if (-not $Pending.Eof) {
+        $null = $Pending.Task.Wait($TimeoutMs)
+        Read-PendingChars $Pending $Buffer $Log $Echo
     }
 }
 
@@ -1071,11 +1112,16 @@ function Invoke-TunnelWorker {
     $exitCode = 0
 
     try {
+        # Non-blocking readers for all four child streams (see New-PendingRead).
+        $ocOut  = New-PendingRead $oc.StandardOutput
+        $ocErr  = New-PendingRead $oc.StandardError
+        $gostOut = New-PendingRead $gost.StandardOutput
+        $gostErr = New-PendingRead $gost.StandardError
         while (-not $oc.HasExited) {
-            Read-AvailableChars $oc.StandardOutput $outBuf $logAll $EchoRaw
-            Read-AvailableChars $oc.StandardError $errBuf $logAll $EchoRaw
-            Read-AvailableChars $gost.StandardOutput $gostBuf $gostLog $false
-            Read-AvailableChars $gost.StandardError $gostBufE $gostLog $false
+            Read-PendingChars $ocOut   $outBuf   $logAll  $EchoRaw
+            Read-PendingChars $ocErr   $errBuf   $logAll  $EchoRaw
+            Read-PendingChars $gostOut $gostBuf  $gostLog $false
+            Read-PendingChars $gostErr $gostBufE $gostLog $false
             foreach ($gl in (Get-CompleteLines $gostBuf)) { Learn-FromGostLine $gl }
             foreach ($gl in (Get-CompleteLines $gostBufE)) { Learn-FromGostLine $gl }
 
@@ -1151,8 +1197,12 @@ function Invoke-TunnelWorker {
         }
         if (-not $oc.HasExited) { Wait-Process -Id $oc.Id -ErrorAction SilentlyContinue }
         try { $oc.Refresh(); $exitCode = $oc.ExitCode } catch {}
-        Read-AvailableChars $oc.StandardOutput $outBuf $logAll $EchoRaw
-        Read-AvailableChars $oc.StandardError $errBuf $logAll $EchoRaw
+        Read-PendingChars $ocOut $outBuf $logAll $EchoRaw
+        Read-PendingChars $ocErr $errBuf $logAll $EchoRaw
+        Drain-PendingRead $ocOut   $outBuf   $logAll  $EchoRaw
+        Drain-PendingRead $ocErr   $errBuf   $logAll  $EchoRaw
+        Drain-PendingRead $gostOut $gostBuf  $gostLog $false
+        Drain-PendingRead $gostErr $gostBufE $gostLog $false
         Write-Info ("openconnect exited with code {0}" -f $exitCode)
         Write-Marker ("HKUVPN_EXITED code={0}" -f $exitCode)
     }
