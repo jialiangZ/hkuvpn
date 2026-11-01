@@ -1066,6 +1066,14 @@ function Invoke-TunnelWorker {
     $gostPsi.RedirectStandardOutput = $true
     $gostPsi.RedirectStandardError = $true
     $gost = [System.Diagnostics.Process]::Start($gostPsi)
+    # gost exits immediately when it cannot bind the listeners (most often
+    # because another proxy already owns 1080/1088). Give it a moment and
+    # fail loudly instead of running a tunnel with no proxy.
+    Start-Sleep -Milliseconds 400
+    if ($gost.HasExited) {
+        throw ("gost exited immediately (code {0}) - 127.0.0.1:{1}/{2} are probably already in use" -f `
+               $gost.ExitCode, $Cfg.SocksPort, $Cfg.HttpPort)
+    }
 
     # openconnect: the tunnel; our split-only vpnc-script does the routing.
     $argList = New-Object System.Collections.Generic.List[string]
@@ -1122,6 +1130,13 @@ function Invoke-TunnelWorker {
             Read-PendingChars $ocErr   $errBuf   $logAll  $EchoRaw
             Read-PendingChars $gostOut $gostBuf  $gostLog $false
             Read-PendingChars $gostErr $gostBufE $gostLog $false
+            if ($gost.HasExited) {
+                # The proxy died (crash, or the listeners were taken away).
+                # Without it the tunnel is useless, so stop instead of hanging.
+                Write-Err ("gost exited (code {0}); the local proxy is gone" -f $gost.ExitCode)
+                Write-Marker ("HKUVPN_GOST_EXITED code={0}" -f $gost.ExitCode)
+                break
+            }
             foreach ($gl in (Get-CompleteLines $gostBuf)) { Learn-FromGostLine $gl }
             foreach ($gl in (Get-CompleteLines $gostBufE)) { Learn-FromGostLine $gl }
 
