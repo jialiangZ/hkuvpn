@@ -19,21 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-## Upstream attribution
-
-This project is derived from
-[ethack/docker-vpn](https://github.com/ethack/docker-vpn) via the HKU edition
-by [rqhu1995/docker-vpn](https://github.com/rqhu1995/docker-vpn). Those two
-upstream projects were published without an explicit license; the MIT terms
-above apply to the work published in this repository, and the upstream
-attribution is preserved.
-
-## Exception
-
-`docker/etc/vpnc-script` is vendored verbatim from
-[openconnect/vpnc-scripts](https://gitlab.com/openconnect/openconnect/-/tree/master/vpnc-scripts)
-and remains under the GNU General Public License version 2, as stated in the
-header of that file.

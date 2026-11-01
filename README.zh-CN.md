@@ -158,4 +158,4 @@ hkuvpn/
 
 更多内容：[故障排查](docs/guide.zh-CN.md#常见故障) · [安全说明](docs/guide.zh-CN.md#安全说明) · [兼容性与版本](docs/guide.zh-CN.md#兼容性与版本)
 
-基于 [ethack/docker-vpn](https://github.com/ethack/docker-vpn)，经由 [rqhu1995/docker-vpn](https://github.com/rqhu1995/docker-vpn) 的 HKU 版改造。以 [MIT 许可证](LICENSE) 发布，保留上游署名。详见[来源与许可证](docs/guide.zh-CN.md#来源与许可证)。
+基于 [ethack/docker-vpn](https://github.com/ethack/docker-vpn)，经由 [rqhu1995/docker-vpn](https://github.com/rqhu1995/docker-vpn) 的 HKU 版改造。以 [MIT 许可证](LICENSE) 发布；上游署名与第三方声明见 [NOTICE](NOTICE)。详见[来源与许可证](docs/guide.zh-CN.md#来源与许可证)。

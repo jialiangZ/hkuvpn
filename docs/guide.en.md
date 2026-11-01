@@ -624,7 +624,8 @@ Rules of thumb when adding files:
 
 ### Credits and Licensing
 
-hkuvpn is distributed under the [MIT License](../LICENSE).
+hkuvpn is distributed under the [MIT License](../LICENSE). Upstream
+attribution and third-party notices are collected in [NOTICE](../NOTICE).
 
 Derived from [ethack/docker-vpn](https://github.com/ethack/docker-vpn) via
 the HKU edition by [rqhu1995/docker-vpn](https://github.com/rqhu1995/docker-vpn),
@@ -638,4 +639,6 @@ One file keeps its own license: `docker/etc/vpnc-script` is vendored
 verbatim from
 [openconnect/vpnc-scripts](https://gitlab.com/openconnect/openconnect/-/tree/master/vpnc-scripts)
 and remains under the GNU General Public License version 2, as stated in its
-header.
+header. The HKU campus VPN server is operated by the University of Hong Kong;
+this project is an unofficial client and is not affiliated with or endorsed by
+HKU.

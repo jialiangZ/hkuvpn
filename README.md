@@ -158,4 +158,4 @@ hkuvpn/
 
 More: [Troubleshooting](docs/guide.en.md#troubleshooting) · [Security](docs/guide.en.md#security) · [Compatibility and versions](docs/guide.en.md#compatibility-and-versions)
 
-Adapted from [ethack/docker-vpn](https://github.com/ethack/docker-vpn) via the HKU edition by [rqhu1995/docker-vpn](https://github.com/rqhu1995/docker-vpn). Released under the [MIT License](LICENSE), with upstream attribution preserved. See [Credits and licensing](docs/guide.en.md#credits-and-licensing).
+Adapted from [ethack/docker-vpn](https://github.com/ethack/docker-vpn) via the HKU edition by [rqhu1995/docker-vpn](https://github.com/rqhu1995/docker-vpn). Released under the [MIT License](LICENSE); upstream attribution and third-party notices are in [NOTICE](NOTICE). See [Credits and licensing](docs/guide.en.md#credits-and-licensing).

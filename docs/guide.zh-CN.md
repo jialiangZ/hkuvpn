@@ -452,7 +452,8 @@ hkuvpn 的便携核心包括启动器、Shell 包装函数、路由示例和容�
 
 ### 来源与许可证
 
-hkuvpn 以 [MIT 许可证](../LICENSE) 发布。
+hkuvpn 以 [MIT 许可证](../LICENSE) 发布。上游署名与第三方声明汇总在
+[NOTICE](../NOTICE)。
 
 本项目基于 [ethack/docker-vpn](https://github.com/ethack/docker-vpn)，经由
 [rqhu1995/docker-vpn](https://github.com/rqhu1995/docker-vpn) 的 HKU 版改造而来，
@@ -462,4 +463,5 @@ hkuvpn 以 [MIT 许可证](../LICENSE) 发布。
 
 其中一个文件保留其自身许可证：`docker/etc/vpnc-script` 原样 vendored 自
 [openconnect/vpnc-scripts](https://gitlab.com/openconnect/openconnect/-/tree/master/vpnc-scripts)，
-仍按其文件头声明的 GNU General Public License v2 授权。
+仍按其文件头声明的 GNU General Public License v2 授权。港大 VPN 服务器由香港大学
+运营，本项目为非官方客户端，与港大无隶属或背书关系。

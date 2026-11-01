@@ -1,0 +1,43 @@
+hkuvpn
+Copyright (c) 2026 jialiangZ and the hkuvpn contributors
+
+This product is licensed under the MIT License; see the LICENSE file for the
+full terms.
+
+Upstream attribution
+--------------------
+
+This project is derived from:
+
+  * ethack/docker-vpn — https://github.com/ethack/docker-vpn
+  * rqhu1995/docker-vpn — the HKU edition
+    (https://github.com/rqhu1995/docker-vpn)
+
+Those two upstream projects were published without an explicit license. The
+MIT terms in the LICENSE file apply to the work published in this repository,
+and the upstream attribution above is preserved.
+
+The HKU campus VPN server (vpn2fa.hku.hk) is operated by the University of
+Hong Kong. This project is an unofficial client; it is not affiliated with
+or endorsed by HKU.
+
+Third-party components redistributed or invoked at build time
+--------------------------------------------------------------
+
+  * docker/etc/vpnc-script
+    Vendored verbatim from openconnect/vpnc-scripts
+    (https://gitlab.com/openconnect/openconnect/-/tree/master/vpnc-scripts).
+    Licensed under the GNU General Public License version 2, as stated in the
+    header of that file. It is a separate work and keeps its own license.
+
+  * OpenConnect
+    Built from the official release tarball inside the container image and
+    installed on Windows from the official Windows build. GPL-2.0-or-later;
+    https://gitlab.com/openconnect/openconnect
+
+  * gost
+    The SOCKS5/HTTP proxy listeners, from the official go-gost releases.
+    MIT License; https://github.com/go-gost/gost
+
+  * OpenSSL, Alpine Linux, expect, curl, iproute2 and the other packages
+    installed into the container image, each under its own license.
