@@ -1129,6 +1129,29 @@ function Invoke-TunnelWorker {
     # connection is attempted, which is the only place a destination appears
     # when the connection never completes (licensed resources that are only
     # reachable through the campus exit). The auto-route learner needs it.
+
+    # Reap a gost orphaned by an earlier crashed/hard-killed session BEFORE
+    # it can fail our bind ("ports already in use"). pids.txt may already
+    # name THIS worker (the --Worker bootstrap claims it), so only trust a
+    # different live worker; when none exists, any gost from our own tools
+    # directory is an orphan by definition. This is the choke point every
+    # connect path funnels through (smart / -t / -d / tray app / --Worker).
+    $wPidNow = Read-PidValue 'WORKER'
+    $otherWorkerAlive = ($wPidNow -gt 0 -and $wPidNow -ne $PID -and
+        (Get-Process -Id $wPidNow -ErrorAction SilentlyContinue))
+    if (-not $otherWorkerAlive) {
+        foreach ($g in @(Get-Process -Name gost -ErrorAction SilentlyContinue)) {
+            $gp = $null
+            try { $gp = $g.Path } catch {}
+            if ($gp -and $gp.StartsWith($Script:VpnHome, [StringComparison]::OrdinalIgnoreCase)) {
+                Stop-Process -Id $g.Id -Force -ErrorAction SilentlyContinue
+                Write-Info ("reaped orphaned gost (pid {0}) from a previous dead session" -f $g.Id)
+                Write-Marker ("HKUVPN_ORPHAN_GOST_REAPED pid={0}" -f $g.Id)
+                Start-Sleep -Milliseconds 300
+            }
+        }
+    }
+
     $gostPsi = New-Object System.Diagnostics.ProcessStartInfo
     $gostPsi.FileName = $Cfg.Gost
     $gostPsi.Arguments = ('-D -L socks5://127.0.0.1:{0} -L http://127.0.0.1:{1}' -f $Cfg.SocksPort, $Cfg.HttpPort)
