@@ -1562,6 +1562,9 @@ try {
     if ($st.Code -eq 0) {
         Write-Info 'Already connected:'
         foreach ($l in $st.Text) { Write-Info $l }
+        # A relaunched elevated console closes the moment the script exits;
+        # keep the report on screen long enough to read when double-clicked.
+        if ($elevated) { Start-Sleep -Seconds 5 }
         exit 0
     }
     Invoke-ReapOrphanGost
