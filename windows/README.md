@@ -135,8 +135,16 @@ hkuvpn --stop       # stop (live worker cleans up itself, no UAC; force-stopping
                     # a dead session elevates)
 ```
 
-Three long-session modes, by scenario:
+Three long-session modes, by scenario (plus a tray app):
 
+- **Tray app** (`bin\hkuvpn-app.ps1`): double-click the tray icon to
+  connect (UAC + an MFA popup); the icon is gray=disconnected /
+  orange=connecting / green=connected / red=worker unresponsive, and the
+  right-click menu disconnects without UAC. Exiting the app never kills
+  a running session. Shortcut target:
+  ```powershell
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$HOME\hkuvpn\windows\bin\hkuvpn-app.ps1"
+  ```
 - **Smart mode** (default): the session stays attached to its console;
   closing the window (or Ctrl+C) disconnects, like `hkuvpn -f` in the
   Docker edition. The natural fit for the desktop shortcut.

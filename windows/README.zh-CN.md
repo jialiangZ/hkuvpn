@@ -92,6 +92,10 @@ hkuvpn --stop       # 停止（活跃 worker 自清理，免 UAC；死会话强�
 
 三种长会话模式按场景选：
 
+- **托盘 App**（`bin\hkuvpn-app.ps1`）：双击托盘图标即连接（UAC + MFA 弹窗），图标灰=断开/橙=连接中/绿=已连接/红=worker 无响应；右键菜单断开（免 UAC）。退出 App 不影响运行中的会话。给它建个快捷方式即可当日常入口：
+  ```powershell
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$HOME\hkuvpn\windows\bin\hkuvpn-app.ps1"
+  ```
 - **智能模式**（默认）：整个会话挂在当前控制台，关窗/Ctrl+C 即断开，适合双击图标使用；
 - **`-t` 终端模式**：隧道跑在隐藏的提权 worker 里，MFA 直接在你的终端输入（投递空码或超时会自动停掉 worker）。连接后**关闭终端不影响 VPN**，适合日常从终端启动；
 - **`-d` 后台模式**：无交互启动，配合 `--mfa` 投递，适合脚本。
