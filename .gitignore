@@ -6,6 +6,11 @@
 # Downloaded Windows binaries (gost, the OpenConnect installer)
 windows/tools/
 
+# Desktop app build outputs (source is tracked; the exe is built per machine)
+windows/app/bin/
+windows/app/obj/
+windows/app/publish/
+
 # OS / editor
 .DS_Store
 *.swp
