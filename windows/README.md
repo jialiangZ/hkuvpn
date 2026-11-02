@@ -137,15 +137,13 @@ hkuvpn --stop       # stop (live worker cleans up itself, no UAC; force-stopping
 
 Three long-session modes, by scenario (plus a tray app):
 
-- **Window app** (`bin\hkuvpn-app.ps1`): an openconnect-gui-style window -
-  status header, session info (account / VPN IP / duration / proxy
-  addresses), inline MFA entry while connecting, and a live OpenConnect
-  log view. Closing minimizes to a state-colored tray icon
-  (gray/orange/green/red), and the right-click menu disconnects without
-  UAC. Exiting the app never kills a running session. Shortcut target:
-  ```powershell
-  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$HOME\hkuvpn\windows\bin\hkuvpn-app.ps1"
-  ```
+- **Desktop app** (native Win32, `windows\app`): `HKUVPN.exe` (~800KB, zero
+  runtime dependencies, cross-built with MinGW - see `windows\app\build.sh`).
+  Status header, session info (account / VPN IP / duration / proxies /
+  learned routes + heartbeat), inline MFA entry while connecting, live log
+  view, and close-to-tray. Disconnect is UAC-free and exiting the app never
+  kills a session. A pure-PowerShell fallback exists as `bin\hkuvpn-app.ps1`
+  (no build required).
 - **Smart mode** (default): the session stays attached to its console;
   closing the window (or Ctrl+C) disconnects, like `hkuvpn -f` in the
   Docker edition. The natural fit for the desktop shortcut.
