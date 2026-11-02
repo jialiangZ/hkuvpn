@@ -1586,6 +1586,9 @@ switch ($command) {
     '--foreground' { }
     '-d' { }
     '--detach' { }
+    '-t' { }
+    '--term' { }
+    '--terminal' { }
     default {
         if (-not $elevated -and -not $worker) {
             Write-Err ("Unknown argument: {0}" -f $command)
@@ -1604,6 +1607,7 @@ switch ($command) {
     '-d' { $mode = 'detach' }
     '--detach' { $mode = 'detach' }
     '-t' { $mode = 'terminal' }
+    '--term' { $mode = 'terminal' }
     '--terminal' { $mode = 'terminal' }
 }
 if ($worker) { $mode = 'detach' }
