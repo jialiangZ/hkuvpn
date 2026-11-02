@@ -53,6 +53,7 @@ $Script:MarkerFile   = Join-Path $Script:TempBase 'markers.log'
 $Script:PidFile      = Join-Path $Script:TempBase 'pids.txt'
 $Script:StateFile    = Join-Path $Script:TempBase 'vpnc-state.txt'
 $Script:ResponseFile = Join-Path $Script:TempBase 'response.txt'
+$Script:StopFlagFile = Join-Path $Script:TempBase 'stop.flag'
 
 # Auto-learned licensed-resource routes (HKU_AUTO_ROUTES=1), persisted
 # across sessions as "base/prefix|lastseen-epoch|host" lines.
@@ -712,7 +713,8 @@ function Invoke-CleanupSession {
     Invoke-DisconnectScript
     Remove-HkuNrpt
     Remove-LearnedTunnelRoutes
-    foreach ($f in @($Script:ResponseFile, $Script:StateFile, $Script:MarkerFile, $Script:PidFile)) {
+    foreach ($f in @($Script:ResponseFile, $Script:StateFile, $Script:MarkerFile,
+                     $Script:StopFlagFile, $Script:PidFile)) {
         Remove-Item $f -Force -ErrorAction SilentlyContinue
     }
     if ($RemovePidFile) {
@@ -1109,8 +1111,8 @@ function Invoke-TunnelWorker {
 
     $dir = Split-Path -Parent $Script:LogFile
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-    Remove-Item $Script:MarkerFile, $Script:StateFile, $Script:ResponseFile `
-        -Force -ErrorAction SilentlyContinue
+    Remove-Item $Script:MarkerFile, $Script:StateFile, $Script:ResponseFile,
+        $Script:StopFlagFile -Force -ErrorAction SilentlyContinue
     # Note: $Script:PidFile is NOT removed here. The --Worker bootstrap wrote
     # it to claim the session; Test-WorkerAlive relies on it, and it is
     # overwritten with the real child pids below.
@@ -1291,6 +1293,13 @@ function Invoke-TunnelWorker {
                 } catch {}
                 $lastFlush = Get-Date
             }
+            # A non-elevated 'hkuvpn.ps1 --stop' asks this elevated worker
+            # to tear the session down itself (routes, NRPT, children) via
+            # the finally below - no second UAC prompt for stopping.
+            if (Test-Path $Script:StopFlagFile) {
+                Write-Info 'Stop requested (--stop); cleaning up...'
+                break
+            }
             Start-Sleep -Milliseconds 100
         }
         if (-not $oc.HasExited) { Wait-Process -Id $oc.Id -ErrorAction SilentlyContinue }
@@ -1328,6 +1337,25 @@ function Test-WorkerAlive {
     return ($null -ne $p -and $p.ProcessName -match 'powershell')
 }
 
+function Invoke-ReapOrphanGost {
+    # A hard-killed or crashed worker can leave gost behind holding the
+    # proxy ports; every later connect then fails at bind with "ports in
+    # use". Called elevated at the connect entry points, before anything
+    # rewrites pids.txt: with no live worker, a gost binary from OUR tools
+    # directory is an orphan by definition. Other users' gost processes
+    # (different path) are left alone.
+    if (Test-WorkerAlive) { return }
+    foreach ($g in @(Get-Process -Name gost -ErrorAction SilentlyContinue)) {
+        $path = $null
+        try { $path = $g.Path } catch {}
+        if ($path -and $path.StartsWith($Script:VpnHome, [StringComparison]::OrdinalIgnoreCase)) {
+            Stop-Process -Id $g.Id -Force -ErrorAction SilentlyContinue
+            Write-Info ("reaped orphaned gost (pid {0}) from a previous dead session" -f $g.Id)
+            Write-Marker ("HKUVPN_ORPHAN_GOST_REAPED pid={0}" -f $g.Id)
+        }
+    }
+}
+
 function Start-DetachedWorker {
     param([string[]]$ForwardArgs)
     $parts = @('-NoProfile', '-ExecutionPolicy', 'Bypass',
@@ -1357,6 +1385,7 @@ function Invoke-DetachedConnect {
         Write-Info 'A detached worker is already running (hkuvpn.ps1 --status).'
         return 0
     }
+    Invoke-ReapOrphanGost
     $null = Start-DetachedWorker
     Write-Info 'Detached worker started; waiting for the MFA prompt...'
     $hit = Wait-DetachedMarker -WatchFor @('HKUVPN_MFA_RESPONSE_REQUIRED', 'HKUVPN_CONNECTED', 'HKUVPN_EXITED') -Seconds 30
@@ -1413,7 +1442,8 @@ Usage: hkuvpn.ps1 [hk|-f|-d|--mfa CODE|--check|--status|--logs|--stop]
   --status     Layered health check. Exit codes: 0 ok, 2 process down,
                3 tunnel down, 4 proxy down, 5 e2e failed
   --logs       Follow the OpenConnect log
-  --stop       Stop the VPN, remove routes and NRPT rules
+  --stop       Stop the VPN (a live worker cleans up itself, no UAC;
+               force-stop of a dead session elevates)
 '@
 }
 
@@ -1448,6 +1478,20 @@ switch ($command) {
         exit 0
     }
     '--stop' {
+        # Fast path: a live worker performs its own full teardown (routes,
+        # NRPT, children) when asked via the stop flag - no UAC needed.
+        if (Test-WorkerAlive) {
+            $dir = Split-Path -Parent $Script:StopFlagFile
+            if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+            Set-Content -Path $Script:StopFlagFile -Value 'stop' -NoNewline
+            for ($i = 0; $i -lt 60 -and (Test-WorkerAlive); $i++) { Start-Sleep -Milliseconds 500 }
+            Remove-Item $Script:StopFlagFile -Force -ErrorAction SilentlyContinue
+            if (-not (Test-WorkerAlive)) {
+                Write-Info 'HKU VPN stopped.'
+                exit 0
+            }
+            Write-Err 'Worker still alive after 30s; escalating to elevated force-stop.'
+        }
         if (-not (Test-IsAdmin)) {
             Invoke-RelaunchElevated @('--stop')
             exit 0
@@ -1520,6 +1564,7 @@ try {
         foreach ($l in $st.Text) { Write-Info $l }
         exit 0
     }
+    Invoke-ReapOrphanGost
     $pre = Invoke-Preflight
     if ($pre -ne 0) { exit 1 }
     $cfg = Initialize-ConnectConfig
