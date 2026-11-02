@@ -137,11 +137,12 @@ hkuvpn --stop       # stop (live worker cleans up itself, no UAC; force-stopping
 
 Three long-session modes, by scenario (plus a tray app):
 
-- **Tray app** (`bin\hkuvpn-app.ps1`): double-click the tray icon to
-  connect (UAC + an MFA popup); the icon is gray=disconnected /
-  orange=connecting / green=connected / red=worker unresponsive, and the
-  right-click menu disconnects without UAC. Exiting the app never kills
-  a running session. Shortcut target:
+- **Window app** (`bin\hkuvpn-app.ps1`): an openconnect-gui-style window -
+  status header, session info (account / VPN IP / duration / proxy
+  addresses), inline MFA entry while connecting, and a live OpenConnect
+  log view. Closing minimizes to a state-colored tray icon
+  (gray/orange/green/red), and the right-click menu disconnects without
+  UAC. Exiting the app never kills a running session. Shortcut target:
   ```powershell
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$HOME\hkuvpn\windows\bin\hkuvpn-app.ps1"
   ```

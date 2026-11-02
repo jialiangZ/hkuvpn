@@ -92,7 +92,7 @@ hkuvpn --stop       # 停止（活跃 worker 自清理，免 UAC；死会话强�
 
 三种长会话模式按场景选：
 
-- **托盘 App**（`bin\hkuvpn-app.ps1`）：双击托盘图标即连接（UAC + MFA 弹窗），图标灰=断开/橙=连接中/绿=已连接/红=worker 无响应；右键菜单断开（免 UAC）。退出 App 不影响运行中的会话。给它建个快捷方式即可当日常入口：
+- **窗口 App**（`bin\hkuvpn-app.ps1`）：OpenConnect-GUI 风格的主窗口——状态区、会话信息（账号/VPN IP/时长/代理地址）、连接中**行内 MFA 输入**、实时 OpenConnect 日志视窗；关闭最小化到托盘（图标颜色随状态：灰/橙/绿/红），断开免 UAC。退出 App 不影响运行中的会话。快捷方式目标：
   ```powershell
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$HOME\hkuvpn\windows\bin\hkuvpn-app.ps1"
   ```
