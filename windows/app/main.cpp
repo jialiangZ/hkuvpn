@@ -26,17 +26,19 @@
 #pragma comment(lib, "comctl32.lib")
 
 // ---------------------------------------------------------------- palette
+// Light theme (Windows 11 style): light gray canvas, white cards,
+// blue accent, GitHub-light semantic colors.
 
-static const COLORREF C_BG     = RGB(30, 31, 34);
-static const COLORREF C_CARD   = RGB(38, 39, 43);
-static const COLORREF C_BORDER = RGB(51, 53, 58);
-static const COLORREF C_LOGBG  = RGB(22, 23, 26);
-static const COLORREF C_TEXT   = RGB(230, 230, 230);
-static const COLORREF C_MUTED  = RGB(139, 148, 158);
-static const COLORREF C_ACCENT = RGB(47, 129, 247);
-static const COLORREF C_GREEN  = RGB(63, 185, 80);
-static const COLORREF C_ORANGE = RGB(210, 153, 34);
-static const COLORREF C_RED    = RGB(248, 81, 73);
+static const COLORREF C_BG     = RGB(243, 243, 243);
+static const COLORREF C_CARD   = RGB(255, 255, 255);
+static const COLORREF C_BORDER = RGB(226, 227, 232);
+static const COLORREF C_LOGBG  = RGB(255, 255, 255);
+static const COLORREF C_TEXT   = RGB(31, 35, 40);
+static const COLORREF C_MUTED  = RGB(110, 119, 129);
+static const COLORREF C_ACCENT = RGB(10, 108, 255);
+static const COLORREF C_GREEN  = RGB(26, 127, 55);
+static const COLORREF C_ORANGE = RGB(154, 103, 0);
+static const COLORREF C_RED    = RGB(207, 34, 46);
 
 static HBRUSH gBrBg, gBrCard, gBrLogBg;
 
@@ -260,11 +262,11 @@ static HBRUSH BrushFor(COLORREF c) {
 
 // Styled flat button (owner-draw) --------------------------------------------
 
-struct BtnStyle { COLORREF fill, border, hoverFill; };
+struct BtnStyle { COLORREF fill, border, hoverFill, text; };
 
-static const BtnStyle gBsConnect  = { RGB(35,134,54),  RGB(46,160,67),  RGB(46,160,67) };
-static const BtnStyle gBsDanger   = { RGB(61,34,38),   RGB(110,48,57),  RGB(90,44,51) };
-static const BtnStyle gBsNeutral  = { RGB(45,47,52),   RGB(61,65,73),   RGB(58,61,68) };
+static const BtnStyle gBsConnect  = { RGB(10,108,255),  RGB(9,105,218),   RGB(56,139,253),  RGB(255,255,255) };
+static const BtnStyle gBsDanger   = { RGB(255,255,255), RGB(207,34,46),   RGB(255,240,240), RGB(207,34,46) };
+static const BtnStyle gBsNeutral  = { RGB(245,245,245), RGB(209,213,218), RGB(233,236,239), RGB(31,35,40) };
 
 static LRESULT CALLBACK BtnSubProc(HWND h, UINT m, WPARAM w, LPARAM l,
                                    UINT_PTR id, DWORD_PTR ref) {
@@ -287,7 +289,7 @@ static void DrawStyledButton(DRAWITEMSTRUCT* dis, const BtnStyle* st,
     bool hover = GetPropW(dis->hwndItem, L"hov") != NULL;
     bool disabled = (dis->itemState & ODS_DISABLED) != 0;
     COLORREF fill = hover ? st->hoverFill : st->fill;
-    if (disabled) fill = RGB(52, 54, 59);
+    if (disabled) fill = RGB(235, 236, 238);
     SetDCBrushColor(dc, fill);
     HPEN pen = CreatePen(PS_SOLID, 1, disabled ? RGB(70, 72, 77) : st->border);
     HBRUSH br = (HBRUSH)GetStockObject(DC_BRUSH);
@@ -302,7 +304,7 @@ static void DrawStyledButton(DRAWITEMSTRUCT* dis, const BtnStyle* st,
     SelectObject(dc, oldBr);
     DeleteObject(pen);
     SetBkMode(dc, TRANSPARENT);
-    SetTextColor(dc, disabled ? RGB(120, 124, 130) : C_TEXT);
+    SetTextColor(dc, disabled ? RGB(168, 172, 178) : st->text);
     HFONT of = (HFONT)SelectObject(dc, font);
     RECT tr = r;
     DrawTextW(dc, text, -1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
@@ -364,9 +366,9 @@ static void PaintHeader(HDC dc, const RECT& rc) {
     int s = (int)(g_scale * 96) / 96; (void)s;
     // State dot
     HBRUSH dot = CreateSolidBrush(HeaderColor());
-    int dotSz = (int)(18 * g_scale);
-    RECT dr = { (int)(18 * g_scale), (int)(20 * g_scale),
-                (int)(18 * g_scale) + dotSz, (int)(20 * g_scale) + dotSz };
+    int dotSz = (int)(20 * g_scale);
+    RECT dr = { (int)(20 * g_scale), (int)(22 * g_scale),
+                (int)(20 * g_scale) + dotSz, (int)(22 * g_scale) + dotSz };
     HBRUSH ob = (HBRUSH)SelectObject(dc, dot);
     HPEN np = CreatePen(PS_NULL, 0, 0);
     HPEN op = (HPEN)SelectObject(dc, np);
@@ -387,7 +389,7 @@ static void PaintHeader(HDC dc, const RECT& rc) {
     }
     SetTextColor(dc, HeaderColor());
     HFONT of = (HFONT)SelectObject(dc, gFTitle);
-    TextOutW(dc, (int)(44 * g_scale), (int)(12 * g_scale), title, (int)wcslen(title));
+    TextOutW(dc, (int)(52 * g_scale), (int)(14 * g_scale), title, (int)wcslen(title));
     SelectObject(dc, gFSub);
     SetTextColor(dc, C_MUTED);
     const wchar_t* sub;
@@ -399,12 +401,12 @@ static void PaintHeader(HDC dc, const RECT& rc) {
         case APP_CONNECTING: sub = L"Requesting elevation / bringing the tunnel up"; break;
         default:            sub = L"Tunnel is down"; break;
     }
-    TextOutW(dc, (int)(44 * g_scale), (int)(42 * g_scale), sub, (int)wcslen(sub));
+    TextOutW(dc, (int)(52 * g_scale), (int)(46 * g_scale), sub, (int)wcslen(sub));
     SelectObject(dc, of);
 
     // Server, right aligned
-    RECT right = { rc.right - (int)(190 * g_scale), (int)(16 * g_scale),
-                   rc.right - (int)(18 * g_scale), rc.bottom };
+    RECT right = { rc.right - (int)(200 * g_scale), (int)(16 * g_scale),
+                   rc.right - (int)(20 * g_scale), rc.bottom };
     SetTextColor(dc, C_ACCENT);
     SelectObject(dc, gFSub);
     RECT r1 = right; DrawTextW(dc, L"HKU Portal VPN", -1, &r1,
@@ -441,7 +443,7 @@ static LRESULT CALLBACK PanelProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             int id = GetDlgCtrlID((HWND)l);
             SetBkMode(dc, TRANSPARENT);
             if (id == IDC_ED_LOG) {
-                SetTextColor(dc, RGB(201, 209, 217));
+                SetTextColor(dc, RGB(36, 41, 47));
                 return (LRESULT)gBrLogBg;
             }
             if (id == IDC_ED_MFA) {
@@ -723,17 +725,15 @@ static void Move(HWND h, int x, int y, int w, int ht) {
 }
 
 static void LayoutAll() {
-    int W = 700, H = 620;
+    int W = 720, H = 640;
     RECT rc; GetClientRect(hMain, &rc);
     W = rc.right; H = rc.bottom;
     (void)W; (void)H;
 
-    int cardW = 700 - 36;
-    Move(hPanelSession, 18, 84, cardW, 148);
-    Move(hPanelMfa,     18, 84, cardW, 148);
+    int cardW = 720 - 40;
+    Move(hPanelSession, 20, 92, cardW, 152);
+    Move(hPanelMfa,     20, 92, cardW, 152);
 
-    const wchar_t* caps[] = { L"Account", L"VPN address", L"Duration",
-                              L"Local proxy", L"Routes" };
     int capIds[] = { ID_CAP_ACCOUNT, ID_CAP_VPN, ID_CAP_DURATION,
                      ID_CAP_PROXY, ID_CAP_ROUTES };
     int valIds[] = { ID_VAL_ACCOUNT, ID_VAL_VPN, ID_VAL_DURATION,
@@ -743,40 +743,40 @@ static void LayoutAll() {
         HWND val = GetDlgItem(hPanelSession, valIds[i]);
         SendMessageW(cap, WM_SETFONT, (WPARAM)gFSub, TRUE);
         SendMessageW(val, WM_SETFONT, (WPARAM)gFBody, TRUE);
-        Move(cap, 16, 14 + i * 26, 110, 20);
-        Move(val, 130, 14 + i * 26, cardW - 150, 20);
+        Move(cap, 18, 16 + i * 27, 120, 20);
+        Move(val, 148, 16 + i * 27, cardW - 170, 20);
     }
 
     // MFA panel content
     SendMessageW(GetDlgItem(hPanelMfa, ID_MFA_TITLE), WM_SETFONT, (WPARAM)gFSub, TRUE);
-    Move(GetDlgItem(hPanelMfa, ID_MFA_TITLE), 16, 14, 400, 20);
+    Move(GetDlgItem(hPanelMfa, ID_MFA_TITLE), 18, 16, 400, 20);
     SendMessageW(hMfaNote, WM_SETFONT, (WPARAM)gFSub, TRUE);
-    Move(hMfaNote, 16, 36, cardW - 32, 18);
+    Move(hMfaNote, 18, 40, cardW - 36, 18);
     SendMessageW(hEdMfa, WM_SETFONT, (WPARAM)gFMono, TRUE);
-    Move(hEdMfa, 16, 60, 190, 36);
+    Move(hEdMfa, 18, 64, 200, 38);
     SendMessageW(hBtnMfa, WM_SETFONT, (WPARAM)gFButton, TRUE);
-    Move(hBtnMfa, 220, 60, 110, 36);
+    Move(hBtnMfa, 234, 64, 110, 38);
 
     // Buttons
     SendMessageW(hBtnConnect, WM_SETFONT, (WPARAM)gFButton, TRUE);
     SendMessageW(hBtnDisconnect, WM_SETFONT, (WPARAM)gFButton, TRUE);
-    Move(hBtnConnect, 18, 244, 150, 38);
-    Move(hBtnDisconnect, 182, 244, 150, 38);
+    Move(hBtnConnect, 20, 262, 170, 40);
+    Move(hBtnDisconnect, 206, 262, 170, 40);
 
     // Log panel
-    Move(hPanelLog, 18, 294, cardW, 620 - 294 - 60);
+    Move(hPanelLog, 20, 318, cardW, 640 - 318 - 64);
     SendMessageW(GetDlgItem(hPanelLog, 0), WM_SETFONT, (WPARAM)gFSub, TRUE);
-    Move(GetDlgItem(hPanelLog, 0), 16, 10, 300, 20);
-    Move(hBtnClear, cardW - 90, 8, 74, 24);
+    Move(GetDlgItem(hPanelLog, 0), 18, 10, 300, 20);
+    Move(hBtnClear, cardW - 94, 8, 76, 26);
     SendMessageW(hBtnClear, WM_SETFONT, (WPARAM)gFSub, TRUE);
     SendMessageW(hEdLog, WM_SETFONT, (WPARAM)gFMono, TRUE);
-    Move(hEdLog, 12, 38, cardW - 24, 620 - 294 - 60 - 48);
+    Move(hEdLog, 14, 42, cardW - 28, 640 - 318 - 64 - 56);
 
     // Footer
     SendMessageW(hChkTray, WM_SETFONT, (WPARAM)gFSub, TRUE);
-    Move(hChkTray, 18, 620 - 40, 260, 20);
+    Move(hChkTray, 20, 640 - 42, 300, 20);
     SendMessageW(hFooter, WM_SETFONT, (WPARAM)gFSub, TRUE);
-    Move(hFooter, 700 - 200, 620 - 40, 180, 20);
+    Move(hFooter, 720 - 200, 640 - 42, 180, 20);
 
     InvalidateRect(hMain, NULL, TRUE);
 }
@@ -786,8 +786,8 @@ static void LayoutAll() {
 static LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     switch (m) {
         case WM_CREATE: {
-            BOOL dark = TRUE;
-            DwmSetWindowAttribute(h, 20, &dark, sizeof(dark));  // dark titlebar
+            BOOL dark = FALSE;   // light title bar to match the light theme
+            DwmSetWindowAttribute(h, 20, &dark, sizeof(dark));
             return 0;
         }
         case WM_PAINT: {
@@ -814,7 +814,7 @@ static LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             if (GetDlgCtrlID((HWND)l) == IDC_ED_LOG) {
                 HDC dc = (HDC)w;
                 SetBkColor(dc, C_LOGBG);
-                SetTextColor(dc, RGB(201, 209, 217));
+                SetTextColor(dc, RGB(36, 41, 47));
                 return (LRESULT)gBrLogBg;
             }
             break;
@@ -916,10 +916,10 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
     gBrBg     = CreateSolidBrush(C_BG);
     gBrCard   = CreateSolidBrush(C_CARD);
     gBrLogBg  = CreateSolidBrush(C_LOGBG);
-    gIcoGray   = MakeDotIcon(RGB(130, 130, 130));
-    gIcoGreen  = MakeDotIcon(RGB(63, 185, 80));
-    gIcoOrange = MakeDotIcon(RGB(210, 153, 34));
-    gIcoRed    = MakeDotIcon(RGB(248, 81, 73));
+    gIcoGray   = MakeDotIcon(RGB(150, 153, 158));
+    gIcoGreen  = MakeDotIcon(C_GREEN);
+    gIcoOrange = MakeDotIcon(C_ORANGE);
+    gIcoRed    = MakeDotIcon(C_RED);
     gIcoApp    = (HICON)LoadImageW(hInst, MAKEINTRESOURCEW(1),
                                    IMAGE_ICON, 0, 0, LR_DEFAULTSIZE);
 
@@ -936,11 +936,11 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
 
     hMain = CreateWindowExW(0, L"HkuMain", L"HKU VPN",
         WS_OVERLAPPEDWINDOW & ~(WS_MAXIMIZEBOX | WS_THICKFRAME),
-        CW_USEDEFAULT, CW_USEDEFAULT, 700, 620, NULL, NULL, hInst, NULL);
+        CW_USEDEFAULT, CW_USEDEFAULT, 720, 640, NULL, NULL, hInst, NULL);
     {
         UINT dpi = GetDpiForWindow(hMain);
         g_scale = dpi / 96.0;
-        RECT adj = { 0, 0, (int)(700 * g_scale), (int)(620 * g_scale) };
+        RECT adj = { 0, 0, (int)(720 * g_scale), (int)(640 * g_scale) };
         AdjustWindowRectEx(&adj,
             WS_OVERLAPPEDWINDOW & ~(WS_MAXIMIZEBOX | WS_THICKFRAME), FALSE, 0);
         SetWindowPos(hMain, NULL, CW_USEDEFAULT, CW_USEDEFAULT,
@@ -968,7 +968,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
     hValRoutes  = MkStatic(hPanelSession, ID_VAL_ROUTES, 0, L"-");
 
     // MFA panel
-    static PanelStyle stMfa = { C_CARD, RGB(90, 74, 31), 10 };
+    static PanelStyle stMfa = { C_CARD, RGB(223, 196, 120), 10 };
     hPanelMfa = CreateWindowExW(0, L"HkuPanel", NULL, WS_CHILD,
                                 0, 0, 10, 10, hMain, NULL, hInst, NULL);
     SetWindowLongPtrW(hPanelMfa, GWLP_USERDATA, (LONG_PTR)&stMfa);
