@@ -1242,7 +1242,16 @@ function Invoke-TunnelWorker {
                 $connected = $true
                 Write-Marker 'HKUVPN_CONNECTED'
                 Write-Info 'Tunnel established; waiting for split routes...'
-                for ($w = 0; $w -lt 20 -and -not (Test-Path $Script:StateFile); $w++) {
+                # The vpnc-script runs once the wintun adapter comes up. A
+                # first-attempt DTLS handshake timeout delays that by 10-15s
+                # after CSTP connects, so wait up to 45s - while still
+                # draining the gost streams, or gost could block on a full
+                # pipe during the longer wait.
+                for ($w = 0; $w -lt 180 -and -not (Test-Path $Script:StateFile); $w++) {
+                    Read-PendingChars $ocOut   $outBuf   $logAll $EchoRaw
+                    Read-PendingChars $ocErr   $errBuf   $logAll $EchoRaw
+                    Read-PendingChars $gostOut $gostBuf  $gostLog $false
+                    Read-PendingChars $gostErr $gostBufE $gostLog $false
                     Start-Sleep -Milliseconds 250
                 }
                 Add-HkuNrptFromState
