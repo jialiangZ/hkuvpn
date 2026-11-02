@@ -1568,6 +1568,23 @@ switch ($command) {
             }
             Write-Err 'Worker not responding to the stop flag (wedged?); escalating to elevated force-stop.'
         }
+        if (-not (Test-WorkerAlive)) {
+            # Nothing to signal; only raise UAC if there is actually
+            # something elevated to kill (a worker-less leftover).
+            $children = @(Get-Process -Name openconnect -ErrorAction SilentlyContinue)
+            foreach ($g in @(Get-Process -Name gost -ErrorAction SilentlyContinue)) {
+                $p = $null
+                try { $p = $g.Path } catch {}
+                if ($p -and $p.StartsWith($Script:VpnHome, [StringComparison]::OrdinalIgnoreCase)) {
+                    $children += $g
+                }
+            }
+            if ($children.Count -eq 0) {
+                Remove-Item $Script:PidFile -Force -ErrorAction SilentlyContinue
+                Write-Info 'HKU VPN is not running.'
+                exit 0
+            }
+        }
         if (-not (Test-IsAdmin)) {
             Invoke-RelaunchElevated @('--stop')
             exit 0
