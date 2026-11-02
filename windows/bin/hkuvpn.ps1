@@ -1528,5 +1528,11 @@ try {
     exit $rc
 } catch {
     Write-Err $_.Exception.Message
+    # The elevated relaunch console closes on exit, so the red error above
+    # can flash by unseen. Persist it like the detached worker does, or a
+    # crashed session leaves no trace at all for --logs/markers diagnosis.
+    try {
+        Write-Marker ('HKUVPN_EXITED error={0}' -f ($_.Exception.Message -replace '\r?\n', ' '))
+    } catch {}
     exit 1
 }
