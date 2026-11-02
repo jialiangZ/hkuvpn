@@ -1091,6 +1091,9 @@ function Get-MfaCode {
             Write-Info 'Response file ignored (need exactly 6 digits); still waiting...'
         }
         if ($OpenConnectProc.HasExited) { return $null }
+        # A wedged main loop cannot see the flag; if the wait happens to be
+        # this loop, honor the stop request here so --stop still works.
+        if (Test-Path $Script:StopFlagFile) { return $null }
         # Keep the log current while waiting, so "hkuvpn.ps1 --logs" shows what
         # the gateway is saying (the wait blocks the main loop otherwise).
         if ($LogBuffer -and $LogPath) {
@@ -1557,13 +1560,13 @@ switch ($command) {
             $dir = Split-Path -Parent $Script:StopFlagFile
             if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
             Set-Content -Path $Script:StopFlagFile -Value 'stop' -NoNewline
-            for ($i = 0; $i -lt 60 -and (Test-WorkerAlive); $i++) { Start-Sleep -Milliseconds 500 }
+            for ($i = 0; $i -lt 16 -and (Test-WorkerAlive); $i++) { Start-Sleep -Milliseconds 500 }
             Remove-Item $Script:StopFlagFile -Force -ErrorAction SilentlyContinue
             if (-not (Test-WorkerAlive)) {
                 Write-Info 'HKU VPN stopped.'
                 exit 0
             }
-            Write-Err 'Worker still alive after 30s; escalating to elevated force-stop.'
+            Write-Err 'Worker not responding to the stop flag (wedged?); escalating to elevated force-stop.'
         }
         if (-not (Test-IsAdmin)) {
             Invoke-RelaunchElevated @('--stop')
