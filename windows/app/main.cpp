@@ -311,9 +311,7 @@ static void DrawStyledButton(DRAWITEMSTRUCT* dis, const BtnStyle* st,
     RECT tr = r;
     DrawTextW(dc, text, -1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     SelectObject(dc, of);
-    if (dis->itemState & ODS_FOCUS) {
-        DrawFocusRect(dc, &r);
-    }
+    // (no focus rectangle: the dashed outline reads as visual noise)
 }
 
 // ---------------------------------------------------------------- icons
@@ -754,10 +752,10 @@ static void TailLog() {
         }
         g_logPos += (long long)raw.size();
         if (!raw.empty()) {
-            int wl = MultiByteToWideChar(CP_UTF8, 0, raw.c_str(),
+            int wl = MultiByteToWideChar(CP_ACP, 0, raw.c_str(),
                                          (int)raw.size(), NULL, 0);
             std::wstring w(wl, 0);
-            MultiByteToWideChar(CP_UTF8, 0, raw.c_str(), (int)raw.size(),
+            MultiByteToWideChar(CP_ACP, 0, raw.c_str(), (int)raw.size(),
                                 &w[0], wl);
             int cur = GetWindowTextLengthW(hEdLog);
             if (cur > 120000) {                          // trim old content
@@ -899,12 +897,17 @@ static LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             PAINTSTRUCT ps;
             HDC dc = BeginPaint(h, &ps);
             RECT rc; GetClientRect(h, &rc);
+            // Always fill the client with the canvas color first: never rely
+            // on the erase pass (a stale un-erased area reads as black).
+            HBRUSH bg = CreateSolidBrush(C_BG);
+            FillRect(dc, &rc, bg);
+            DeleteObject(bg);
             PaintHeader(dc, rc);
             EndPaint(h, &ps);
             return 0;
         }
         case WM_ERASEBKGND:
-            return 1;   // class brush handles it; avoid flicker
+            return 1;   // WM_PAINT fills the canvas itself
         case WM_CTLCOLORSTATIC: {
             HDC dc = (HDC)w;
             int id = GetDlgCtrlID((HWND)l);
