@@ -72,11 +72,13 @@ static long long g_logPos = -1;
 static std::wstring g_launcher, g_account = L"-";
 static double g_scale = 1.0;
 
-static HWND hMain, hPanelSession, hPanelMfa, hPanelLog;
-static HWND hBtnConnect, hBtnDisconnect, hBtnMfa, hBtnClear;
-static HWND hEdMfa, hEdLog, hChkTray;
+static HWND hMain, hPanelSession, hPanelLog;
+static HWND hBtnConnect, hBtnDisconnect, hBtnClear;
+static HWND hEdLog, hChkTray;
 static HWND hValAccount, hValVpn, hValDuration, hValRoutes;
-static HWND hMfaNote, hFooter;
+static HWND hFooter;
+
+static HINSTANCE g_hInst = NULL;
 
 static HFONT gFTitle, gFSub, gFBody, gFMono, gFButton;
 static HICON gIcoGray, gIcoGreen, gIcoOrange, gIcoRed, gIcoApp;
@@ -490,8 +492,7 @@ static void SetState(App_State s) {
     EnableWindow(hBtnConnect, s == APP_IDLE);
     EnableWindow(hBtnDisconnect, busy);
     SetWindowTextW(hBtnDisconnect, s == APP_CONNECTING ? L"Cancel" : L"Disconnect");
-    ShowWindow(hPanelSession, s == APP_CONNECTED ? SW_SHOW : SW_HIDE);
-    ShowWindow(hPanelMfa, SW_HIDE);
+    ShowWindow(hPanelSession, SW_SHOW);
     if (s == APP_CONNECTED) {
         g_connectedTick = g_connectedTick ? g_connectedTick : GetTickCount64();
         std::wstring ip = StateValue(L"IP4");
@@ -538,20 +539,137 @@ static void DoDisconnect() {
     SetState(APP_IDLE);
 }
 
-static void DoMfaSubmit() {
-    wchar_t code[8] = {};
-    GetWindowTextW(hEdMfa, code, 8);
-    if (wcslen(code) != 6) {
-        SetWindowTextW(hMfaNote, L"The code must be exactly 6 digits.");
-        ShowWindow(hMfaNote, SW_SHOW);
+// ---------------------------------------------------------------- MFA popup
+
+static void CloseMfaDlg();
+static void SetState(App_State s);
+static HWND MkStatic(HWND parent, int id, DWORD style, const wchar_t* txt);
+static void OpenMfaDlg(bool rejected);
+
+static HWND g_hMfaDlg = NULL, g_hMfaEd = NULL, g_hMfaNote = NULL;
+
+static LRESULT CALLBACK MfaDlgProc(HWND h, UINT m, WPARAM w, LPARAM l) {
+    switch (m) {
+        case WM_CTLCOLORSTATIC: {
+            HDC dc = (HDC)w;
+            int id = GetDlgCtrlID((HWND)l);
+            SetBkMode(dc, TRANSPARENT);
+            SetTextColor(dc, id == ID_MFA_NOTE ? C_RED : C_TEXT);
+            static HBRUSH sWhite = NULL;
+            if (!sWhite) sWhite = (HBRUSH)GetStockObject(WHITE_BRUSH);
+            return (LRESULT)sWhite;
+        }
+        case WM_CTLCOLOREDIT: {
+            HDC dc = (HDC)w;
+            SetBkColor(dc, C_LOGBG);
+            SetTextColor(dc, C_TEXT);
+            static HBRUSH sWhite2 = NULL;
+            if (!sWhite2) sWhite2 = (HBRUSH)GetStockObject(WHITE_BRUSH);
+            return (LRESULT)sWhite2;
+        }
+        case WM_DRAWITEM: {
+            DRAWITEMSTRUCT* dis = (DRAWITEMSTRUCT*)l;
+            if (dis->CtlID == ID_BTN_MFA) {
+                DrawStyledButton(dis, &gBsConnect, L"Submit", gFButton);
+                return TRUE;
+            }
+            if (dis->CtlID == ID_BTN_DISCONNECT) {   // reused id: Cancel button
+                DrawStyledButton(dis, &gBsNeutral, L"Cancel", gFButton);
+                return TRUE;
+            }
+            break;
+        }
+        case WM_COMMAND: {
+            if (LOWORD(w) == ID_BTN_MFA && HIWORD(w) == BN_CLICKED) {
+                wchar_t code[8] = {};
+                GetWindowTextW(g_hMfaEd, code, 8);
+                if (wcslen(code) != 6) {
+                    SetWindowTextW(g_hMfaNote, L"The code must be exactly 6 digits.");
+                    ShowWindow(g_hMfaNote, SW_SHOW);
+                    return 0;
+                }
+                if (WriteAllTextW(P.response, code)) {
+                    CloseMfaDlg();
+                } else {
+                    SetWindowTextW(g_hMfaNote, L"Could not deliver the code.");
+                    ShowWindow(g_hMfaNote, SW_SHOW);
+                }
+                return 0;
+            }
+            if (LOWORD(w) == ID_BTN_DISCONNECT && HIWORD(w) == BN_CLICKED) {
+                // Cancel = abort the half-built session.
+                WriteAllTextW(P.stop, L"stop");
+                CloseMfaDlg();
+                SetState(APP_IDLE);
+                return 0;
+            }
+            return 0;
+        }
+        case WM_CLOSE:
+            WriteAllTextW(P.stop, L"stop");
+            CloseMfaDlg();
+            SetState(APP_IDLE);
+            return 0;
+    }
+    return DefWindowProcW(h, m, w, l);
+}
+
+static void CloseMfaDlg() {
+    if (!g_hMfaDlg) return;
+    HWND h = g_hMfaDlg;
+    g_hMfaDlg = NULL; g_hMfaEd = NULL; g_hMfaNote = NULL;
+    DestroyWindow(h);
+    EnableWindow(hMain, TRUE);
+    SetForegroundWindow(hMain);
+}
+
+static void OpenMfaDlg(bool rejected) {
+    if (g_hMfaDlg) {
+        // A rejected code: the worker asks again through a new marker.
+        SetWindowTextW(g_hMfaNote, L"The previous code was REJECTED - enter the one showing NOW.");
+        ShowWindow(g_hMfaNote, SW_SHOW);
+        SetWindowTextW(g_hMfaEd, L"");
+        SetForegroundWindow(g_hMfaDlg);
+        SetFocus(g_hMfaEd);
         return;
     }
-    if (WriteAllTextW(P.response, code)) {
-        ShowWindow(hPanelMfa, SW_HIDE);
-    } else {
-        SetWindowTextW(hMfaNote, L"Could not deliver the code.");
-        ShowWindow(hMfaNote, SW_SHOW);
-    }
+    RECT mr; GetWindowRect(hMain, &mr);
+    int dw = 380, dh = 200;
+    int x = mr.left + ((mr.right - mr.left) - dw) / 2;
+    int y = mr.top + ((mr.bottom - mr.top) - dh) / 2;
+    g_hMfaDlg = CreateWindowExW(WS_EX_DLGMODALFRAME, L"HkuMfaDlg",
+        L"HKU VPN - MFA code",
+        WS_POPUP | WS_CAPTION | WS_SYSMENU,
+        x, y, dw, dh, hMain, NULL, g_hInst, NULL);
+    MkStatic(g_hMfaDlg, ID_MFA_TITLE, 0,
+             L"Enter the 6-digit Microsoft Authenticator code:");
+    SendMessageW(GetDlgItem(g_hMfaDlg, ID_MFA_TITLE), WM_SETFONT, (WPARAM)gFSub, TRUE);
+    MoveWindow(GetDlgItem(g_hMfaDlg, ID_MFA_TITLE), 18, 16, 340, 20, TRUE);
+    g_hMfaNote = MkStatic(g_hMfaDlg, ID_MFA_NOTE, 0,
+        rejected ? L"The previous code was REJECTED - enter the one showing NOW." : L"");
+    SendMessageW(g_hMfaNote, WM_SETFONT, (WPARAM)gFSub, TRUE);
+    MoveWindow(g_hMfaNote, 18, 38, 340, 18, TRUE);
+    ShowWindow(g_hMfaNote, rejected ? SW_SHOW : SW_HIDE);
+    g_hMfaEd = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
+        WS_CHILD | WS_VISIBLE | ES_NUMBER | ES_CENTER | ES_AUTOHSCROLL,
+        18, 64, 200, 38, g_hMfaDlg, (HMENU)IDC_ED_MFA, g_hInst, NULL);
+    SendMessageW(g_hMfaEd, WM_SETFONT, (WPARAM)gFMono, TRUE);
+    SendMessageW(g_hMfaEd, EM_SETLIMITTEXT, 6, 0);
+    HWND ok = CreateWindowExW(0, L"BUTTON", L"Submit",
+        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | BS_DEFPUSHBUTTON,
+        234, 64, 110, 38, g_hMfaDlg, (HMENU)ID_BTN_MFA, g_hInst, NULL);
+    SendMessageW(ok, WM_SETFONT, (WPARAM)gFButton, TRUE);
+    SetWindowSubclass(ok, BtnSubProc, 5, 0);
+    HWND cancel = CreateWindowExW(0, L"BUTTON", L"Cancel",
+        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+        18, 114, 110, 32, g_hMfaDlg, (HMENU)ID_BTN_DISCONNECT, g_hInst, NULL);
+    SendMessageW(cancel, WM_SETFONT, (WPARAM)gFButton, TRUE);
+    SetWindowSubclass(cancel, BtnSubProc, 6, 0);
+
+    EnableWindow(hMain, FALSE);
+    ShowWindow(g_hMfaDlg, SW_SHOWNORMAL);
+    SetForegroundWindow(g_hMfaDlg);
+    SetFocus(g_hMfaEd);
 }
 
 // ---------------------------------------------------------------- state machine
@@ -562,24 +680,19 @@ static void Tick() {
         for (int i = g_seen; i < (int)lines.size(); i++) {
             const std::wstring& l = lines[i];
             if (l.find(L"HKUVPN_CONNECTED") != std::wstring::npos) {
+                CloseMfaDlg();
                 g_connectedTick = GetTickCount64();
                 SetState(APP_CONNECTED);
             } else if (l.find(L"HKUVPN_MFA_RESPONSE_REQUIRED") != std::wstring::npos &&
                        g_state == APP_CONNECTING) {
-                ShowWindow(hPanelSession, SW_HIDE);
-                SetWindowTextW(hMfaNote, g_retry
-                    ? L"The previous code was REJECTED - enter the one showing NOW."
-                    : L"");
-                ShowWindow(hMfaNote, g_retry ? SW_SHOW : SW_HIDE);
-                SetWindowTextW(hEdMfa, L"");
-                ShowWindow(hPanelMfa, SW_SHOW);
-                SetFocus(hEdMfa);
+                OpenMfaDlg(g_retry);
+                g_retry = false;
             } else if (l.find(L"HKUVPN_MFA_RETRY") != std::wstring::npos) {
                 g_retry = true;
             } else if (l.find(L"HKUVPN_EXITED") != std::wstring::npos) {
                 if (g_state == APP_CONNECTING) {
+                    CloseMfaDlg();
                     SetState(APP_IDLE);
-                    ShowWindow(hPanelMfa, SW_HIDE);
                 }
             }
         }
@@ -611,8 +724,11 @@ static void Tick() {
         }
     }
 
-    // repaint the header occasionally (state colors)
-    InvalidateRect(hMain, NULL, FALSE);
+    // repaint ONLY the header band (state colors); a full-window invalidate
+    // every tick makes the log and cards flicker
+    RECT rc; GetClientRect(hMain, &rc);
+    RECT hdr = { 0, 0, rc.right, (int)(88 * g_scale) };
+    InvalidateRect(hMain, &hdr, FALSE);
 }
 
 // ---------------------------------------------------------------- log tail
@@ -732,7 +848,6 @@ static void LayoutAll() {
 
     int cardW = 720 - 40;
     Move(hPanelSession, 20, 92, cardW, 152);
-    Move(hPanelMfa,     20, 92, cardW, 152);
 
     int capIds[] = { ID_CAP_ACCOUNT, ID_CAP_VPN, ID_CAP_DURATION,
                      ID_CAP_PROXY, ID_CAP_ROUTES };
@@ -746,16 +861,6 @@ static void LayoutAll() {
         Move(cap, 18, 16 + i * 27, 120, 20);
         Move(val, 148, 16 + i * 27, cardW - 170, 20);
     }
-
-    // MFA panel content
-    SendMessageW(GetDlgItem(hPanelMfa, ID_MFA_TITLE), WM_SETFONT, (WPARAM)gFSub, TRUE);
-    Move(GetDlgItem(hPanelMfa, ID_MFA_TITLE), 18, 16, 400, 20);
-    SendMessageW(hMfaNote, WM_SETFONT, (WPARAM)gFSub, TRUE);
-    Move(hMfaNote, 18, 40, cardW - 36, 18);
-    SendMessageW(hEdMfa, WM_SETFONT, (WPARAM)gFMono, TRUE);
-    Move(hEdMfa, 18, 64, 200, 38);
-    SendMessageW(hBtnMfa, WM_SETFONT, (WPARAM)gFButton, TRUE);
-    Move(hBtnMfa, 234, 64, 110, 38);
 
     // Buttons
     SendMessageW(hBtnConnect, WM_SETFONT, (WPARAM)gFButton, TRUE);
@@ -836,7 +941,6 @@ static LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             int id = LOWORD(w);
             if (id == ID_BTN_CONNECT && HIWORD(w) == BN_CLICKED) DoConnect();
             else if (id == ID_BTN_DISCONNECT && HIWORD(w) == BN_CLICKED) DoDisconnect();
-            else if (id == ID_BTN_MFA && HIWORD(w) == BN_CLICKED) DoMfaSubmit();
             else if (id == ID_BTN_CLEAR && HIWORD(w) == BN_CLICKED) {
                 SetWindowTextW(hEdLog, L"");
                 g_logPos = -1;
@@ -934,9 +1038,10 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
     wc.lpszClassName = L"HkuMain";
     RegisterClassW(&wc);
 
-    hMain = CreateWindowExW(0, L"HkuMain", L"HKU VPN",
+    hMain = CreateWindowExW(WS_EX_COMPOSITED, L"HkuMain", L"HKU VPN",
         WS_OVERLAPPEDWINDOW & ~(WS_MAXIMIZEBOX | WS_THICKFRAME),
         CW_USEDEFAULT, CW_USEDEFAULT, 720, 640, NULL, NULL, hInst, NULL);
+    g_hInst = hInst;
     {
         UINT dpi = GetDpiForWindow(hMain);
         g_scale = dpi / 96.0;
@@ -967,20 +1072,15 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
              L"socks5://127.0.0.1:1080   http://127.0.0.1:1088");
     hValRoutes  = MkStatic(hPanelSession, ID_VAL_ROUTES, 0, L"-");
 
-    // MFA panel
-    static PanelStyle stMfa = { C_CARD, RGB(223, 196, 120), 10 };
-    hPanelMfa = CreateWindowExW(0, L"HkuPanel", NULL, WS_CHILD,
-                                0, 0, 10, 10, hMain, NULL, hInst, NULL);
-    SetWindowLongPtrW(hPanelMfa, GWLP_USERDATA, (LONG_PTR)&stMfa);
-    MkStatic(hPanelMfa, ID_MFA_TITLE, 0, L"Multi-factor authentication");
-    hMfaNote = MkStatic(hPanelMfa, ID_MFA_NOTE, 0, L"");
-    hEdMfa = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
-        WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_NUMBER | ES_CENTER,
-        0, 0, 10, 10, hPanelMfa, (HMENU)IDC_ED_MFA, hInst, NULL);
-    SendMessageW(hEdMfa, EM_SETLIMITTEXT, 6, 0);
-    hBtnMfa = CreateWindowExW(0, L"BUTTON", L"Submit",
-        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | BS_DEFPUSHBUTTON,
-        0, 0, 10, 10, hPanelMfa, (HMENU)ID_BTN_MFA, hInst, NULL);
+    // MFA popup class (light background)
+    WNDCLASSW mwc = {};
+    mwc.lpfnWndProc = MfaDlgProc;
+    mwc.hInstance = hInst;
+    mwc.hCursor = LoadCursor(NULL, IDC_ARROW);
+    mwc.hIcon = gIcoApp;
+    mwc.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
+    mwc.lpszClassName = L"HkuMfaDlg";
+    RegisterClassW(&mwc);
 
     // Main buttons
     hBtnConnect = CreateWindowExW(0, L"BUTTON", L"Connect",
@@ -991,7 +1091,6 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
         0, 0, 10, 10, hMain, (HMENU)ID_BTN_DISCONNECT, hInst, NULL);
     SetWindowSubclass(hBtnConnect, BtnSubProc, 1, 0);
     SetWindowSubclass(hBtnDisconnect, BtnSubProc, 2, 0);
-    SetWindowSubclass(hBtnMfa, BtnSubProc, 3, 0);
     SetWindowSubclass(hBtnClear, BtnSubProc, 4, 0);
 
     // Log panel
@@ -1032,13 +1131,28 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
     SetTimer(hMain, 2, 600, NULL);
     if (WorkerAlive()) { g_seen = 0; }
     SetState(WorkerAlive() ? APP_CONNECTED : APP_IDLE);
+    // If the session is still mid-MFA (e.g. the app was reopened while the
+    // worker waits), surface the popup immediately.
+    if (g_state == APP_CONNECTING || WorkerAlive()) {
+        std::wstring all;
+        if (ReadAllTextW(P.markers, all)) {
+            size_t need = all.rfind(L"HKUVPN_MFA_RESPONSE_REQUIRED");
+            size_t conn = all.rfind(L"HKUVPN_CONNECTED");
+            if (need != std::wstring::npos &&
+                (conn == std::wstring::npos || need > conn)) {
+                OpenMfaDlg(false);
+            }
+        }
+    }
 
     ShowWindow(hMain, nCmd);
     UpdateWindow(hMain);
 
     MSG msg;
     while (GetMessageW(&msg, NULL, 0, 0) > 0) {
-        if (!IsDialogMessageW(hMain, &msg)) {
+        if (g_hMfaDlg && IsDialogMessageW(g_hMfaDlg, &msg)) {
+            // handled by the MFA popup (Enter = Submit, Esc = Cancel)
+        } else if (!IsDialogMessageW(hMain, &msg)) {
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
