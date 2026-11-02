@@ -122,19 +122,36 @@ function hkuvpn { & "$HOME\hkuvpn\windows\bin\hkuvpn.ps1" @args }
 
 ```powershell
 hkuvpn              # smart connect: prompts for the MFA code, waits for the tunnel
-hkuvpn              # run again while connected: reports status
+hkuvpn              # run again while connected: reports status (elevated window holds 5s)
 hkuvpn --check      # pre-flight check (exit 0 = ready)
 hkuvpn -f           # foreground connect, echoes the raw OpenConnect log
+hkuvpn -t           # terminal connect: hidden elevated worker, MFA typed here,
+                    # no second console window
 hkuvpn -d           # background connect (waits for MFA readiness)
 hkuvpn --mfa 123456 # deliver the code to the background worker
 hkuvpn --status     # layered health check (exit 0/2/3/4/5)
 hkuvpn --logs       # follow the OpenConnect log
-hkuvpn --stop       # stop, remove split routes and the NRPT rule
+hkuvpn --stop       # stop (live worker cleans up itself, no UAC; force-stopping
+                    # a dead session elevates)
 ```
 
-Smart mode stays attached to your console: closing the window (or Ctrl+C)
-disconnects the VPN, like `hkuvpn -f` in the Docker edition. Use `-d` for a
-hidden background worker when you want the terminal back.
+Three long-session modes, by scenario:
+
+- **Smart mode** (default): the session stays attached to its console;
+  closing the window (or Ctrl+C) disconnects, like `hkuvpn -f` in the
+  Docker edition. The natural fit for the desktop shortcut.
+- **`-t` terminal mode**: the tunnel runs in a hidden elevated worker and
+  the MFA code is typed right in the invoking terminal (an empty answer
+  or a timeout stops the worker cleanly). Closing the terminal afterwards
+  does NOT affect the VPN - the everyday choice from a shell.
+- **`-d` detach mode**: no interaction at start; deliver the code with
+  `--mfa`. For scripts.
+
+Two self-healing behaviors on top: connect entry points reap a gost
+orphaned by a crashed session (it would otherwise hold 1080/1088 and
+fail every later connect at bind; recorded as HKUVPN_ORPHAN_GOST_REAPED),
+and every mode writes its fatal errors to markers (HKUVPN_EXITED
+error=...) so a flashing window never loses the diagnostic trail.
 
 **Enter the code as soon as you are prompted.** An Authenticator code is
 only valid for about 30 seconds, and the gateway rejects an expired one. If
@@ -175,6 +192,8 @@ HTTP `127.0.0.1:1088`, and point Clash Verge / Surge at them with the same
   `%USERPROFILE%\.vpn\hku.env`, same as the Docker edition.
 - **Stale routes after a crash** — run `hkuvpn --stop` (it replays the
   disconnect script and removes the NRPT rule), or check `route print`.
+  A gost orphan holding 1080/1088 is reaped automatically at the next
+  connect (HKUVPN_ORPHAN_GOST_REAPED).
 - **`--mfa` says no worker** — the background worker exited early;
   reconnect with plain `hkuvpn` and watch the console output.
 

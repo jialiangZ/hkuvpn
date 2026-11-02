@@ -247,6 +247,9 @@ route print -4 | Select-String '<学到的网段>'
 powershell -ExecutionPolicy Bypass -File .\hkuvpn.ps1 --stop
 ```
 
+会话还活着时**不会弹 UAC**：命令写一个 `stop.flag`，提权 worker 看到后自行
+拆除路由、删除 NRPT 规则并退出，随后打印 `HKU VPN stopped.`。
+
 然后确认主机是干净的：
 
 ```powershell
@@ -260,7 +263,7 @@ Get-Process openconnect,gost -ErrorAction SilentlyContinue   # 无输出
 
 | 路径 | 内容 | 能否删除 |
 |---|---|---|
-| `%TEMP%\hkuvpn\` | 日志、标记、pid 列表、状态文件 | 随时可删 |
+| `%TEMP%\hkuvpn\` | 日志、标记、pid 列表、状态文件、停机标志 | 随时可删 |
 | `%USERPROFILE%\.vpn\hku.env`、`hku.pass` | 你的凭据 | 保留（配好 NTFS ACL） |
 | `%USERPROFILE%\.vpn\pin-hk.cache` | 证书指纹缓存 | 可删 |
 | `%USERPROFILE%\.vpn\learned-routes.txt` | 学到的路由 | 可删 |

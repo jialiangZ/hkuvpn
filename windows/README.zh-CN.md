@@ -77,19 +77,26 @@ function hkuvpn { & "$HOME\hkuvpn\windows\bin\hkuvpn.ps1" @args }
 
 ```powershell
 hkuvpn              # 智能连接：提示输入 MFA 动态码，等待隧道建立
-hkuvpn              # 已连接时再次运行：报告状态
+hkuvpn              # 已连接时再次运行：报告状态（提权窗口停 5 秒后自动关闭）
 hkuvpn --check      # 预检（退出码 0 = 就绪）
 hkuvpn -f           # 前台连接，回显 OpenConnect 原始日志
+hkuvpn -t           # 终端连接：隐藏提权 worker，MFA 在当前终端输入，无第二窗口
 hkuvpn -d           # 后台连接（等待 MFA 就绪后返回）
 hkuvpn --mfa 123456 # 向后台 worker 投递动态码
 hkuvpn --status     # 分层健康检查（退出码 0/2/3/4/5）
 hkuvpn --logs       # 跟踪 OpenConnect 日志
-hkuvpn --stop       # 停止并清理分流路由和 NRPT 规则
+hkuvpn --stop       # 停止（活跃 worker 自清理，免 UAC；死会话强杀才需提权）
 ```
 
 **提示后立刻输入动态码。** Authenticator 的码只有约 30 秒有效期，过期后网关会拒绝。若被拒绝，启动器会明确提示 `The previous MFA code was rejected; enter the current one` 并重新询问 —— 此时输入**当前显示**的码即可。`-d` 后台模式同理：投递给 worker 的必须是**当下**有效的码，而不是提前抄下来的旧码。
 
-智能模式会保持挂在当前控制台：关闭窗口（或 Ctrl+C）即断开 VPN，行为类似 Docker 版的 `hkuvpn -f`。想拿回终端就用 `-d` 切换到隐藏后台 worker。
+三种长会话模式按场景选：
+
+- **智能模式**（默认）：整个会话挂在当前控制台，关窗/Ctrl+C 即断开，适合双击图标使用；
+- **`-t` 终端模式**：隧道跑在隐藏的提权 worker 里，MFA 直接在你的终端输入（投递空码或超时会自动停掉 worker）。连接后**关闭终端不影响 VPN**，适合日常从终端启动；
+- **`-d` 后台模式**：无交互启动，配合 `--mfa` 投递，适合脚本。
+
+另外两个自愈机制：连接入口会自动回收上个崩溃会话遗留的 gost（否则它占着 1080/1088 会让之后每次连接都失败，标记 `HKUVPN_ORPHAN_GOST_REAPED` 留痕）；任何模式的异常退出都会把错误写进 markers（`HKUVPN_EXITED error=...`），窗口闪退也不会丢失诊断线索。
 
 代理使用方式与 Docker 版完全一致：SOCKS5 `127.0.0.1:1080`、HTTP
 `127.0.0.1:1088`，Clash Verge / Surge 照主指南配置，同样注意"VPN 服务器
@@ -121,7 +128,8 @@ hkuvpn --stop       # 停止并清理分流路由和 NRPT 规则
 - **会话冻结（无 keepalive）** —— 在 `%USERPROFILE%\.vpn\hku.env` 设置
   `HKU_DTLS=0`，与 Docker 版相同。
 - **异常退出后路由残留** —— 运行 `hkuvpn --stop`（会重放 disconnect 脚本
-  并删除 NRPT 规则），或用 `route print` 检查。
+  并删除 NRPT 规则），或用 `route print` 检查。若 gost 孤儿进程占着
+  1080/1088，下次连接会自动回收（`HKUVPN_ORPHAN_GOST_REAPED`）。
 - **`--mfa` 提示没有 worker** —— 后台 worker 提前退出了；直接运行
   `hkuvpn` 观察输出。
 

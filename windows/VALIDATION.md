@@ -265,6 +265,10 @@ To forget it, delete `learned-routes.txt`.
 powershell -ExecutionPolicy Bypass -File .\hkuvpn.ps1 --stop
 ```
 
+With a live worker this does **not** raise UAC: the command drops a
+`stop.flag`, the elevated worker tears down routes, removes the NRPT rule
+and exits by itself, then `HKU VPN stopped.` is printed.
+
 Then confirm the host is clean:
 
 ```powershell
@@ -278,7 +282,7 @@ task. The only files the port creates are:
 
 | Path | Content | Remove it? |
 |---|---|---|
-| `%TEMP%\hkuvpn\` | Logs, markers, pid list, state | Safe to delete any time |
+| `%TEMP%\hkuvpn\` | Logs, markers, pid list, state, stop flag | Safe to delete any time |
 | `%USERPROFILE%\.vpn\hku.env`, `hku.pass` | Your credentials | Keep (0600-style ACLs) |
 | `%USERPROFILE%\.vpn\pin-hk.cache` | Cached certificate pin | Safe to delete |
 | `%USERPROFILE%\.vpn\learned-routes.txt` | Learned routes | Safe to delete |
