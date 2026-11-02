@@ -1408,6 +1408,77 @@ function Invoke-DetachedConnect {
 
 # --- mfa delivery -----------------------------------------------------------
 
+function Invoke-TerminalConnect {
+    # Terminal mode: keep the whole interaction in the caller's console.
+    # The tunnel runs in a hidden elevated worker (one UAC prompt, no
+    # second window); the MFA code is read here and delivered through the
+    # same response file --mfa uses. Aborting at the prompt (or a timeout)
+    # stops the worker cleanly via the stop flag.
+    if (Test-WorkerAlive) {
+        Write-Info 'A session is already running (hkuvpn.ps1 --status).'
+        return 0
+    }
+    Write-Info 'Requesting administrator rights (UAC prompt)...'
+    $parts = @('-NoProfile', '-ExecutionPolicy', 'Bypass',
+               '-File', ('"{0}"' -f $PSCommandPath), '"--Worker"')
+    try {
+        $null = Start-Process -FilePath 'powershell.exe' `
+            -ArgumentList ($parts -join ' ') -Verb RunAs -WindowStyle Hidden
+    } catch {
+        Write-Err ('Could not start the elevated worker: {0}' -f $_.Exception.Message)
+        return 1
+    }
+    Write-Info 'Hidden worker started; bringing up the tunnel...'
+
+    # Stateful marker cursor: only NEW lines trigger prompts, so a stale
+    # HKUVPN_MFA_RESPONSE_REQUIRED never re-prompts after a delivered code.
+    $seen = 0
+    $deadline = (Get-Date).AddSeconds(180)
+    while ((Get-Date) -lt $deadline) {
+        $lines = @()
+        if (Test-Path $Script:MarkerFile) {
+            try { $lines = @(Get-Content $Script:MarkerFile -ErrorAction Stop) } catch {}
+        }
+        for ($i = $seen; $i -lt $lines.Count; $i++) {
+            $line = [string]$lines[$i]
+            if ($line -match 'HKUVPN_CONNECTED') {
+                Write-Info 'Connected - the tunnel runs in a hidden background worker.'
+                Write-Info '  Status : hkuvpn.ps1 --status'
+                Write-Info '  Logs   : hkuvpn.ps1 --logs'
+                Write-Info '  Stop   : hkuvpn.ps1 --stop'
+                return 0
+            }
+            if ($line -match 'HKUVPN_EXITED') {
+                Write-Err 'The worker exited; see hkuvpn.ps1 --logs'
+                return 1
+            }
+            if ($line -match 'HKUVPN_MFA_RETRY') {
+                Write-Err 'The previous MFA code was rejected; enter the current one.'
+            }
+            if ($line -match 'HKUVPN_MFA_RESPONSE_REQUIRED') {
+                $code = Read-Host 'MFA code (6 digits from Authenticator, empty to abort)'
+                if ("$code" -ne '' -and "$code" -notmatch '^\d{6}$') {
+                    do {
+                        $code = Read-Host 'Need exactly 6 digits (or empty to abort)'
+                    } while ("$code" -ne '' -and "$code" -notmatch '^\d{6}$')
+                }
+                if ("$code" -eq '') {
+                    Write-Err 'Aborted; stopping the worker.'
+                    try { Set-Content -Path $Script:StopFlagFile -Value 'stop' -NoNewline } catch {}
+                    return 1
+                }
+                $null = Send-MfaCode $code
+                Write-Info 'Code delivered; waiting for the tunnel...'
+            }
+        }
+        $seen = $lines.Count
+        Start-Sleep -Milliseconds 500
+    }
+    Write-Err 'Timed out waiting for the worker; stopping it (see hkuvpn.ps1 --logs).'
+    try { Set-Content -Path $Script:StopFlagFile -Value 'stop' -NoNewline } catch {}
+    return 1
+}
+
 function Send-MfaCode {
     param([string]$Code)
     if ($Code -notmatch '^\d{6}$') {
@@ -1431,12 +1502,14 @@ function Send-MfaCode {
 
 function Show-Usage {
     Write-Info @'
-Usage: hkuvpn.ps1 [hk|-f|-d|--mfa CODE|--check|--status|--logs|--stop]
+Usage: hkuvpn.ps1 [hk|-f|-d|-t|--mfa CODE|--check|--status|--logs|--stop]
 
   (no arg)/hk  Smart connect: pre-flight, start the tunnel + proxies, prompt
                for the MFA code, wait until connected. Stays attached
   -f           Foreground connect: same flow, echoes the raw OpenConnect log
   -d           Background connect; deliver the code with --mfa (for scripts)
+  -t           Terminal connect: hidden elevated worker, MFA typed right
+                here - no second console window (for interactive shells)
   --mfa CODE   Send the 6-digit Authenticator code to a detached worker
   --check      Pre-flight check. Exit 0 = ready
   --status     Layered health check. Exit codes: 0 ok, 2 process down,
@@ -1530,8 +1603,15 @@ switch ($command) {
     '--foreground' { $mode = 'foreground' }
     '-d' { $mode = 'detach' }
     '--detach' { $mode = 'detach' }
+    '-t' { $mode = 'terminal' }
+    '--terminal' { $mode = 'terminal' }
 }
 if ($worker) { $mode = 'detach' }
+
+if ($mode -eq 'terminal') {
+    # Manages its own (hidden) elevation; MFA stays in this console.
+    exit (Invoke-TerminalConnect)
+}
 
 # Connect paths need admin (wintun adapter + routes). Self-elevate once.
 if (-not (Test-IsAdmin)) {
