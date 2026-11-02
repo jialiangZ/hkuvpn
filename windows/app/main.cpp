@@ -29,12 +29,12 @@
 // Light theme (Windows 11 style): light gray canvas, white cards,
 // blue accent, GitHub-light semantic colors.
 
-static const COLORREF C_BG     = RGB(243, 243, 243);
+static const COLORREF C_BG     = RGB(245, 246, 248);
 static const COLORREF C_CARD   = RGB(255, 255, 255);
-static const COLORREF C_BORDER = RGB(226, 227, 232);
+static const COLORREF C_BORDER = RGB(227, 229, 234);
 static const COLORREF C_LOGBG  = RGB(255, 255, 255);
-static const COLORREF C_TEXT   = RGB(31, 35, 40);
-static const COLORREF C_MUTED  = RGB(110, 119, 129);
+static const COLORREF C_TEXT   = RGB(28, 32, 36);
+static const COLORREF C_MUTED  = RGB(105, 112, 120);
 static const COLORREF C_ACCENT = RGB(10, 108, 255);
 static const COLORREF C_GREEN  = RGB(26, 127, 55);
 static const COLORREF C_ORANGE = RGB(154, 103, 0);
@@ -46,10 +46,12 @@ static HBRUSH gBrBg, gBrCard, gBrLogBg;
 
 enum {
     IDC_PANEL_SESSION = 500, IDC_PANEL_MFA = 501, IDC_PANEL_LOG = 502,
+    IDC_PANEL_CREDS = 503,
     ID_CAP_ACCOUNT = 100, ID_CAP_VPN, ID_CAP_DURATION, ID_CAP_PROXY, ID_CAP_ROUTES,
     ID_VAL_ACCOUNT = 120, ID_VAL_VPN, ID_VAL_DURATION, ID_VAL_PROXY, ID_VAL_ROUTES,
-    ID_MFA_TITLE = 130, ID_MFA_NOTE = 131,
-    IDC_ED_MFA = 200, IDC_ED_LOG = 201,
+    ID_MFA_TITLE = 130, ID_MFA_NOTE = 131, ID_CRED_TITLE = 132,
+    ID_LBL_ACCOUNT = 133, ID_LBL_PIN = 134, ID_CRED_NOTE = 135,
+    IDC_ED_ACCOUNT = 200, IDC_ED_PIN = 202, IDC_ED_MFA = 203, IDC_ED_LOG = 201,
     ID_BTN_CONNECT = 300, ID_BTN_DISCONNECT, ID_BTN_MFA, ID_BTN_CLEAR,
     IDC_CHK_TRAY = 400, ID_FOOTER = 401,
 };
@@ -72,10 +74,10 @@ static long long g_logPos = -1;
 static std::wstring g_launcher, g_account = L"-";
 static double g_scale = 1.0;
 
-static HWND hMain, hPanelSession, hPanelLog;
+static HWND hMain, hPanelSession, hPanelCreds, hPanelLog;
 static HWND hBtnConnect, hBtnDisconnect, hBtnClear;
-static HWND hEdLog, hChkTray;
-static HWND hValAccount, hValVpn, hValDuration, hValRoutes;
+static HWND hEdAccount, hEdPin, hEdLog, hChkTray;
+static HWND hValVpn, hValDuration, hValRoutes;
 static HWND hFooter;
 
 static HINSTANCE g_hInst = NULL;
@@ -437,19 +439,30 @@ static LRESULT CALLBACK PanelProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             EndPaint(h, &ps);
             return 0;
         }
-        case WM_CTLCOLORSTATIC:
         case WM_CTLCOLOREDIT: {
             HDC dc = (HDC)w;
             int id = GetDlgCtrlID((HWND)l);
-            SetBkMode(dc, TRANSPARENT);
-            if (id == IDC_ED_LOG) {
-                SetTextColor(dc, RGB(36, 41, 47));
-                return (LRESULT)gBrLogBg;
+            if (id == IDC_ED_ACCOUNT || id == IDC_ED_PIN) {
+                SetBkColor(dc, RGB(255, 255, 255));
+                SetTextColor(dc, C_TEXT);
+                static HBRUSH sWhiteE = NULL;
+                if (!sWhiteE) sWhiteE = (HBRUSH)GetStockObject(WHITE_BRUSH);
+                return (LRESULT)sWhiteE;
             }
             if (id == IDC_ED_MFA) {
                 SetBkMode(dc, OPAQUE);
                 SetBkColor(dc, C_LOGBG);
                 SetTextColor(dc, C_TEXT);
+                return (LRESULT)gBrLogBg;
+            }
+            break;
+        }
+        case WM_CTLCOLORSTATIC: {
+            HDC dc = (HDC)w;
+            int id = GetDlgCtrlID((HWND)l);
+            SetBkMode(dc, TRANSPARENT);
+            if (id == IDC_ED_LOG) {
+                SetTextColor(dc, RGB(36, 41, 47));
                 return (LRESULT)gBrLogBg;
             }
             PanelStyle* st = (PanelStyle*)GetWindowLongPtrW(h, GWLP_USERDATA);
@@ -482,6 +495,55 @@ static LRESULT CALLBACK PanelProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     return DefWindowProcW(h, m, w, l);
 }
 
+static bool PersistCredentials() {
+    wchar_t acc[256] = {}, pin[128] = {};
+    GetWindowTextW(hEdAccount, acc, 256);
+    GetWindowTextW(hEdPin, pin, 128);
+    std::wstring account(acc), pinS(pin);
+    // trim
+    auto trim = [](std::wstring& s) {
+        while (!s.empty() && (s.front() == L' ' || s.front() == L'\t')) s.erase(0, 1);
+        while (!s.empty() && (s.back() == L' ' || s.back() == L'\t' ||
+                              s.back() == L'\r' || s.back() == L'\n')) s.pop_back();
+    };
+    trim(account); trim(pinS);
+    if (account.empty()) {
+        MessageBoxW(hMain, L"Enter your HKU account first (e.g. u1234567@connect.hku.hk).",
+                    L"HKU VPN", MB_ICONWARNING);
+        SetFocus(hEdAccount);
+        return false;
+    }
+    std::wstring vpnDir = JoinPath(HomeDir(), L".vpn");
+    CreateDirectoryW(vpnDir.c_str(), NULL);
+
+    // hku.env: replace/insert the HKU_USER line, keep every other line.
+    std::wstring envPath = JoinPath(vpnDir, L"hku.env");
+    std::vector<std::wstring> lines = ReadLinesW(envPath);
+    std::wstring body;
+    bool found = false, first = true;
+    for (auto& l : lines) {
+        if (l.rfind(L"HKU_USER=", 0) == 0) {
+            body += L"HKU_USER=" + account + L"\r\n";
+            found = true;
+        } else {
+            if (!first) body += L"\r\n";
+            body += l + L"\r\n";
+        }
+        first = false;
+    }
+    if (!found) {
+        if (!body.empty() && body.back() != L'\n') body += L"\r\n";
+        body = L"HKU_USER=" + account + L"\r\n" + body;
+    }
+    WriteAllTextW(envPath, body);
+
+    // hku.pass: the worker reads the static Portal PIN from here.
+    if (!pinS.empty()) WriteAllTextW(JoinPath(vpnDir, L"hku.pass"), pinS);
+
+    g_account = account;
+    return true;
+}
+
 // ---------------------------------------------------------------- actions
 
 static void SetState(App_State s) {
@@ -506,7 +568,16 @@ static void SetState(App_State s) {
 }
 
 static void DoConnect() {
-    if (!g_launcher.empty() && WorkerAlive()) { SetState(APP_CONNECTED); return; }
+    if (!PersistCredentials()) return;
+    if (WorkerAlive()) { SetState(APP_CONNECTED); return; }
+    if (g_launcher.empty()) {
+        MessageBoxW(hMain,
+            L"hkuvpn.ps1 was not found. Place HKUVPN.exe inside the hkuvpn "
+            L"repo (windows\\app\\publish) or clone the repo to "
+            L"%USERPROFILE%\\hkuvpn.",
+            L"HKU VPN", MB_ICONERROR);
+        return;
+    }
     if (g_launcher.empty()) return;
     std::wstring args = L"-NoProfile -ExecutionPolicy Bypass -File \"" +
                         g_launcher + L"\" \"--Worker\"";
@@ -839,47 +910,65 @@ static void Move(HWND h, int x, int y, int w, int ht) {
 }
 
 static void LayoutAll() {
-    int W = 720, H = 640;
+    int W = 760, H = 740;
     RECT rc; GetClientRect(hMain, &rc);
     W = rc.right; H = rc.bottom;
     (void)W; (void)H;
 
-    int cardW = 720 - 40;
-    Move(hPanelSession, 20, 92, cardW, 152);
+    int cardW = 760 - 40;
 
-    int capIds[] = { ID_CAP_ACCOUNT, ID_CAP_VPN, ID_CAP_DURATION,
-                     ID_CAP_PROXY, ID_CAP_ROUTES };
-    int valIds[] = { ID_VAL_ACCOUNT, ID_VAL_VPN, ID_VAL_DURATION,
-                     ID_VAL_PROXY, ID_VAL_ROUTES };
-    for (int i = 0; i < 5; i++) {
+    // Credentials card
+    Move(hPanelCreds, 20, 88, cardW, 108);
+    SendMessageW(GetDlgItem(hPanelCreds, ID_CRED_TITLE), WM_SETFONT,
+                 (WPARAM)gFSub, TRUE);
+    Move(GetDlgItem(hPanelCreds, ID_CRED_TITLE), 18, 12, 200, 20);
+    SendMessageW(GetDlgItem(hPanelCreds, ID_LBL_ACCOUNT), WM_SETFONT,
+                 (WPARAM)gFSub, TRUE);
+    Move(GetDlgItem(hPanelCreds, ID_LBL_ACCOUNT), 18, 44, 90, 20);
+    SendMessageW(hEdAccount, WM_SETFONT, (WPARAM)gFBody, TRUE);
+    Move(hEdAccount, 112, 40, 260, 30);
+    SendMessageW(GetDlgItem(hPanelCreds, ID_LBL_PIN), WM_SETFONT,
+                 (WPARAM)gFSub, TRUE);
+    Move(GetDlgItem(hPanelCreds, ID_LBL_PIN), 400, 44, 80, 20);
+    SendMessageW(hEdPin, WM_SETFONT, (WPARAM)gFBody, TRUE);
+    Move(hEdPin, 490, 40, 120, 30);
+    SendMessageW(GetDlgItem(hPanelCreds, ID_CRED_NOTE), WM_SETFONT,
+                 (WPARAM)gFSub, TRUE);
+    Move(GetDlgItem(hPanelCreds, ID_CRED_NOTE), 18, 78, cardW - 36, 18);
+
+    // Session card
+    Move(hPanelSession, 20, 208, cardW, 140);
+    int capIds[] = { ID_CAP_VPN, ID_CAP_DURATION, ID_CAP_PROXY, ID_CAP_ROUTES };
+    int valIds[] = { ID_VAL_VPN, ID_VAL_DURATION, ID_VAL_PROXY, ID_VAL_ROUTES };
+    for (int i = 0; i < 4; i++) {
         HWND cap = GetDlgItem(hPanelSession, capIds[i]);
         HWND val = GetDlgItem(hPanelSession, valIds[i]);
         SendMessageW(cap, WM_SETFONT, (WPARAM)gFSub, TRUE);
         SendMessageW(val, WM_SETFONT, (WPARAM)gFBody, TRUE);
         Move(cap, 18, 16 + i * 27, 120, 20);
-        Move(val, 148, 16 + i * 27, cardW - 170, 20);
+        Move(val, 150, 16 + i * 27, cardW - 175, 20);
     }
 
     // Buttons
     SendMessageW(hBtnConnect, WM_SETFONT, (WPARAM)gFButton, TRUE);
     SendMessageW(hBtnDisconnect, WM_SETFONT, (WPARAM)gFButton, TRUE);
-    Move(hBtnConnect, 20, 262, 170, 40);
-    Move(hBtnDisconnect, 206, 262, 170, 40);
+    Move(hBtnConnect, 20, 362, 180, 42);
+    Move(hBtnDisconnect, 212, 362, 150, 42);
 
     // Log panel
-    Move(hPanelLog, 20, 318, cardW, 640 - 318 - 64);
+    Move(hPanelLog, 20, 416, cardW, 740 - 416 - 52);
     SendMessageW(GetDlgItem(hPanelLog, 0), WM_SETFONT, (WPARAM)gFSub, TRUE);
     Move(GetDlgItem(hPanelLog, 0), 18, 10, 300, 20);
     Move(hBtnClear, cardW - 94, 8, 76, 26);
     SendMessageW(hBtnClear, WM_SETFONT, (WPARAM)gFSub, TRUE);
     SendMessageW(hEdLog, WM_SETFONT, (WPARAM)gFMono, TRUE);
-    Move(hEdLog, 14, 42, cardW - 28, 640 - 318 - 64 - 56);
+    Move(hEdLog, 14, 42, cardW - 28, 740 - 416 - 52 - 58);
 
     // Footer
     SendMessageW(hChkTray, WM_SETFONT, (WPARAM)gFSub, TRUE);
-    Move(hChkTray, 20, 640 - 42, 300, 20);
+    Move(hChkTray, 20, 740 - 36, 320, 20);
     SendMessageW(hFooter, WM_SETFONT, (WPARAM)gFSub, TRUE);
-    Move(hFooter, 720 - 200, 640 - 42, 180, 20);
+    Move(hFooter, 760 - 220, 740 - 36, 200, 20);
 
     InvalidateRect(hMain, NULL, TRUE);
 }
@@ -1043,12 +1132,12 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
 
     hMain = CreateWindowExW(WS_EX_COMPOSITED, L"HkuMain", L"HKU VPN",
         WS_OVERLAPPEDWINDOW & ~(WS_MAXIMIZEBOX | WS_THICKFRAME),
-        CW_USEDEFAULT, CW_USEDEFAULT, 720, 640, NULL, NULL, hInst, NULL);
+        CW_USEDEFAULT, CW_USEDEFAULT, 760, 740, NULL, NULL, hInst, NULL);
     g_hInst = hInst;
     {
         UINT dpi = GetDpiForWindow(hMain);
         g_scale = dpi / 96.0;
-        RECT adj = { 0, 0, (int)(720 * g_scale), (int)(640 * g_scale) };
+        RECT adj = { 0, 0, (int)(760 * g_scale), (int)(740 * g_scale) };
         AdjustWindowRectEx(&adj,
             WS_OVERLAPPEDWINDOW & ~(WS_MAXIMIZEBOX | WS_THICKFRAME), FALSE, 0);
         SetWindowPos(hMain, NULL, CW_USEDEFAULT, CW_USEDEFAULT,
@@ -1061,19 +1150,51 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
     // Session panel
     static PanelStyle stCard = { C_CARD, C_BORDER, 10 };
     hPanelSession = CreateWindowExW(0, L"HkuPanel", NULL, WS_CHILD | WS_VISIBLE,
-                                    0, 0, 10, 10, hMain, NULL, hInst, NULL);
+                                    0, 0, 10, 10, hMain, (HMENU)IDC_PANEL_SESSION, hInst, NULL);
     SetWindowLongPtrW(hPanelSession, GWLP_USERDATA, (LONG_PTR)&stCard);
-    MkStatic(hPanelSession, ID_CAP_ACCOUNT, 0, L"Account");
     MkStatic(hPanelSession, ID_CAP_VPN, 0, L"VPN address");
     MkStatic(hPanelSession, ID_CAP_DURATION, 0, L"Duration");
     MkStatic(hPanelSession, ID_CAP_PROXY, 0, L"Local proxy");
     MkStatic(hPanelSession, ID_CAP_ROUTES, 0, L"Routes");
-    hValAccount = MkStatic(hPanelSession, ID_VAL_ACCOUNT, 0, g_account.c_str());
     hValVpn     = MkStatic(hPanelSession, ID_VAL_VPN, 0, L"-");
     hValDuration= MkStatic(hPanelSession, ID_VAL_DURATION, 0, L"-");
     MkStatic(hPanelSession, ID_VAL_PROXY, 0,
              L"socks5://127.0.0.1:1080   http://127.0.0.1:1088");
     hValRoutes  = MkStatic(hPanelSession, ID_VAL_ROUTES, 0, L"-");
+
+    // Credentials panel (editable account + static Portal PIN)
+    static PanelStyle stCreds = { C_CARD, C_BORDER, 10 };
+    hPanelCreds = CreateWindowExW(0, L"HkuPanel", NULL, WS_CHILD | WS_VISIBLE,
+                                  0, 0, 10, 10, hMain, (HMENU)IDC_PANEL_CREDS, hInst, NULL);
+    SetWindowLongPtrW(hPanelCreds, GWLP_USERDATA, (LONG_PTR)&stCreds);
+    MkStatic(hPanelCreds, ID_CRED_TITLE, 0, L"Credentials");
+    MkStatic(hPanelCreds, ID_LBL_ACCOUNT, 0, L"HKU account");
+    MkStatic(hPanelCreds, ID_LBL_PIN, 0, L"Portal PIN");
+    MkStatic(hPanelCreds, ID_CRED_NOTE, 0,
+             L"Stored locally in %USERPROFILE%\\.vpn  (hku.env / hku.pass).");
+    hEdAccount = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
+        WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
+        0, 0, 10, 10, hPanelCreds, (HMENU)IDC_ED_ACCOUNT, hInst, NULL);
+    hEdPin = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
+        WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_PASSWORD,
+        0, 0, 10, 10, hPanelCreds, (HMENU)IDC_ED_PIN, hInst, NULL);
+    SendMessageW(hEdPin, EM_SETPASSWORDCHAR, 0x25CF, 0);   // ●
+    // Prefill from the existing config, if any.
+    {
+        std::wstring envPath = JoinPath(JoinPath(HomeDir(), L".vpn"), L"hku.env");
+        for (auto& l : ReadLinesW(envPath)) {
+            if (l.rfind(L"HKU_USER=", 0) == 0) {
+                SetWindowTextW(hEdAccount, l.substr(9).c_str());
+                break;
+            }
+        }
+        std::wstring pin;
+        if (ReadAllTextW(JoinPath(JoinPath(HomeDir(), L".vpn"), L"hku.pass"), pin)) {
+            while (!pin.empty() && (pin.back() == L'\r' || pin.back() == L'\n' ||
+                                    pin.back() == L' ')) pin.pop_back();
+            SetWindowTextW(hEdPin, pin.c_str());
+        }
+    }
 
     // MFA popup class (light background)
     WNDCLASSW mwc = {};
