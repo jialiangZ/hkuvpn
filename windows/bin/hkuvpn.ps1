@@ -54,6 +54,7 @@ $Script:PidFile      = Join-Path $Script:TempBase 'pids.txt'
 $Script:StateFile    = Join-Path $Script:TempBase 'vpnc-state.txt'
 $Script:ResponseFile = Join-Path $Script:TempBase 'response.txt'
 $Script:StopFlagFile = Join-Path $Script:TempBase 'stop.flag'
+$Script:HbFile       = Join-Path $Script:TempBase 'hb.log'
 
 # Auto-learned licensed-resource routes (HKU_AUTO_ROUTES=1), persisted
 # across sessions as "base/prefix|lastseen-epoch|host" lines.
@@ -1115,7 +1116,7 @@ function Invoke-TunnelWorker {
     $dir = Split-Path -Parent $Script:LogFile
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     Remove-Item $Script:MarkerFile, $Script:StateFile, $Script:ResponseFile,
-        $Script:StopFlagFile -Force -ErrorAction SilentlyContinue
+        $Script:StopFlagFile, $Script:HbFile -Force -ErrorAction SilentlyContinue
     # Note: $Script:PidFile is NOT removed here. The --Worker bootstrap wrote
     # it to claim the session; Test-WorkerAlive relies on it, and it is
     # overwritten with the real child pids below.
@@ -1175,6 +1176,11 @@ function Invoke-TunnelWorker {
     Write-PidFile -WorkerPid $PID -OpenConnectPid $oc.Id -GostPid $gost.Id
     Write-Info ("started openconnect (pid {0}) and gost (pid {1})" -f $oc.Id, $gost.Id)
 
+    # Flight recorder: heartbeat + last-executed section. hb.log gets one
+    # line per flush cycle; when the loop wedges, its final line names the
+    # section that never returned. ($Script:HbFile, constants section.)
+    $script:lastOp     = 'startup'
+
     $outBuf = New-Object System.Text.StringBuilder
     $errBuf = New-Object System.Text.StringBuilder
     $logAll = New-Object System.Text.StringBuilder
@@ -1197,10 +1203,12 @@ function Invoke-TunnelWorker {
         $gostOut = New-PendingRead $gost.StandardOutput
         $gostErr = New-PendingRead $gost.StandardError
         while (-not $oc.HasExited) {
+            $script:lastOp = 'read-streams'
             Read-PendingChars $ocOut   $outBuf   $logAll  $EchoRaw
             Read-PendingChars $ocErr   $errBuf   $logAll  $EchoRaw
             Read-PendingChars $gostOut $gostBuf  $gostLog $false
             Read-PendingChars $gostErr $gostBufE $gostLog $false
+            $script:lastOp = 'gost-check'
             if ($gost.HasExited) {
                 # The proxy died (crash, or the listeners were taken away).
                 # Without it the tunnel is useless, so stop instead of hanging.
@@ -1208,6 +1216,7 @@ function Invoke-TunnelWorker {
                 Write-Marker ("HKUVPN_GOST_EXITED code={0}" -f $gost.ExitCode)
                 break
             }
+            $script:lastOp = 'learn-gost'
             foreach ($gl in (Get-CompleteLines $gostBuf)) { Learn-FromGostLine $gl }
             foreach ($gl in (Get-CompleteLines $gostBufE)) { Learn-FromGostLine $gl }
 
@@ -1233,6 +1242,7 @@ function Invoke-TunnelWorker {
                     Write-Marker ("HKUVPN_MFA_RETRY count={0}" -f $mfaAttempts)
                 }
                 $mfaAttempts++
+                $script:lastOp = 'mfa-wait'
                 $code = Get-MfaCode -Interactive $InteractiveMfa -OpenConnectProc $oc `
                             -LogBuffer $logAll -LogPath $Script:LogFile
                 if (-not $code) { break }
@@ -1293,6 +1303,10 @@ function Invoke-TunnelWorker {
                         [IO.File]::AppendAllText($Script:GostLogFile, $gostLog.ToString())
                         $null = $gostLog.Clear()
                     }
+                } catch {}
+                try {
+                    [IO.File]::AppendAllText($Script:HbFile,
+                        ("{0} op={1}`n" -f (Get-Date -Format s), $script:lastOp))
                 } catch {}
                 $lastFlush = Get-Date
             }
@@ -1559,14 +1573,42 @@ switch ($command) {
         if (Test-WorkerAlive) {
             $dir = Split-Path -Parent $Script:StopFlagFile
             if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-            Set-Content -Path $Script:StopFlagFile -Value 'stop' -NoNewline
-            for ($i = 0; $i -lt 16 -and (Test-WorkerAlive); $i++) { Start-Sleep -Milliseconds 500 }
-            Remove-Item $Script:StopFlagFile -Force -ErrorAction SilentlyContinue
-            if (-not (Test-WorkerAlive)) {
-                Write-Info 'HKU VPN stopped.'
-                exit 0
+            # Healthy worker? hb.log is touched every 3s by the flush cycle;
+            # a fresh heartbeat means the stop flag will be honored, a stale
+            # one means the main loop is wedged - do not wait at all then.
+            $hbPath  = Join-Path $Script:TempBase 'hb.log'
+            $hbStale = $true
+            if (Test-Path $hbPath) {
+                $hbStale = (((Get-Date) - (Get-Item $hbPath).LastWriteTime).TotalSeconds -gt 15)
             }
-            Write-Err 'Worker not responding to the stop flag (wedged?); escalating to elevated force-stop.'
+            if (-not $hbStale) {
+                Set-Content -Path $Script:StopFlagFile -Value 'stop' -NoNewline
+                for ($i = 0; $i -lt 16 -and (Test-WorkerAlive); $i++) { Start-Sleep -Milliseconds 500 }
+                Remove-Item $Script:StopFlagFile -Force -ErrorAction SilentlyContinue
+                if (-not (Test-WorkerAlive)) {
+                    Write-Info 'HKU VPN stopped.'
+                    exit 0
+                }
+                Write-Err 'Worker did not stop within 8s; escalating.'
+            } else {
+                Write-Err 'Worker heartbeat is stale (main loop wedged); escalating immediately.'
+            }
+            # Flight-recorder dump before the force-stop destroys evidence.
+            try {
+                $wPid2 = Read-PidValue 'WORKER'
+                if ($wPid2 -gt 0) {
+                    $p = Get-Process -Id $wPid2 -ErrorAction Stop
+                    $lines = @(
+                        ("=== wedge diagnostics {0} worker pid {1} ===" -f (Get-Date -Format s), $wPid2),
+                        ("hb tail: " + ((Get-Content $hbPath -Tail 3 -ErrorAction SilentlyContinue) -join ' | '))
+                    )
+                    $lines += @($p.Threads | ForEach-Object {
+                        ("thread {0}: {1}/{2}" -f $_.Id, $_.ThreadState, $_.WaitReason)
+                    })
+                    [IO.File]::WriteAllLines((Join-Path $Script:TempBase 'wedge-diagnostics.txt'), $lines)
+                    Write-Info 'Diagnostics captured: %TEMP%\hkuvpn\wedge-diagnostics.txt'
+                }
+            } catch {}
         }
         if (-not (Test-WorkerAlive)) {
             # Nothing to signal; only raise UAC if there is actually
