@@ -297,13 +297,45 @@ func (a *app) appendLogBytes(b []byte, replace bool) {
 		line := decodeLogLine([]byte(raw))
 		for _, part := range strings.Split(line, "\r") {
 			if strings.TrimSpace(part) != "" {
-				a.logLines = append(a.logLines, part)
+				a.logLines = append(a.logLines, logEntry{text: part, level: classifyLog(part)})
 			}
 		}
 	}
 	if n := len(a.logLines); n > 400 {
 		a.logLines = a.logLines[n-400:]
 	}
+}
+
+// classifyLog assigns a severity from the line's own words. The worker's
+// log is free text, so this is a heuristic that keeps the important lines
+// distinguishable without changing what the worker writes.
+func classifyLog(line string) logLevel {
+	l := strings.ToLower(line)
+	has := func(words ...string) bool {
+		for _, word := range words {
+			if strings.Contains(l, word) {
+				return true
+			}
+		}
+		return false
+	}
+	// Routine keepalive chatter first: an "error" word in it is rare, and
+	// these lines are the ones a reader wants hidden by default.
+	if has("keepalive", "cstp dpd", "dtls dpd", "mtu probe", "mtu ") {
+		return lvlDebug
+	}
+	// "timeout:" / "-Timeout" are server settings, and "disconnect done"
+	// is a normal teardown line: only failures count as errors.
+	if has("failed", "error", "fatal", "cannot ", "could not", "unable to",
+		"denied", "rejected", "refused", "no route", "timed out",
+		"connection reset", "unexpected eof") {
+		return lvlError
+	}
+	if has("warning", "warn", "retry", "retrying", "stale", "deprecated",
+		"falling back", "reconnect", "ignored", "aborted") {
+		return lvlWarn
+	}
+	return lvlInfo
 }
 
 func (a *app) clearLog() {

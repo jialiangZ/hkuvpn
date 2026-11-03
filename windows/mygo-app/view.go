@@ -133,28 +133,46 @@ func (a *app) mfaDialog(c *ui.Context, t *ui.Theme) {
 
 func (a *app) logDialog(c *ui.Context, t *ui.Theme) {
 	ui.Modal(c, &a.logOpen, func() {
-		// A fixed width keeps the dialog from resizing with the log content
-		// (clearing it used to shrink the panel).
-		ui.Column(c).Width(380).Gap(12).Children(func() {
+		entries := a.visibleLog()
+		// A fixed width keeps the dialog from resizing with the log content.
+		ui.Column(c).Width(380).Gap(10).Children(func() {
 			ui.Row(c).AlignItems(ui.Baseline).Gap(8).Children(func() {
 				ui.Text(c, "Connection log").FontSize(18).Bold()
 				ui.Text(c, "this session").FontSize(12).TextColor(t.TextMuted)
 			})
+			ui.Row(c).AlignItems(ui.Center).Gap(10).Children(func() {
+				ui.Text(c, "Level").FontSize(12).TextColor(t.TextMuted)
+				ui.Segmented(c, &a.logFilter, "All", "Info+", "Warnings", "Errors")
+			})
 			// The official list virtualizes long logs and FollowEnd keeps the
 			// newest line in view; a border on each row separates entries.
-			ui.List(c, &a.logList, len(a.logLines), func(i int) {
-				ui.Row(c).RowWidth(372).Padding(6, 8).
+			ui.List(c, &a.logList, len(entries), func(i int) {
+				entry := entries[i]
+				color := logLevelColor(entry.level, t)
+				ui.Row(c).RowWidth(372).Padding(5, 8).
 					BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
+					ui.Text(c, logLevelTag(entry.level)).Width(34).
+						Font("monospace").FontSize(11).Bold().TextColor(color)
 					// A fixed width wraps long lines here instead of
 					// widening the row and scrolling sideways.
-					ui.Text(c, a.logLines[i]).Width(360).Font("monospace").FontSize(12)
+					ui.Text(c, entry.text).Width(316).
+						Font("monospace").FontSize(12).TextColor(color).Selectable()
 				})
-			}).RowWidth(372).Height(300).Children(func() {
+			}).RowWidth(372).Height(290).Children(func() {
 				if len(a.logLines) == 0 {
 					ui.Text(c, "No log lines yet").TextColor(t.TextMuted).Padding(12)
+				} else if len(entries) == 0 {
+					ui.Text(c, "No lines at this level").TextColor(t.TextMuted).Padding(12)
 				}
 			})
 			ui.Row(c).Justify(ui.End).Gap(8).Children(func() {
+				copyLabel := "Copy"
+				if !a.copiedAt.IsZero() {
+					copyLabel = "Copied"
+				}
+				ui.Button(c, copyLabel).Disabled(len(entries) == 0).
+					Tooltip("Copy the lines shown to the clipboard").
+					OnClick(a.copyLog)
 				ui.Button(c, "Clear").
 					Tooltip("Hide the lines shown so far; the session log file is kept").
 					OnClick(a.clearLog)
@@ -162,4 +180,30 @@ func (a *app) logDialog(c *ui.Context, t *ui.Theme) {
 			})
 		})
 	})
+}
+
+func logLevelTag(level logLevel) string {
+	switch level {
+	case lvlDebug:
+		return "DBG"
+	case lvlWarn:
+		return "WRN"
+	case lvlError:
+		return "ERR"
+	default:
+		return "INF"
+	}
+}
+
+func logLevelColor(level logLevel, t *ui.Theme) ui.Color {
+	switch level {
+	case lvlDebug:
+		return t.TextMuted
+	case lvlWarn:
+		return t.Warning
+	case lvlError:
+		return t.Danger
+	default:
+		return t.Text
+	}
 }

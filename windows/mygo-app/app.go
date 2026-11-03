@@ -9,6 +9,21 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
+// logEntry is one line of the session log with its severity.
+type logEntry struct {
+	text  string
+	level logLevel
+}
+
+type logLevel int
+
+const (
+	lvlDebug logLevel = iota
+	lvlInfo
+	lvlWarn
+	lvlError
+)
+
 type session int
 
 const (
@@ -58,10 +73,12 @@ type app struct {
 	mfaNote string
 
 	logOpen        bool
-	logLines       []string
+	logLines       []logEntry
 	logOffset      int64
 	logLoaded      bool
+	logFilter      int
 	logList        ui.ListState
+	copiedAt       time.Time
 	lastLogRefresh time.Time
 
 	// Hints and credential autosave.
@@ -82,6 +99,8 @@ func newApp() *app {
 	}
 	// The log follows its newest line until the user scrolls away.
 	a.logList.FollowEnd = true
+	// Default to hiding the keepalive noise but keeping info lines.
+	a.logFilter = 1
 	// Adopt a session that survived a frontend restart.
 	if workerAlive() && heartbeatFresh() {
 		a.state = connected
@@ -253,6 +272,9 @@ func (a *app) tick(now time.Time) {
 		a.lastLogRefresh = now
 		a.refreshLog()
 	}
+	if !a.copiedAt.IsZero() && now.Sub(a.copiedAt) > 1500*time.Millisecond {
+		a.copiedAt = time.Time{}
+	}
 	a.syncTray(alive, fresh)
 }
 
@@ -352,6 +374,37 @@ func (a *app) refreshStatus(now time.Time, alive, fresh bool) {
 		a.statusText = "Disconnecting"
 		a.statusColor = colorAmber
 	}
+}
+
+// visibleLog applies the level filter chosen in the dialog.
+func (a *app) visibleLog() []logEntry {
+	if a.logFilter <= 0 {
+		return a.logLines
+	}
+	out := make([]logEntry, 0, len(a.logLines))
+	for _, entry := range a.logLines {
+		if int(entry.level) >= a.logFilter {
+			out = append(out, entry)
+		}
+	}
+	return out
+}
+
+// copyLog puts the lines currently shown on the clipboard.
+func (a *app) copyLog() {
+	entries := a.visibleLog()
+	if len(entries) == 0 {
+		return
+	}
+	var b strings.Builder
+	for i, entry := range entries {
+		if i > 0 {
+			b.WriteString("\r\n")
+		}
+		b.WriteString(entry.text)
+	}
+	mygo.Clipboard.WriteText(b.String())
+	a.copiedAt = time.Now()
 }
 
 func (a *app) trayIconName() string {

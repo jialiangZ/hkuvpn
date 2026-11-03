@@ -144,7 +144,8 @@ Three long-session modes, by scenario (plus a tray app):
   compact window built from MyGo's official widgets - a status card (state,
   tunnel address, duration, proxy, routes), labeled HKU account and portal
   PIN fields (saved automatically when edited), one primary Connect /
-  Cancel / Disconnect button, a View log sheet and an MFA dialog, plus
+  Cancel / Disconnect button, a View log sheet (per-session log with
+  DBG/INF/WRN/ERR tags, a level filter, and Copy) and an MFA dialog, plus
   close-to-tray. Built with Go alone (`GOOS=windows go build`, no cgo, no
   webview) - see `windows\mygo-app\build.sh`. The tray icon is a 4-state
   shield (grey / green / amber / red) rendered from
