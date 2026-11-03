@@ -130,10 +130,13 @@ hkuvpn -t           # terminal connect: hidden elevated worker, MFA typed here,
 hkuvpn -d           # background connect (waits for MFA readiness)
 hkuvpn --mfa 123456 # deliver the code to the background worker
 hkuvpn --status     # layered health check (exit 0/2/3/4/5)
-hkuvpn --logs       # follow the OpenConnect log
+hkuvpn --logs       # follow the current session's OpenConnect log
 hkuvpn --stop       # stop (live worker cleans up itself, no UAC; force-stopping
                     # a dead session elevates)
 ```
+
+Each connection starts a fresh `openconnect.log`; the previous session's
+log is kept beside it as `openconnect.log.1`, so logs never mix runs.
 
 Three long-session modes, by scenario (plus a tray app):
 

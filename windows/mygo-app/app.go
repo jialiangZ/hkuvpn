@@ -60,6 +60,7 @@ type app struct {
 	logOpen        bool
 	logLines       []string
 	logOffset      int64
+	logLoaded      bool
 	logList        ui.ListState
 	lastLogRefresh time.Time
 
@@ -151,6 +152,9 @@ func (a *app) connect() {
 	}
 	a.seen = len(readLines(p.markers))
 	a.retry = false
+	// The worker starts a fresh log for every session: read it from the top
+	// the next time the log window opens.
+	a.logLoaded = false
 	a.setState(connecting)
 }
 

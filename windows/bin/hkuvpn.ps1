@@ -1165,6 +1165,14 @@ function Invoke-TunnelWorker {
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     Remove-Item $Script:MarkerFile, $Script:StateFile, $Script:ResponseFile,
         $Script:StopFlagFile, $Script:HbFile -Force -ErrorAction SilentlyContinue
+    # One log per session: keep the previous session's log as .1 so the
+    # viewer never mixes old and new runs. Diagnostics survive one session.
+    try {
+        if (Test-Path $Script:LogFile) {
+            Move-Item -Force -LiteralPath $Script:LogFile `
+                -Destination ($Script:LogFile + '.1')
+        }
+    } catch {}
     # Note: $Script:PidFile is NOT removed here. The --Worker bootstrap wrote
     # it to claim the session; Test-WorkerAlive relies on it, and it is
     # overwritten with the real child pids below.

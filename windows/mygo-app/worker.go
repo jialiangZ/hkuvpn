@@ -209,9 +209,14 @@ var sixDigits = regexp.MustCompile(`^\d{6}$`)
 
 func (a *app) openLog() {
 	a.logOpen = true
-	a.logLines = nil
-	a.logOffset = 0
-	a.readWholeLog()
+	// Load the session's log once. Reopening the window, including after
+	// Clear, must not reload lines the user has already dismissed.
+	if !a.logLoaded {
+		a.logLoaded = true
+		a.logLines = nil
+		a.logOffset = 0
+		a.readWholeLog()
+	}
 }
 
 func (a *app) readWholeLog() {

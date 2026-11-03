@@ -136,7 +136,10 @@ func (a *app) logDialog(c *ui.Context, t *ui.Theme) {
 		// A fixed width keeps the dialog from resizing with the log content
 		// (clearing it used to shrink the panel).
 		ui.Column(c).Width(380).Gap(12).Children(func() {
-			ui.Text(c, "Connection log").FontSize(18).Bold()
+			ui.Row(c).AlignItems(ui.Baseline).Gap(8).Children(func() {
+				ui.Text(c, "Connection log").FontSize(18).Bold()
+				ui.Text(c, "this session").FontSize(12).TextColor(t.TextMuted)
+			})
 			// The official list virtualizes long logs and FollowEnd keeps the
 			// newest line in view; a border on each row separates entries.
 			ui.List(c, &a.logList, len(a.logLines), func(i int) {
@@ -152,7 +155,9 @@ func (a *app) logDialog(c *ui.Context, t *ui.Theme) {
 				}
 			})
 			ui.Row(c).Justify(ui.End).Gap(8).Children(func() {
-				ui.Button(c, "Clear").OnClick(a.clearLog)
+				ui.Button(c, "Clear").
+					Tooltip("Hide the lines shown so far; the session log file is kept").
+					OnClick(a.clearLog)
 				ui.PrimaryButton(c, "Close").OnClick(func() { a.logOpen = false })
 			})
 		})
