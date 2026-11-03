@@ -784,7 +784,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
     gIcoOrange = MakeDotIcon(RGB(154, 103, 0));
     gIcoRed    = MakeDotIcon(RGB(207, 34, 46));
 
-    if (!Backend::Initialize("HKU VPN", 420, 468, false)) return 1;
+    if (!Backend::Initialize("HKU VPN", 480, 620, false)) return 1;
     g_hwnd = FindWindowW(L"HKU VPN", NULL);
     if (!g_hwnd) {
         // Window class name == window title in the stock backend.
@@ -803,7 +803,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
     Rml::SetRenderInterface(Backend::GetRenderInterface());
     Rml::Initialise();
 
-    g_ctx = Rml::CreateContext("main", Rml::Vector2i(420, 468));
+    g_ctx = Rml::CreateContext("main", Rml::Vector2i(480, 620));
     if (!g_ctx) return 1;
 
     // Fonts from the Windows font directory.

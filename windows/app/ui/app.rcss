@@ -1,18 +1,18 @@
-/* HKU VPN - compact, modern light UI.
+/* HKU VPN - compact, modern light UI (larger type).
    Sizes are dp, so RmlUi scales them with the monitor DPI. */
 
 body {
     margin: 0dp;
     padding: 0dp;
     font-family: "Segoe UI";
-    font-size: 13dp;
+    font-size: 15dp;
     color: #0f172a;
     background: #f4f5f7;
 }
 
 #app {
-    width: 420dp;
-    height: 468dp;
+    width: 480dp;
+    height: 620dp;
     background: #f4f5f7;
 }
 
@@ -20,38 +20,38 @@ body {
 
 #header {
     position: absolute;
-    left: 24dp;
-    top: 22dp;
-    width: 372dp;
-    height: 44dp;
+    left: 28dp;
+    top: 26dp;
+    width: 424dp;
+    height: 52dp;
 }
 
 #badge {
     position: absolute;
     left: 0dp;
     top: 2dp;
-    width: 40dp;
-    height: 40dp;
+    width: 46dp;
+    height: 46dp;
 }
 
 #titles {
     position: absolute;
-    left: 52dp;
+    left: 60dp;
     top: 1dp;
-    width: 260dp;
+    width: 340dp;
 }
 
 #app-title {
     display: block;
-    font-size: 16dp;
+    font-size: 20dp;
     font-weight: bold;
     color: #0f172a;
 }
 
 #app-sub {
     display: block;
-    margin-top: 3dp;
-    font-size: 11dp;
+    margin-top: 4dp;
+    font-size: 13dp;
     color: #6b7280;
 }
 
@@ -59,173 +59,150 @@ body {
 
 #status-card {
     position: absolute;
-    left: 24dp;
-    top: 76dp;
-    width: 372dp;
-    height: 114dp;
+    left: 28dp;
+    top: 92dp;
+    width: 424dp;
+    height: 152dp;
     background: #ffffff;
     border: 1dp #e6e8ec;
-    border-radius: 12dp;
+    border-radius: 14dp;
 }
 
 #status-dot {
     position: absolute;
-    left: 18dp;
-    top: 17dp;
-    width: 9dp;
-    height: 9dp;
-    border-radius: 5dp;
+    left: 20dp;
+    top: 23dp;
+    width: 11dp;
+    height: 11dp;
+    border-radius: 6dp;
     background: #9aa1a9;
 }
 
 #status-text {
     position: absolute;
-    left: 34dp;
-    top: 10dp;
-    width: 200dp;
-    height: 22dp;
-    font-size: 13dp;
+    left: 38dp;
+    top: 15dp;
+    width: 220dp;
+    height: 26dp;
+    font-size: 15dp;
     font-weight: bold;
     color: #111827;
 }
 
 #status-duration {
     position: absolute;
-    left: 240dp;
-    top: 12dp;
-    width: 114dp;
+    left: 268dp;
+    top: 17dp;
+    width: 136dp;
     text-align: right;
     font-family: Consolas;
-    font-size: 12dp;
+    font-size: 14dp;
     color: #8a9199;
 }
 
 #primary-value {
     position: absolute;
-    left: 18dp;
-    top: 34dp;
-    width: 336dp;
-    height: 28dp;
-    font-size: 20dp;
+    left: 20dp;
+    top: 46dp;
+    width: 384dp;
+    height: 38dp;
+    font-size: 26dp;
     font-weight: bold;
     color: #0f172a;
 }
 
 #primary-value.idle {
-    font-size: 15dp;
+    font-size: 19dp;
     font-weight: normal;
     color: #8a9199;
 }
 
 .detail-row {
     position: absolute;
-    left: 18dp;
-    width: 336dp;
-    height: 16dp;
+    left: 20dp;
+    width: 384dp;
+    height: 20dp;
 }
 
 #row-proxy {
-    top: 68dp;
+    top: 98dp;
+}
+
+#row-routes {
+    top: 122dp;
 }
 
 .detail-label {
     display: inline-block;
-    width: 58dp;
-    font-size: 11dp;
-    color: #9aa1a9;
+    width: 72dp;
+    font-size: 13dp;
+    color: #8a9199;
 }
 
 .detail-value {
     display: inline-block;
-    width: 270dp;
-    font-size: 11dp;
+    width: 308dp;
+    font-size: 13dp;
     color: #4b5563;
-}
-
-#row-routes {
-    top: 88dp;
 }
 
 /* --------------------------------------------------------- account card */
 
 #account-card {
     position: absolute;
-    left: 24dp;
-    top: 202dp;
-    width: 372dp;
-    height: 140dp;
+    left: 28dp;
+    top: 260dp;
+    width: 424dp;
+    height: 192dp;
     background: #ffffff;
     border: 1dp #e6e8ec;
-    border-radius: 12dp;
+    border-radius: 14dp;
 }
 
 #account-title {
     position: absolute;
-    left: 16dp;
-    top: 13dp;
-    font-size: 12dp;
+    left: 20dp;
+    top: 16dp;
+    font-size: 15dp;
     font-weight: bold;
     color: #374151;
 }
 
-#btn-save-account {
-    position: absolute;
-    left: 292dp;
-    top: 410dp;
-    width: 104dp;
-    height: 32dp;
-    box-sizing: border-box;
-    line-height: 30dp;
-    text-align: center;
-    font-size: 12dp;
-    color: #374151;
-    background: #ffffff;
-    border: 1dp #e2e5ea;
-    border-radius: 8dp;
-}
-
-#btn-save-account:hover {
-    background: #eef2f7;
-    border: 1dp #c9d2dc;
-}
-
 .field-label {
-    font-size: 11dp;
+    position: absolute;
+    left: 20dp;
+    font-size: 13dp;
     color: #6b7280;
 }
 
 #lbl-account {
-    position: absolute;
-    left: 16dp;
-    top: 38dp;
+    top: 48dp;
 }
 
 #lbl-pin {
-    position: absolute;
-    left: 16dp;
-    top: 88dp;
+    top: 118dp;
 }
 
 #account, #pin {
     position: absolute;
-    left: 16dp;
+    left: 20dp;
     box-sizing: border-box;
-    width: 340dp;
-    height: 30dp;
-    padding: 0dp 9dp;
-    font-size: 13dp;
+    width: 384dp;
+    height: 38dp;
+    padding: 0dp 11dp;
+    font-size: 15dp;
     color: #0f172a;
     background: #ffffff;
     border: 1dp #d8dce2;
-    border-radius: 7dp;
+    border-radius: 8dp;
 }
 
 #account {
-    top: 52dp;
+    top: 68dp;
 }
 
 #pin {
-    top: 102dp;
+    top: 138dp;
 }
 
 #account:focus, #pin:focus {
@@ -236,16 +213,16 @@ body {
 
 #btn-connect {
     position: absolute;
-    left: 24dp;
-    top: 354dp;
-    width: 372dp;
-    height: 44dp;
+    left: 28dp;
+    top: 470dp;
+    width: 424dp;
+    height: 52dp;
     box-sizing: border-box;
-    border-radius: 9dp;
-    font-size: 14dp;
+    border-radius: 10dp;
+    font-size: 17dp;
     font-weight: bold;
     text-align: center;
-    line-height: 42dp;
+    line-height: 50dp;
     color: #ffffff;
     background: #0b6b45;
     border: 1dp #0b6b45;
@@ -286,14 +263,14 @@ body {
 
 #btn-log {
     position: absolute;
-    left: 24dp;
-    top: 410dp;
-    width: 118dp;
-    height: 32dp;
+    left: 28dp;
+    top: 538dp;
+    width: 148dp;
+    height: 40dp;
     box-sizing: border-box;
     background: #ffffff;
     border: 1dp #e2e5ea;
-    border-radius: 8dp;
+    border-radius: 9dp;
 }
 
 #btn-log:hover {
@@ -303,26 +280,47 @@ body {
 
 #btn-log img {
     position: absolute;
-    left: 11dp;
-    top: 8dp;
-    width: 15dp;
-    height: 15dp;
+    left: 13dp;
+    top: 11dp;
+    width: 18dp;
+    height: 18dp;
 }
 
 #btn-log span {
     position: absolute;
-    left: 34dp;
-    top: 7dp;
-    font-size: 12dp;
+    left: 40dp;
+    top: 8dp;
+    font-size: 14dp;
     color: #374151;
+}
+
+#btn-save-account {
+    position: absolute;
+    left: 332dp;
+    top: 538dp;
+    width: 120dp;
+    height: 40dp;
+    box-sizing: border-box;
+    line-height: 38dp;
+    text-align: center;
+    font-size: 14dp;
+    color: #374151;
+    background: #ffffff;
+    border: 1dp #e2e5ea;
+    border-radius: 9dp;
+}
+
+#btn-save-account:hover {
+    background: #eef2f7;
+    border: 1dp #c9d2dc;
 }
 
 #footer-hint {
     position: absolute;
-    left: 24dp;
-    top: 448dp;
-    width: 372dp;
-    font-size: 10dp;
+    left: 28dp;
+    top: 590dp;
+    width: 424dp;
+    font-size: 12dp;
     color: #9aa1a9;
 }
 
@@ -333,8 +331,8 @@ body {
     position: absolute;
     left: 0dp;
     top: 0dp;
-    width: 420dp;
-    height: 468dp;
+    width: 480dp;
+    height: 620dp;
     background: #0f172a33;
     z-index: 100;
 }
@@ -347,45 +345,38 @@ body {
     position: absolute;
     background: #ffffff;
     border: 1dp #e2e5ea;
-    border-radius: 12dp;
-    padding: 20dp;
+    border-radius: 14dp;
+    padding: 24dp;
     box-sizing: border-box;
 }
 
 .dlg-title {
     display: block;
-    font-size: 15dp;
+    font-size: 19dp;
     font-weight: bold;
     color: #0f172a;
 }
 
 .dlg-sub {
     display: block;
-    margin-top: 4dp;
-    font-size: 11dp;
+    margin-top: 5dp;
+    font-size: 13dp;
     color: #6b7280;
-}
-
-.dlg-buttons {
-    position: absolute;
-    right: 20dp;
-    bottom: 16dp;
-    height: 30dp;
 }
 
 .btn {
     display: inline-block;
     box-sizing: border-box;
-    width: 84dp;
-    height: 30dp;
-    margin-left: 8dp;
-    line-height: 28dp;
+    width: 100dp;
+    height: 38dp;
+    margin-left: 10dp;
+    line-height: 36dp;
     text-align: center;
-    font-size: 12dp;
+    font-size: 14dp;
     color: #374151;
     background: #ffffff;
     border: 1dp #d8dce2;
-    border-radius: 7dp;
+    border-radius: 8dp;
 }
 
 .btn:hover {
@@ -408,85 +399,82 @@ body {
     border: 1dp #0a5c3c;
 }
 
-.btn.disabled {
-    color: #9aa1a9;
-    background: #f4f5f7;
-    border: 1dp #e2e5ea;
-}
-
 /* log */
 #log-dialog {
     left: 20dp;
-    top: 40dp;
-    width: 380dp;
-    height: 300dp;
-    padding: 18dp;
+    top: 46dp;
+    width: 440dp;
+    height: 400dp;
+    padding: 22dp;
 }
 
 #log-view {
     position: absolute;
-    left: 18dp;
-    top: 62dp;
-    width: 344dp;
-    height: 176dp;
+    left: 22dp;
+    top: 72dp;
+    width: 396dp;
+    height: 254dp;
     background: #fafbfc;
     border: 1dp #e6e8ec;
-    border-radius: 8dp;
+    border-radius: 9dp;
     overflow-y: auto;
     overflow-x: hidden;
 }
 
 #log-content {
-    padding: 8dp 10dp;
+    padding: 10dp 12dp;
     font-family: Consolas;
-    font-size: 11dp;
+    font-size: 13dp;
     color: #374151;
     white-space: normal;
 }
 
 #log-content div {
     display: block;
-    width: 322dp;
-    margin-bottom: 2dp;
+    width: 368dp;
+    margin-bottom: 3dp;
 }
 
 #log-dialog .dlg-buttons {
-    bottom: 16dp;
+    position: absolute;
+    right: 22dp;
+    bottom: 18dp;
+    height: 38dp;
 }
 
 /* mfa */
 #mfa-dialog {
     left: 40dp;
-    top: 92dp;
-    width: 340dp;
-    height: 190dp;
+    top: 130dp;
+    width: 400dp;
+    height: 250dp;
 }
 
 #mfa-note {
     position: absolute;
-    left: 20dp;
-    top: 64dp;
-    width: 300dp;
-    height: 26dp;
-    font-size: 11dp;
+    left: 24dp;
+    top: 84dp;
+    width: 352dp;
+    height: 34dp;
+    font-size: 13dp;
     color: #b42318;
 }
 
 #mfa-code {
     position: absolute;
-    left: 20dp;
-    top: 96dp;
+    left: 24dp;
+    top: 124dp;
     box-sizing: border-box;
-    width: 184dp;
-    height: 34dp;
-    padding: 0dp 10dp;
+    width: 220dp;
+    height: 44dp;
+    padding: 0dp 12dp;
     font-family: Consolas;
-    font-size: 17dp;
+    font-size: 20dp;
     text-align: center;
     color: #0f172a;
     background: #ffffff;
     border: 1dp #d8dce2;
-    border-radius: 7dp;
+    border-radius: 8dp;
 }
 
 #mfa-code:focus {
@@ -495,19 +483,19 @@ body {
 
 #btn-mfa {
     position: absolute;
-    left: 212dp;
-    top: 96dp;
-    width: 108dp;
-    height: 34dp;
-    line-height: 32dp;
+    left: 254dp;
+    top: 124dp;
+    width: 122dp;
+    height: 44dp;
+    line-height: 42dp;
     margin-left: 0dp;
+    font-size: 15dp;
 }
 
 #mfa-hint {
     position: absolute;
-    left: 20dp;
-    top: 146dp;
-    font-size: 10dp;
+    left: 24dp;
+    top: 188dp;
+    font-size: 12dp;
     color: #9aa1a9;
 }
-
