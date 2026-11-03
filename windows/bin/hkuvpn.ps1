@@ -510,9 +510,39 @@ function Test-TargetCovered {
     return $false
 }
 
+function Invoke-BoundedProcess {
+    # Run a helper child process with a hard timeout. A hung helper (a
+    # route.exe that never exits, for instance) must never freeze the
+    # worker's main loop - on timeout the child is killed and the failure
+    # is recorded. Returns $true when the child exited in time.
+    param([string]$FileName, [string]$Arguments, [int]$TimeoutMs = 5000)
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $FileName
+    $psi.Arguments = $Arguments
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $p = [System.Diagnostics.Process]::Start($psi)
+    if (-not $p.WaitForExit($TimeoutMs)) {
+        try { $p.Kill() } catch {}
+        Write-Info ("helper timed out and was killed: {0} {1}" -f $FileName, $Arguments)
+        Write-Marker ("HKUVPN_HELPER_TIMEOUT exe={0}" -f (Split-Path -Leaf $FileName))
+        return $false
+    }
+    return $true
+}
+
 function Add-TunnelRoute {
     param([string]$Base, [int]$MaskLen, [int]$TunIdx, [string]$TunIp)
-    & route.exe add $Base mask (Get-PrefixMaskDotted $MaskLen) $TunIp metric 1 if $TunIdx 2>$null | Out-Null
+    $mask = Get-PrefixMaskDotted $MaskLen
+    # Bounded: a hung route.exe used to freeze the whole worker loop here
+    # (the recurring 'stuck in Connecting' field reports).
+    if (-not (Invoke-BoundedProcess 'route.exe' `
+            "add $Base mask $mask $TunIp metric 1 if $TunIdx" 5000)) {
+        Write-Marker ("HKUVPN_ROUTE_ADD_TIMEOUT base={0}" -f $Base)
+        return
+    }
 }
 
 function Add-LearnedTarget {
