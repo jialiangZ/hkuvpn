@@ -150,6 +150,7 @@ body {
     display: inline-block;
     width: 112dp;
     height: 24dp;
+    line-height: 20dp;
     padding: 2dp 6dp;
     background: #e1e1e1;
     border: 1dp #adadad;
@@ -178,7 +179,7 @@ body {
 }
 #btn-log {
     margin-left: 8dp;
-    width: 112dp;
+    width: 118dp;
 }
 
 /* vpn info */

@@ -28,8 +28,8 @@
                     </div>
                     <div id="status-row">Disconnected</div>
                     <div id="button-row">
-                        <input type="button" id="btn-connect" class="btn primary" value="Connect"/>
-                        <input type="button" id="btn-log" class="btn" value="View log"/>
+                        <div id="btn-connect" class="btn primary">Connect</div>
+                        <div id="btn-log" class="btn">View log</div>
                     </div>
                 </div>
             </div>
@@ -66,8 +66,8 @@
                 <input id="server-edit" type="text" value="vpn2fa.hku.hk"/>
             </div>
             <div class="dlg-buttons">
-                <input type="button" id="btn-settings-save" class="btn primary" value="Save"/>
-                <input type="button" id="btn-settings-close" class="btn" value="Close"/>
+                <div id="btn-settings-save" class="btn primary">Save</div>
+                <div id="btn-settings-close" class="btn">Close</div>
             </div>
         </div>
     </div>
@@ -78,8 +78,8 @@
             <div class="dlg-title">OpenConnect Log</div>
             <div id="log-view"><div id="log-content"></div></div>
             <div class="dlg-buttons">
-                <input type="button" id="btn-log-clear" class="btn" value="Clear"/>
-                <input type="button" id="btn-log-close" class="btn" value="Close"/>
+                <div id="btn-log-clear" class="btn">Clear</div>
+                <div id="btn-log-close" class="btn">Close</div>
             </div>
         </div>
     </div>
@@ -92,7 +92,7 @@
             <div id="mfa-note"></div>
             <div class="mfa-row">
                 <input id="mfa-code" type="text" maxlength="6"/>
-                <input type="button" id="btn-mfa" class="btn primary" value="Submit"/>
+                <div id="btn-mfa" class="btn primary">Submit</div>
             </div>
             <div class="mfa-hint">Enter to submit &#183; Esc to cancel the connection</div>
         </div>
@@ -104,7 +104,7 @@
             <div class="dlg-title">About HKU VPN</div>
             <div class="about-text">HKU campus VPN frontend for the HKU Portal 2FA gateway.<br/>Server: vpn2fa.hku.hk</div>
             <div class="dlg-buttons">
-                <input type="button" id="btn-about-close" class="btn" value="Close"/>
+                <div id="btn-about-close" class="btn">Close</div>
             </div>
         </div>
     </div>

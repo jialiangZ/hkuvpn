@@ -120,28 +120,7 @@ static Rml::Context* g_ctx = nullptr;
 static Rml::ElementDocument* g_doc = nullptr;
 static bool g_mfaVisible = false;
 
-class FileLog : public Rml::Log {
-public:
-    static void Write(const char* msg) {
-        HANDLE h = CreateFileA("C:\\Users\\Pineapple\\AppData\\Local\\Temp\\hkuvpn\\rmlui.log",
-            GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
-            OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-        if (h == INVALID_HANDLE_VALUE) return;
-        SetFilePointer(h, 0, NULL, FILE_END);
-        DWORD n; WriteFile(h, msg, (DWORD)strlen(msg), &n, NULL);
-        WriteFile(h, "\r\n", 2, &n, NULL);
-        CloseHandle(h);
-    }
-};
-class LogInterface : public Rml::SystemInterface {
-public:
-    Rml::SystemInterface* base;
-    double GetElapsedTime() override { return base->GetElapsedTime(); }
-    bool LogMessage(Rml::Log::Type type, const Rml::String& message) override {
-        FileLog::Write(message.c_str());
-        return true;
-    }
-};
+
 
 static Rml::Element* El(const char* id) { return g_doc->GetElementById(id); }
 static void SetText(const char* id, const std::wstring& t) {
@@ -759,9 +738,6 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
 
     Rml::SetSystemInterface(Backend::GetSystemInterface());
     Rml::SetRenderInterface(Backend::GetRenderInterface());
-    static LogInterface logIf;
-    logIf.base = Backend::GetSystemInterface();
-    Rml::SetSystemInterface(&logIf);
     Rml::Initialise();
 
     g_ctx = Rml::CreateContext("main", Rml::Vector2i(434, 206));
