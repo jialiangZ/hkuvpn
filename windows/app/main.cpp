@@ -1,62 +1,96 @@
-// hkuvpn native desktop app (Win32, C++, no runtime dependencies).
+// HKUVPN.exe - RmlUi desktop frontend for the HKU campus VPN.
 //
-// A frontend only: it drives the same hidden elevated worker as
-// 'hkuvpn.ps1 -t' (markers.log state machine, response.txt MFA delivery,
-// stop.flag disconnect) and displays a live tail of openconnect.log.
-// Build: see build.sh (llvm-mingw / x86_64-w64-mingw32-g++).
-
-#ifndef UNICODE
-#define UNICODE
-#endif
-#ifndef _UNICODE
-#define _UNICODE
-#endif
+// Pure frontend: it drives the hidden elevated PowerShell worker
+// (windows/bin/hkuvpn.ps1 --Worker) through the marker-file protocol in
+// %TEMP%\hkuvpn, exactly like the previous native Win32 frontend.
+// UI: RmlUi (RML/RCSS in ui/), Win32 + OpenGL2 backend, statically linked.
 
 #include <windows.h>
-#include <commctrl.h>
 #include <shellapi.h>
+#include <commctrl.h>
 #include <dwmapi.h>
-#include <shlobj.h>
+#include <cstdio>
+#include <cstdarg>
 #include <string>
 #include <vector>
-#include <cstdarg>
-#include <cstdio>
-#include <cmath>
 
-#pragma comment(lib, "comctl32.lib")
+#include <RmlUi/Core.h>
+#include <RmlUi/Core/Elements/ElementFormControlInput.h>
+#include "RmlUi_Backend.h"
 
-// ---------------------------------------------------------------- palette
-// Light theme (Windows 11 style): light gray canvas, white cards,
-// blue accent, GitHub-light semantic colors.
+// ---------------------------------------------------------------- utils
 
-static const COLORREF C_BG     = RGB(245, 246, 248);
-static const COLORREF C_CARD   = RGB(255, 255, 255);
-static const COLORREF C_BORDER = RGB(227, 229, 234);
-static const COLORREF C_LOGBG  = RGB(255, 255, 255);
-static const COLORREF C_TEXT   = RGB(28, 32, 36);
-static const COLORREF C_MUTED  = RGB(105, 112, 120);
-static const COLORREF C_SEMI   = RGB(55, 62, 70);   // card titles / emphasized labels
-static const COLORREF C_ACCENT = RGB(10, 108, 255);
-static const COLORREF C_GREEN  = RGB(26, 127, 55);
-static const COLORREF C_ORANGE = RGB(154, 103, 0);
-static const COLORREF C_RED    = RGB(207, 34, 46);
-
-static HBRUSH gBrBg, gBrCard, gBrLogBg;
-
-// ---------------------------------------------------------------- ids
-
-enum {
-    IDC_PANEL_SESSION = 500, IDC_PANEL_CONN = 504, IDC_PANEL_MFA = 501, IDC_PANEL_LOG = 502,
-    IDC_PANEL_CREDS = 503,
-    ID_CAP_ACCOUNT = 100, ID_CAP_VPN, ID_CAP_DURATION, ID_CAP_PROXY, ID_CAP_ROUTES,
-    ID_VAL_ACCOUNT = 120, ID_VAL_VPN, ID_VAL_DURATION, ID_VAL_PROXY, ID_VAL_ROUTES,
-    ID_MFA_TITLE = 130, ID_MFA_NOTE = 131, ID_CRED_TITLE = 132,
-    ID_LBL_ACCOUNT = 133, ID_LBL_PIN = 134, ID_CRED_NOTE = 135,
-    IDC_ED_ACCOUNT = 200, IDC_ED_PIN = 202, IDC_ED_MFA = 203, IDC_ED_LOG = 201,
-    ID_BTN_CONNECT = 300, ID_BTN_DISCONNECT, ID_BTN_MFA, ID_BTN_CLEAR,
-    IDC_CHK_TRAY = 400, ID_FOOTER = 401,
-};
-#define WM_APP_TRAY (WM_APP + 1)
+static std::wstring JoinPath(const std::wstring& a, const std::wstring& b) {
+    return a.back() == L'\\' ? a + b : a + L"\\" + b;
+}
+static bool FileExistsW(const std::wstring& p) {
+    return GetFileAttributesW(p.c_str()) != INVALID_FILE_ATTRIBUTES;
+}
+static bool ReadAllTextW(const std::wstring& path, std::wstring& out) {
+    HANDLE h = CreateFileW(path.c_str(), GENERIC_READ,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h == INVALID_HANDLE_VALUE) return false;
+    std::string raw;
+    char buf[8192]; DWORD n;
+    while (ReadFile(h, buf, sizeof(buf), &n, NULL) && n) raw.append(buf, n);
+    CloseHandle(h);
+    int wl = MultiByteToWideChar(CP_UTF8, 0, raw.c_str(), (int)raw.size(), NULL, 0);
+    if (!wl) { out.clear(); return true; }
+    out.resize(wl);
+    MultiByteToWideChar(CP_UTF8, 0, raw.c_str(), (int)raw.size(), &out[0], wl);
+    return true;
+}
+static std::vector<std::wstring> ReadLinesW(const std::wstring& path) {
+    std::wstring all; std::vector<std::wstring> v;
+    if (!ReadAllTextW(path, all)) return v;
+    size_t start = 0;
+    while (start < all.size()) {
+        size_t e = all.find(L'\n', start);
+        if (e == std::wstring::npos) e = all.size();
+        std::wstring l = all.substr(start, e - start);
+        if (!l.empty() && l.back() == L'\r') l.pop_back();
+        v.push_back(l);
+        start = e + 1;
+    }
+    return v;
+}
+static bool WriteAllTextW(const std::wstring& path, const std::wstring& text) {
+    int nb = WideCharToMultiByte(CP_UTF8, 0, text.c_str(), (int)text.size(), NULL, 0, NULL, NULL);
+    std::string raw(nb, 0);
+    WideCharToMultiByte(CP_UTF8, 0, text.c_str(), (int)text.size(), &raw[0], nb, NULL, NULL);
+    HANDLE h = CreateFileW(path.c_str(), GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
+        CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (h == INVALID_HANDLE_VALUE) return false;
+    DWORD n; WriteFile(h, raw.data(), (DWORD)raw.size(), &n, NULL);
+    CloseHandle(h);
+    return true;
+}
+static std::wstring Fmt(const wchar_t* fmt, ...) {
+    wchar_t b[512];
+    va_list ap; va_start(ap, fmt);
+    _vsnwprintf(b, 511, fmt, ap);
+    va_end(ap); b[511] = 0;
+    return b;
+}
+static std::wstring ExeDir() {
+    wchar_t b[MAX_PATH];
+    GetModuleFileNameW(NULL, b, MAX_PATH);
+    std::wstring p(b);
+    return p.substr(0, p.find_last_of(L"\\/"));
+}
+static std::wstring HomeDir() {
+    wchar_t b[MAX_PATH];
+    DWORD n = GetEnvironmentVariableW(L"USERPROFILE", b, MAX_PATH);
+    return n ? std::wstring(b) : ExeDir();
+}
+static std::string Utf8(const std::wstring& w) {
+    int n = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, NULL, 0, NULL, NULL);
+    std::string s(n - 1, 0);
+    WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, &s[0], n, NULL, NULL);
+    return s;
+}
 
 // ---------------------------------------------------------------- state
 
@@ -64,504 +98,315 @@ enum App_State { APP_IDLE, APP_CONNECTING, APP_CONNECTED };
 
 struct Paths {
     std::wstring base, markers, log, state, hb, pids, response, stop;
-} P;
+};
+static Paths P;
 
 static App_State g_state = APP_IDLE;
 static int  g_seen = 0;
 static bool g_retry = false;
-static bool g_realExit = false;
-static bool g_disconnecting = false;        // waiting for the worker to die
+static bool g_disconnecting = false;
 static ULONGLONG g_disconnectStart = 0;
 static ULONGLONG g_connectedTick = 0;
 static long long g_logPos = -1;
 static std::wstring g_launcher, g_account = L"-";
-static std::wstring g_subOverride;   // transient header sub-line while connecting
-static double g_scale = 1.0;
-
-static HWND hMain, hPanelSession, hPanelConn, hPanelLog;
-static HWND hBtnConnect, hBtnDisconnect, hBtnClear;
-static HWND hEdAccount, hEdPin, hEdLog;
-static HWND hValVpn, hValDuration, hValRoutes;
+static std::wstring g_subOverride;
 
 static HINSTANCE g_hInst = NULL;
-
-static HFONT gFTitle, gFSub, gFBody, gFMono, gFButton;
-static HFONT gFSemi9;               // 9pt semibold: card titles
-static HICON gIcoGray, gIcoGreen, gIcoOrange, gIcoRed, gIcoApp;
+static HWND g_hwnd = NULL;
+static HICON gIcoGray, gIcoGreen, gIcoOrange, gIcoRed;
 static NOTIFYICONDATAW g_nid = {};
 
-static void UpdateTray();   // defined with the tray code below
+static Rml::Context* g_ctx = nullptr;
+static Rml::ElementDocument* g_doc = nullptr;
+static bool g_mfaVisible = false;
 
-// ---------------------------------------------------------------- utils
-
-static std::wstring JoinPath(const std::wstring& a, const std::wstring& b) {
-    if (a.empty() || a.back() == L'\\') return a + b;
-    return a + L"\\" + b;
-}
-
-static bool FileExistsW(const std::wstring& p) {
-    return GetFileAttributesW(p.c_str()) != INVALID_FILE_ATTRIBUTES;
-}
-
-static bool ReadAllTextW(const std::wstring& path, std::wstring& out) {
-    out.clear();
-    HANDLE h = CreateFileW(path.c_str(), GENERIC_READ,
-                           FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                           NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (h == INVALID_HANDLE_VALUE) return false;
-    char buf[8192];
-    DWORD n = 0;
-    std::string raw;
-    while (ReadFile(h, buf, sizeof(buf), &n, NULL) && n > 0) raw.append(buf, n);
-    CloseHandle(h);
-    int len = MultiByteToWideChar(CP_UTF8, 0, raw.c_str(), (int)raw.size(), NULL, 0);
-    out.resize(len);
-    MultiByteToWideChar(CP_UTF8, 0, raw.c_str(), (int)raw.size(), &out[0], len);
-    return true;
-}
-
-static std::vector<std::wstring> ReadLinesW(const std::wstring& path) {
-    std::wstring t;
-    if (!ReadAllTextW(path, t)) return {};
-    std::vector<std::wstring> lines;
-    size_t start = 0;
-    for (;;) {
-        size_t e = t.find(L'\n', start);
-        std::wstring line = (e == std::wstring::npos)
-            ? t.substr(start) : t.substr(start, e - start);
-        while (!line.empty() && (line.back() == L'\r' || line.back() == L'\n'))
-            line.pop_back();
-        lines.push_back(line);
-        if (e == std::wstring::npos) break;
-        start = e + 1;
+class FileLog : public Rml::Log {
+public:
+    static void Write(const char* msg) {
+        HANDLE h = CreateFileA("C:\\Users\\Pineapple\\AppData\\Local\\Temp\\hkuvpn\\rmlui.log",
+            GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
+            OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+        if (h == INVALID_HANDLE_VALUE) return;
+        SetFilePointer(h, 0, NULL, FILE_END);
+        DWORD n; WriteFile(h, msg, (DWORD)strlen(msg), &n, NULL);
+        WriteFile(h, "\r\n", 2, &n, NULL);
+        CloseHandle(h);
     }
-    return lines;
-}
+};
+class LogInterface : public Rml::SystemInterface {
+public:
+    Rml::SystemInterface* base;
+    double GetElapsedTime() override { return base->GetElapsedTime(); }
+    bool LogMessage(Rml::Log::Type type, const Rml::String& message) override {
+        FileLog::Write(message.c_str());
+        return true;
+    }
+};
 
-static bool WriteAllTextW(const std::wstring& path, const std::wstring& text) {
-    std::wstring tmp = path + L".tmp";
-    HANDLE h = CreateFileW(tmp.c_str(), GENERIC_WRITE, 0, NULL,
-                           CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (h == INVALID_HANDLE_VALUE) return false;
-    int len = WideCharToMultiByte(CP_UTF8, 0, text.c_str(), (int)text.size(),
-                                  NULL, 0, NULL, NULL);
-    std::string raw(len, 0);
-    WideCharToMultiByte(CP_UTF8, 0, text.c_str(), (int)text.size(),
-                        &raw[0], len, NULL, NULL);
-    DWORD wrote = 0;
-    BOOL ok = WriteFile(h, raw.data(), (DWORD)raw.size(), &wrote, NULL);
-    CloseHandle(h);
-    if (!ok) return false;
-    return MoveFileExW(tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING) != 0;
-}
-
-static std::wstring Fmt(const wchar_t* fmt, ...) {
-    wchar_t buf[512];
-    va_list ap; va_start(ap, fmt);
-    _vsnwprintf_s(buf, 512, _TRUNCATE, fmt, ap);
-    va_end(ap);
-    return buf;
-}
-
-static std::wstring ExeDir() {
-    wchar_t buf[MAX_PATH + 1] = {};
-    GetModuleFileNameW(NULL, buf, MAX_PATH);
-    std::wstring d(buf);
-    size_t p = d.find_last_of(L'\\');
-    return (p == std::wstring::npos) ? L"." : d.substr(0, p);
-}
-
-static std::wstring HomeDir() {
-    wchar_t buf[MAX_PATH + 1] = {};
-    SHGetFolderPathW(NULL, CSIDL_PROFILE, NULL, 0, buf);
-    return buf;
+static Rml::Element* El(const char* id) { return g_doc->GetElementById(id); }
+static void SetText(const char* id, const std::wstring& t) {
+    if (Rml::Element* e = El(id)) e->SetInnerRML(Utf8(t));
 }
 
 // ---------------------------------------------------------------- protocol
 
 static int WorkerPid() {
     for (auto& l : ReadLinesW(P.pids)) {
-        if (l.rfind(L"WORKER=", 0) == 0) {
-            int n = _wtoi(l.c_str() + 7);
-            if (n > 0) return n;
-        }
+        if (l.rfind(L"WORKER=", 0) == 0) return _wtoi(l.c_str() + 7);
     }
     return 0;
 }
-
 static bool WorkerAlive() {
     int pid = WorkerPid();
-    if (pid <= 0) return false;
-    HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION |
-                           SYNCHRONIZE, FALSE, pid);
+    if (!pid) return false;
+    HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
     if (!h) return false;
-    bool alive = (WaitForSingleObject(h, 0) == WAIT_TIMEOUT);
+    DWORD code = 0;
+    GetExitCodeProcess(h, &code);
     CloseHandle(h);
-    return alive;
+    return code == STILL_ACTIVE;
 }
-
 static bool HeartbeatFresh() {
-    HANDLE h = CreateFileW(P.hb.c_str(), GENERIC_READ,
-                           FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
-                           OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (h == INVALID_HANDLE_VALUE) return false;
-    FILETIME ft = {}; GetFileTime(h, NULL, NULL, &ft);
-    CloseHandle(h);
-    ULARGE_INTEGER u = { ft.dwLowDateTime, ft.dwHighDateTime };
-    ULONGLONG now125 = GetTickCount64() * 10000ULL + 116444736000000000ULL;
-    // Compare against system time instead: simpler via GetSystemTimeAsFileTime.
-    FILETIME nowFt; GetSystemTimeAsFileTime(&nowFt);
-    ULARGE_INTEGER nowU = { nowFt.dwLowDateTime, nowFt.dwHighDateTime };
-    (void)now125;
-    return (nowU.QuadPart - u.QuadPart) <= 15ULL * 10000000ULL;
+    FILETIME ft;
+    WIN32_FILE_ATTRIBUTE_DATA d;
+    if (!GetFileAttributesExW(P.hb.c_str(), GetFileExInfoStandard, &d)) return false;
+    ft = d.ftLastWriteTime;
+    FILETIME now;
+    GetSystemTimeAsFileTime(&now);
+    ULARGE_INTEGER a, b;
+    a.LowPart = ft.dwLowDateTime;  a.HighPart = ft.dwHighDateTime;
+    b.LowPart = now.dwLowDateTime; b.HighPart = now.dwHighDateTime;
+    return (b.QuadPart - a.QuadPart) < 150000000ULL;   // 15s
 }
-
 static std::wstring StateValue(const wchar_t* key) {
-    std::wstring pre(key); pre += L'=';
+    std::wstring k = std::wstring(key) + L"=";
     for (auto& l : ReadLinesW(P.state))
-        if (l.rfind(pre, 0) == 0) return l.substr(pre.size());
+        if (l.rfind(k, 0) == 0) return l.substr(k.size());
     return L"";
 }
-
 static int LearnedCount() {
     int n = 0;
-    for (auto& l : ReadLinesW(JoinPath(JoinPath(HomeDir(), L".vpn"),
-                                       L"learned-routes.txt")))
-        if (!l.empty()) n++;
+    for (auto& l : ReadLinesW(P.state))
+        if (l.rfind(L"ROUTE_", 0) == 0) n++;
     return n;
 }
-
 static void FindLauncherAndAccount() {
-    std::wstring exeDir = ExeDir(), home = HomeDir();
-    std::wstring candidates[] = {
-        JoinPath(exeDir, L"..\\bin\\hkuvpn.ps1"),
-        JoinPath(exeDir, L"..\\..\\..\\bin\\hkuvpn.ps1"),
-        JoinPath(JoinPath(home, L"hkuvpn"), L"windows\\bin\\hkuvpn.ps1"),
-    };
-    for (auto& c : candidates)
+    std::vector<std::wstring> roots;
+    std::wstring dir = ExeDir();
+    for (int i = 0; i < 6; i++) {
+        std::wstring c = JoinPath(dir, L"bin\\hkuvpn.ps1");
         if (FileExistsW(c)) { g_launcher = c; break; }
-    for (auto& l : ReadLinesW(JoinPath(JoinPath(home, L".vpn"), L"hku.env"))) {
+        size_t p = dir.find_last_of(L"\\/");
+        if (p == std::wstring::npos) break;
+        dir = dir.substr(0, p);
+    }
+    if (g_launcher.empty()) {
+        std::wstring c = JoinPath(HomeDir(), L"hkuvpn\\windows\\bin\\hkuvpn.ps1");
+        if (FileExistsW(c)) g_launcher = c;
+    }
+    for (auto& l : ReadLinesW(JoinPath(JoinPath(HomeDir(), L".vpn"), L"hku.env")))
         if (l.rfind(L"HKU_USER=", 0) == 0) { g_account = l.substr(9); break; }
-    }
 }
 
-// ---------------------------------------------------------------- theming
-
-static void DoConnect();
-static void DoDisconnect();
-
-static LRESULT CALLBACK PanelProc(HWND, UINT, WPARAM, LPARAM);
-
-static void RegisterPanelClass(HINSTANCE hInst) {
-    WNDCLASSW wc = {};
-    wc.lpfnWndProc = PanelProc;
-    wc.hInstance = hInst;
-    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wc.hbrBackground = NULL;
-    wc.lpszClassName = L"HkuPanel";
-    RegisterClassW(&wc);
-}
-
-struct PanelStyle {
-    COLORREF bg, border;
-    int radius;
-};
-
-static HBRUSH BrushFor(COLORREF c) {
-    return CreateSolidBrush(c);
-}
-
-// Styled flat button (owner-draw) --------------------------------------------
-
-struct BtnStyle { COLORREF fill, border, hoverFill, text; };
-
-static const BtnStyle gBsConnect  = { RGB(0,103,192),   RGB(0,103,192),   RGB(16,124,224),  RGB(255,255,255) };
-static const BtnStyle gBsDanger   = { RGB(255,255,255), RGB(196,43,43),   RGB(253,240,240), RGB(196,43,43) };
-static const BtnStyle gBsNeutral  = { RGB(255,255,255), RGB(209,213,218), RGB(243,245,247), RGB(31,35,40) };
-
-static LRESULT CALLBACK BtnSubProc(HWND h, UINT m, WPARAM w, LPARAM l,
-                                   UINT_PTR id, DWORD_PTR ref) {
-    if (m == WM_MOUSEMOVE && !GetPropW(h, L"hov")) {
-        SetPropW(h, L"hov", (HANDLE)1);
-        InvalidateRect(h, NULL, TRUE);
-        TRACKMOUSEEVENT t = { sizeof(t), TME_LEAVE, h, 0 };
-        _TrackMouseEvent(&t);
-    } else if (m == WM_MOUSELEAVE) {
-        RemovePropW(h, L"hov");
-        InvalidateRect(h, NULL, TRUE);
-    }
-    return DefSubclassProc(h, m, w, l);
-}
-
-static void DrawStyledButton(DRAWITEMSTRUCT* dis, const BtnStyle* st,
-                             const wchar_t* text, HFONT font) {
-    RECT r = dis->rcItem;
-    HDC dc = dis->hDC;
-    bool hover = GetPropW(dis->hwndItem, L"hov") != NULL;
-    bool disabled = (dis->itemState & ODS_DISABLED) != 0;
-    COLORREF fill = hover ? st->hoverFill : st->fill;
-    if (disabled) fill = RGB(247, 248, 249);
-    SetDCBrushColor(dc, fill);
-    HPEN pen = CreatePen(PS_SOLID, 1, disabled ? RGB(210, 214, 219) : st->border);
-    HBRUSH br = (HBRUSH)GetStockObject(DC_BRUSH);
-    HPEN oldPen = (HPEN)SelectObject(dc, pen);
-    HBRUSH oldBr = (HBRUSH)SelectObject(dc, br);
-    HRGN clip = CreateRoundRectRgn(r.left, r.top, r.right + 1, r.bottom + 1, 8, 8);
-    SelectClipRgn(dc, clip);
-    RoundRect(dc, r.left, r.top, r.right, r.bottom, 8, 8);
-    SelectClipRgn(dc, NULL);
-    DeleteObject(clip);
-    SelectObject(dc, oldPen);
-    SelectObject(dc, oldBr);
-    DeleteObject(pen);
-    SetBkMode(dc, TRANSPARENT);
-    SetTextColor(dc, disabled ? RGB(168, 172, 178) : st->text);
-    HFONT of = (HFONT)SelectObject(dc, font);
-    RECT tr = r;
-    DrawTextW(dc, text, -1, &tr, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    SelectObject(dc, of);
-    // (no focus rectangle: the dashed outline reads as visual noise)
-}
-
-// ---------------------------------------------------------------- icons
+// ---------------------------------------------------------------- tray
 
 static HICON MakeDotIcon(COLORREF c) {
-    HDC screen = GetDC(NULL);
-    HDC dc = CreateCompatibleDC(screen);
-    BITMAPV5HEADER bi = {};
-    bi.bV5Size = sizeof(bi);
-    bi.bV5Width = 16; bi.bV5Height = 16;
-    bi.bV5Planes = 1; bi.bV5BitCount = 32;
-    bi.bV5Compression = BI_BITFIELDS;
-    bi.bV5RedMask = 0x00FF0000; bi.bV5GreenMask = 0x0000FF00; bi.bV5BlueMask = 0x000000FF;
-    bi.bV5AlphaMask = 0xFF000000;
+    const int S = 32;
+    HDC dc = GetDC(NULL);
+    HDC mdc = CreateCompatibleDC(dc);
+    BITMAPINFO bi = {};
+    bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+    bi.bmiHeader.biWidth = S;
+    bi.bmiHeader.biHeight = -S;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    bi.bmiHeader.biCompression = BI_RGB;
     void* bits = NULL;
-    HBITMAP color = CreateDIBSection(screen, (BITMAPINFO*)&bi, DIB_RGB_COLORS,
-                                     &bits, NULL, 0);
-    unsigned int* px = (unsigned int*)bits;
-    for (int y = 0; y < 16; y++) {
-        for (int x = 0; x < 16; x++) {
-            double dx = x - 7.5, dy = y - 7.5;
-            double d = sqrt(dx * dx + dy * dy);
-            unsigned int a;
-            if (d <= 5.0) a = 255;
-            else if (d <= 6.0) a = 160;         // soft edge
-            else a = 0;
-            unsigned int rgb = (unsigned int)c & 0xFFFFFF;
-            px[(15 - y) * 16 + x] = (a << 24) | rgb;
-        }
-    }
-    HBITMAP mask = CreateBitmap(16, 16, 1, 1, NULL);
-    ICONINFO ii = { TRUE, 0, 0, mask, color };
+    HBITMAP bmp = CreateDIBSection(dc, &bi, DIB_RGB_COLORS, &bits, NULL, 0);
+    HBITMAP ob = (HBITMAP)SelectObject(mdc, bmp);
+    HBRUSH br = CreateSolidBrush(c);
+    HPEN np = CreatePen(PS_NULL, 0, 0);
+    HPEN op = (HPEN)SelectObject(mdc, np);
+    HBRUSH obr = (HBRUSH)SelectObject(mdc, br);
+    Ellipse(mdc, 2, 2, S - 2, S - 2);
+    SelectObject(mdc, op); SelectObject(mdc, obr);
+    DeleteObject(np); DeleteObject(br);
+    HBITMAP mask = CreateBitmap(S, S, 1, 1, NULL);
+    ICONINFO ii = { TRUE, 0, 0, mask, bmp };
     HICON ico = CreateIconIndirect(&ii);
-    DeleteObject(color); DeleteObject(mask);
-    DeleteDC(dc);
-    ReleaseDC(NULL, screen);
+    DeleteObject(bmp); DeleteObject(mask);
+    SelectObject(mdc, ob);
+    DeleteDC(mdc);
+    ReleaseDC(NULL, dc);
     return ico;
 }
-
-// ---------------------------------------------------------------- header paint
-
-static COLORREF HeaderColor() {
-    if (g_disconnecting) return C_ORANGE;
+static HICON StateIcon() {
     switch (g_state) {
-        case APP_CONNECTED:  return WorkerAlive() && HeartbeatFresh()
-                                    ? C_GREEN : C_RED;
-        case APP_CONNECTING: return C_ORANGE;
-        default:            return C_MUTED;
+        case APP_CONNECTED:  return (WorkerAlive() && HeartbeatFresh())
+                                    ? gIcoGreen : gIcoRed;
+        case APP_CONNECTING: return gIcoOrange;
+        default:             return gIcoGray;
     }
 }
+static void UpdateTray() {
+    if (!g_nid.hWnd) return;
+    const wchar_t* tip = L"HKU VPN: disconnected";
+    if (g_state == APP_CONNECTED)
+        tip = (WorkerAlive() && HeartbeatFresh())
+            ? L"HKU VPN: connected" : L"HKU VPN: worker unresponsive";
+    else if (g_state == APP_CONNECTING) tip = L"HKU VPN: connecting";
+    lstrcpynW(g_nid.szTip, tip, 128);
+    g_nid.hIcon = StateIcon();
+    Shell_NotifyIconW(NIM_MODIFY, &g_nid);
+}
+static void ShowFromTray() {
+    ShowWindow(g_hwnd, SW_SHOW);
+    ShowWindow(g_hwnd, SW_RESTORE);
+    SetForegroundWindow(g_hwnd);
+}
 
-static void PaintHeader(HDC dc, const RECT& rc) {
-    // Status pill: filled dot + status word, baseline aligned
-    HBRUSH dot = CreateSolidBrush(HeaderColor());
-    int dotSz = (int)(10 * g_scale);
-    int dotX = (int)(20 * g_scale), dotY = (int)(33 * g_scale);
-    HBRUSH ob = (HBRUSH)SelectObject(dc, dot);
-    HPEN np = CreatePen(PS_NULL, 0, 0);
-    HPEN op = (HPEN)SelectObject(dc, np);
-    Ellipse(dc, dotX, dotY, dotX + dotSz, dotY + dotSz);
-    SelectObject(dc, op); SelectObject(dc, ob);
-    DeleteObject(dot); DeleteObject(np);
+// ------------------------------------------------------------- ui update
 
-    SetBkMode(dc, TRANSPARENT);
+static const char* StateDotColor() {
+    if (g_disconnecting) return "#9a6700";
+    switch (g_state) {
+        case APP_CONNECTED:  return (WorkerAlive() && HeartbeatFresh()) ? "#1a7f37" : "#cf222e";
+        case APP_CONNECTING: return "#9a6700";
+        default:             return "#95999e";
+    }
+}
+static void SetBtnEnabled(const char* id, bool on) {
+    Rml::Element* e = El(id);
+    if (!e) return;
+    if (on) e->SetClass("disabled", false);
+    else    e->SetClass("disabled", true);
+}
+static bool BtnEnabled(const char* id) {
+    Rml::Element* e = El(id);
+    return e && !e->IsClassSet("disabled");
+}
 
-    const wchar_t* title;
+static void UpdateHeader() {
+    std::wstring title, sub;
+    bool accentSub = false;
     if (g_disconnecting) title = L"Disconnecting...";
     else switch (g_state) {
         case APP_CONNECTED:
             title = (WorkerAlive() && HeartbeatFresh())
                 ? L"Connected" : L"Worker unresponsive"; break;
         case APP_CONNECTING: title = L"Connecting..."; break;
-        default:            title = L"Disconnected"; break;
+        default:             title = L"Disconnected"; break;
     }
-    HFONT of = (HFONT)SelectObject(dc, gFTitle);
-    SetTextColor(dc, C_TEXT);
-    TextOutW(dc, (int)(38 * g_scale), (int)(20 * g_scale), title, (int)wcslen(title));
-
-    SelectObject(dc, gFSub);
-    SetTextColor(dc, C_MUTED);
-    const wchar_t* sub;
     if (!g_subOverride.empty()) {
-        sub = g_subOverride.c_str();
-        SetTextColor(dc, C_ACCENT);
-    } else {
-        switch (g_state) {
-            case APP_CONNECTED:
-                sub = (WorkerAlive() && HeartbeatFresh())
-                    ? L"Tunnel is up - traffic via 127.0.0.1:1080/1088 goes through HKU"
-                    : L"The worker loop stopped - use Disconnect to recover"; break;
-            case APP_CONNECTING: sub = L"Requesting elevation / bringing the tunnel up"; break;
-            default:            sub = L"Tunnel is down"; break;
-        }
+        sub = g_subOverride; accentSub = true;
+    } else switch (g_state) {
+        case APP_CONNECTED:
+            sub = (WorkerAlive() && HeartbeatFresh())
+                ? L"Tunnel is up - traffic via 127.0.0.1:1080/1088 goes through HKU"
+                : L"The worker loop stopped - use Disconnect to recover"; break;
+        case APP_CONNECTING: sub = L"Requesting elevation / bringing the tunnel up"; break;
+        default:             sub = L"Tunnel is down"; break;
     }
-    TextOutW(dc, (int)(38 * g_scale), (int)(48 * g_scale), sub, (int)wcslen(sub));
-
-    // Server, right aligned
-    RECT right = { rc.right - (int)(210 * g_scale), (int)(22 * g_scale),
-                   rc.right - (int)(20 * g_scale), rc.bottom };
-    SelectObject(dc, gFSemi9);
-    SetTextColor(dc, C_SEMI);
-    RECT r1 = right; DrawTextW(dc, L"HKU Portal VPN", -1, &r1,
-                               DT_RIGHT | DT_SINGLELINE | DT_NOCLIP);
-    SelectObject(dc, gFSub);
-    SetTextColor(dc, C_MUTED);
-    RECT r2 = { right.left, right.top + (int)(18 * g_scale), right.right, 0 };
-    DrawTextW(dc, L"vpn2fa.hku.hk", -1, &r2, DT_RIGHT | DT_SINGLELINE | DT_NOCLIP);
-    SelectObject(dc, of);
+    SetText("status-title", title);
+    SetText("status-sub", sub);
+    if (Rml::Element* d = El("status-dot")) d->SetProperty("background", StateDotColor());
+    if (Rml::Element* s = El("status-sub"))
+        s->SetProperty("color", accentSub ? "#0a6cff" : "#697078");
 }
 
-// ---------------------------------------------------------------- panel proc
-
-static LRESULT CALLBACK PanelProc(HWND h, UINT m, WPARAM w, LPARAM l) {
-    switch (m) {
-        case WM_COMMAND: {
-            int id = LOWORD(w), code = HIWORD(w);
-            if (code == BN_CLICKED) {
-                if (id == ID_BTN_CONNECT) { DoConnect(); return 0; }
-                if (id == ID_BTN_DISCONNECT) { DoDisconnect(); return 0; }
-                if (id == ID_BTN_CLEAR) {
-                    SetWindowTextW(hEdLog, L"");
-                    // Skip to the CURRENT end of the file: -1 would make
-                    // TailLog re-read the last 4KB and "resurrect" old lines.
-                    g_logPos = 0;
-                    HANDLE lh = CreateFileW(P.log.c_str(), GENERIC_READ,
-                        FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
-                        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-                    if (lh != INVALID_HANDLE_VALUE) {
-                        LARGE_INTEGER len;
-                        if (GetFileSizeEx(lh, &len)) g_logPos = len.QuadPart;
-                        CloseHandle(lh);
-                    }
-                    return 0;
-                }
-            }
-            break;
-        }
-        case WM_DRAWITEM: {
-            DRAWITEMSTRUCT* dis = (DRAWITEMSTRUCT*)l;
-            if (dis->CtlID == ID_BTN_CONNECT) {
-                DrawStyledButton(dis, &gBsConnect, L"Connect", gFButton);
-                return TRUE;
-            }
-            if (dis->CtlID == ID_BTN_DISCONNECT) {
-                DrawStyledButton(dis, &gBsDanger,
-                    g_state == APP_CONNECTING ? L"Cancel" : L"Disconnect",
-                    gFButton);
-                return TRUE;
-            }
-            if (dis->CtlID == ID_BTN_MFA) {
-                DrawStyledButton(dis, &gBsConnect, L"Submit", gFButton);
-                return TRUE;
-            }
-            if (dis->CtlID == ID_BTN_CLEAR) {
-                DrawStyledButton(dis, &gBsNeutral, L"Clear", gFSub);
-                return TRUE;
-            }
-            break;
-        }
-        case WM_PAINT: {
-            PAINTSTRUCT ps;
-            HDC dc = BeginPaint(h, &ps);
-            RECT r; GetClientRect(h, &r);
-            PanelStyle* st = (PanelStyle*)GetWindowLongPtrW(h, GWLP_USERDATA);
-            HBRUSH br = CreateSolidBrush(st ? st->bg : C_CARD);
-            HPEN pen = CreatePen(PS_SOLID, 1, st ? st->border : C_BORDER);
-            HBRUSH ob = (HBRUSH)SelectObject(dc, br);
-            HPEN op = (HPEN)SelectObject(dc, pen);
-            RoundRect(dc, 0, 0, r.right, r.bottom,
-                      st ? st->radius : 8, st ? st->radius : 8);
-            SelectObject(dc, op); SelectObject(dc, ob);
-            DeleteObject(br); DeleteObject(pen);
-            EndPaint(h, &ps);
-            return 0;
-        }
-        case WM_CTLCOLOREDIT: {
-            HDC dc = (HDC)w;
-            int id = GetDlgCtrlID((HWND)l);
-            if (id == IDC_ED_ACCOUNT || id == IDC_ED_PIN) {
-                SetBkColor(dc, RGB(255, 255, 255));
-                SetTextColor(dc, C_TEXT);
-                static HBRUSH sWhiteE = NULL;
-                if (!sWhiteE) sWhiteE = (HBRUSH)GetStockObject(WHITE_BRUSH);
-                return (LRESULT)sWhiteE;
-            }
-            if (id == IDC_ED_MFA) {
-                SetBkMode(dc, OPAQUE);
-                SetBkColor(dc, C_LOGBG);
-                SetTextColor(dc, C_TEXT);
-                return (LRESULT)gBrLogBg;
-            }
-            break;
-        }
-        case WM_CTLCOLORSTATIC: {
-            HDC dc = (HDC)w;
-            int id = GetDlgCtrlID((HWND)l);
-            SetBkMode(dc, TRANSPARENT);
-            if (id == IDC_ED_LOG) {
-                SetTextColor(dc, RGB(36, 41, 47));
-                return (LRESULT)gBrLogBg;
-            }
-            PanelStyle* st = (PanelStyle*)GetWindowLongPtrW(h, GWLP_USERDATA);
-            SetBkColor(dc, st ? st->bg : C_CARD);
-            if (id == ID_MFA_TITLE)      SetTextColor(dc, C_ORANGE);
-            else if (id == ID_MFA_NOTE)  SetTextColor(dc, C_RED);
-            else if (id >= 100 && id < 120) SetTextColor(dc, C_MUTED);
-            else                          SetTextColor(dc, C_TEXT);
-            HBRUSH br = CreateSolidBrush(st ? st->bg : C_CARD);
-            // Caller deletes returned brush? No - must keep. Use cached static.
-            static HBRUSH sBr = NULL; static COLORREF sCol = 0;
-            if (sBr && sCol == (st ? st->bg : C_CARD)) { DeleteObject(br); return (LRESULT)sBr; }
-            if (sBr) DeleteObject(sBr);
-            sBr = br; sCol = st ? st->bg : C_CARD;
-            return (LRESULT)sBr;
-        }
+static void SetState(App_State s) {
+    g_state = s;
+    g_subOverride.clear();
+    SetBtnEnabled("btn-connect", s == APP_IDLE);
+    SetBtnEnabled("btn-disconnect", s != APP_IDLE);
+    SetText("btn-disconnect", s == APP_CONNECTING ? L"Cancel" : L"Disconnect");
+    if (s == APP_CONNECTED) {
+        g_connectedTick = g_connectedTick ? g_connectedTick : GetTickCount64();
+        std::wstring ip = StateValue(L"IP4");
+        SetText("val-vpn", ip.empty() ? L"-" : ip);
+    } else {
+        g_connectedTick = 0;
+        SetText("val-vpn", L"-");
+        SetText("val-duration", L"-");
+        SetText("val-routes", L"-");
     }
-    return DefWindowProcW(h, m, w, l);
+    UpdateHeader();
+    UpdateTray();
+}
+
+// ---------------------------------------------------------------- mfa
+
+static void CloseMfa() {
+    if (!g_mfaVisible) return;
+    g_mfaVisible = false;
+    if (Rml::Element* o = El("mfa-overlay")) o->SetClass("visible", false);
+}
+static void OpenMfa(bool rejected) {
+    if (Rml::Element* o = El("mfa-overlay")) o->SetClass("visible", true);
+    g_mfaVisible = true;
+    SetText("mfa-note", rejected
+        ? L"The previous code was REJECTED - enter the one showing NOW." : L"");
+    if (auto* in = static_cast<Rml::ElementFormControlInput*>(El("mfa-code"))) {
+        in->SetValue("");
+        in->Focus();
+    }
+}
+static void SubmitMfa() {
+    auto* in = static_cast<Rml::ElementFormControlInput*>(El("mfa-code"));
+    if (!in) return;
+    std::string v = in->GetValue();
+    if (v.size() != 6) {
+        SetText("mfa-note", L"The code must be exactly 6 digits.");
+        return;
+    }
+    if (WriteAllTextW(P.response, std::wstring(v.begin(), v.end()))) {
+        g_subOverride = L"MFA code accepted - establishing tunnel (DTLS handshake + route learning can take ~30s)...";
+        CloseMfa();
+        UpdateHeader();
+    } else {
+        SetText("mfa-note", L"Could not deliver the code.");
+    }
+}
+static void CancelMfa() {
+    if (g_state != APP_CONNECTED) {
+        WriteAllTextW(P.stop, L"stop");
+        SetState(APP_IDLE);
+    }
+    CloseMfa();
+}
+
+// ---------------------------------------------------------------- actions
+
+static std::wstring GetInputValue(const char* id) {
+    auto* in = static_cast<Rml::ElementFormControlInput*>(El(id));
+    if (!in) return L"";
+    std::string v = in->GetValue();
+    int n = MultiByteToWideChar(CP_UTF8, 0, v.c_str(), (int)v.size(), NULL, 0);
+    std::wstring w(n, 0);
+    MultiByteToWideChar(CP_UTF8, 0, v.c_str(), (int)v.size(), &w[0], n);
+    return w;
+}
+static void SetInputValue(const char* id, const std::wstring& v) {
+    auto* in = static_cast<Rml::ElementFormControlInput*>(El(id));
+    if (in) in->SetValue(Utf8(v));
 }
 
 static bool PersistCredentials() {
-    wchar_t acc[256] = {}, pin[128] = {};
-    GetWindowTextW(hEdAccount, acc, 256);
-    GetWindowTextW(hEdPin, pin, 128);
-    std::wstring account(acc), pinS(pin);
-    // trim
+    std::wstring account = GetInputValue("account"), pin = GetInputValue("pin");
     auto trim = [](std::wstring& s) {
         while (!s.empty() && (s.front() == L' ' || s.front() == L'\t')) s.erase(0, 1);
         while (!s.empty() && (s.back() == L' ' || s.back() == L'\t' ||
                               s.back() == L'\r' || s.back() == L'\n')) s.pop_back();
     };
-    trim(account); trim(pinS);
+    trim(account); trim(pin);
     if (account.empty()) {
-        MessageBoxW(hMain, L"Enter your HKU account first (e.g. u1234567@connect.hku.hk).",
+        MessageBoxW(g_hwnd, L"Enter your HKU account first (e.g. u1234567@connect.hku.hk).",
                     L"HKU VPN", MB_ICONWARNING);
-        SetFocus(hEdAccount);
         return false;
     }
     std::wstring vpnDir = JoinPath(HomeDir(), L".vpn");
     CreateDirectoryW(vpnDir.c_str(), NULL);
 
-    // hku.env: replace/insert the HKU_USER line, keep every other line.
     std::wstring envPath = JoinPath(vpnDir, L"hku.env");
     std::vector<std::wstring> lines = ReadLinesW(envPath);
     std::wstring body;
@@ -581,73 +426,41 @@ static bool PersistCredentials() {
         body = L"HKU_USER=" + account + L"\r\n" + body;
     }
     WriteAllTextW(envPath, body);
-
-    // hku.pass: the worker reads the static Portal PIN from here.
-    if (!pinS.empty()) WriteAllTextW(JoinPath(vpnDir, L"hku.pass"), pinS);
-
+    if (!pin.empty()) WriteAllTextW(JoinPath(vpnDir, L"hku.pass"), pin);
     g_account = account;
     return true;
-}
-
-// ---------------------------------------------------------------- actions
-
-static void SetState(App_State s) {
-    g_state = s;
-    g_subOverride.clear();
-    bool busy = (s != APP_IDLE);
-    EnableWindow(hBtnConnect, s == APP_IDLE);
-    EnableWindow(hBtnDisconnect, busy);
-    SetWindowTextW(hBtnDisconnect, s == APP_CONNECTING ? L"Cancel" : L"Disconnect");
-    ShowWindow(hPanelSession, SW_SHOW);
-    if (s == APP_CONNECTED) {
-        g_connectedTick = g_connectedTick ? g_connectedTick : GetTickCount64();
-        std::wstring ip = StateValue(L"IP4");
-        SetWindowTextW(hValVpn, ip.empty() ? L"-" : ip.c_str());
-    } else {
-        g_connectedTick = 0;
-        SetWindowTextW(hValVpn, L"-");
-        SetWindowTextW(hValDuration, L"-");
-        SetWindowTextW(hValRoutes, L"-");
-    }
-    InvalidateRect(hMain, NULL, TRUE);
-    UpdateTray();
 }
 
 static void DoConnect() {
     if (!PersistCredentials()) return;
     if (WorkerAlive()) { SetState(APP_CONNECTED); return; }
     if (g_launcher.empty()) {
-        MessageBoxW(hMain,
+        MessageBoxW(g_hwnd,
             L"hkuvpn.ps1 was not found. Place HKUVPN.exe inside the hkuvpn "
             L"repo (windows\\app\\publish) or clone the repo to "
             L"%USERPROFILE%\\hkuvpn.",
             L"HKU VPN", MB_ICONERROR);
         return;
     }
-    if (g_launcher.empty()) return;
     std::wstring args = L"-NoProfile -ExecutionPolicy Bypass -File \"" +
                         g_launcher + L"\" \"--Worker\"";
-    HINSTANCE hi = ShellExecuteW(hMain, L"runas", L"powershell.exe",
+    HINSTANCE hi = ShellExecuteW(g_hwnd, L"runas", L"powershell.exe",
                                  args.c_str(), NULL, SW_HIDE);
     if ((INT_PTR)hi > 32) {
         g_seen = 0;
         g_retry = false;
         SetState(APP_CONNECTING);
-        // UAC's secure desktop deactivates (and sometimes minimizes) the
-        // caller. ShellExecuteW returns after consent, so take the
-        // foreground back right here; if Windows denies a plain
-        // SetForegroundWindow, the minimize/restore trick re-earns it.
-        if (IsIconic(hMain)) ShowWindow(hMain, SW_RESTORE);
-        SetForegroundWindow(hMain);
-        if (GetForegroundWindow() != hMain) {
-            ShowWindow(hMain, SW_MINIMIZE);
-            ShowWindow(hMain, SW_RESTORE);
-            SetForegroundWindow(hMain);
+        if (IsIconic(g_hwnd)) ShowWindow(g_hwnd, SW_RESTORE);
+        SetForegroundWindow(g_hwnd);
+        if (GetForegroundWindow() != g_hwnd) {
+            ShowWindow(g_hwnd, SW_MINIMIZE);
+            ShowWindow(g_hwnd, SW_RESTORE);
+            SetForegroundWindow(g_hwnd);
         }
     } else if ((INT_PTR)hi == SE_ERR_ACCESSDENIED) {
-        MessageBoxW(hMain, L"Elevation was declined.", L"HKU VPN", MB_ICONWARNING);
+        MessageBoxW(g_hwnd, L"Elevation was declined.", L"HKU VPN", MB_ICONWARNING);
     } else {
-        MessageBoxW(hMain, Fmt(L"Could not start the worker (ShellExecute=%d).",
+        MessageBoxW(g_hwnd, Fmt(L"Could not start the worker (ShellExecute=%d).",
                                (int)(INT_PTR)hi).c_str(), L"HKU VPN", MB_ICONERROR);
     }
 }
@@ -659,171 +472,56 @@ static void DoDisconnect() {
         return;
     }
     if (g_state != APP_CONNECTED) return;
-
-    // Enter the "disconnecting" phase: fire --stop (hidden), then let Tick
-    // watch the worker and flip to IDLE only once it is really gone. No
-    // console flashes and the state never jumps ahead of reality.
     g_disconnecting = true;
     g_disconnectStart = GetTickCount64();
     g_subOverride = L"Disconnecting - waiting for the worker to clean up...";
-    EnableWindow(hBtnConnect, FALSE);
-    EnableWindow(hBtnDisconnect, FALSE);
-
+    SetBtnEnabled("btn-connect", false);
+    SetBtnEnabled("btn-disconnect", false);
+    UpdateHeader();
     std::wstring args = L"-NoProfile -ExecutionPolicy Bypass -File \"" +
                         g_launcher + L"\" \"--stop\"";
-    ShellExecuteW(hMain, NULL, L"powershell.exe", args.c_str(), NULL, SW_HIDE);
+    ShellExecuteW(g_hwnd, NULL, L"powershell.exe", args.c_str(), NULL, SW_HIDE);
 }
 
-// ---------------------------------------------------------------- MFA popup
-
-static void CloseMfaDlg();
-static void SetState(App_State s);
-static HWND MkStatic(HWND parent, int id, DWORD style, const wchar_t* txt);
-static void OpenMfaDlg(bool rejected);
-
-static HWND g_hMfaDlg = NULL, g_hMfaEd = NULL, g_hMfaNote = NULL;
-
-static LRESULT CALLBACK MfaDlgProc(HWND h, UINT m, WPARAM w, LPARAM l) {
-    switch (m) {
-        case WM_CTLCOLORSTATIC: {
-            HDC dc = (HDC)w;
-            int id = GetDlgCtrlID((HWND)l);
-            SetBkMode(dc, TRANSPARENT);
-            SetTextColor(dc, id == ID_MFA_NOTE ? C_RED : C_TEXT);
-            static HBRUSH sWhite = NULL;
-            if (!sWhite) sWhite = (HBRUSH)GetStockObject(WHITE_BRUSH);
-            return (LRESULT)sWhite;
-        }
-        case WM_CTLCOLOREDIT: {
-            HDC dc = (HDC)w;
-            SetBkColor(dc, C_LOGBG);
-            SetTextColor(dc, C_TEXT);
-            static HBRUSH sWhite2 = NULL;
-            if (!sWhite2) sWhite2 = (HBRUSH)GetStockObject(WHITE_BRUSH);
-            return (LRESULT)sWhite2;
-        }
-        case WM_DRAWITEM: {
-            DRAWITEMSTRUCT* dis = (DRAWITEMSTRUCT*)l;
-            if (dis->CtlID == ID_BTN_MFA) {
-                DrawStyledButton(dis, &gBsConnect, L"Submit", gFButton);
-                return TRUE;
-            }
-            if (dis->CtlID == ID_BTN_DISCONNECT) {   // reused id: Cancel button
-                DrawStyledButton(dis, &gBsNeutral, L"Cancel", gFButton);
-                return TRUE;
-            }
-            break;
-        }
-        case WM_COMMAND: {
-            int id = LOWORD(w);
-            int code = HIWORD(w);
-            // IsDialogMessage reports Enter as IDOK(1) when no default
-            // button handled it, and Esc as IDCANCEL(2); accept both forms.
-            bool submit = (id == ID_BTN_MFA && code == BN_CLICKED) ||
-                          (id == 1 && code == BN_CLICKED);
-            bool cancel = (id == 2);   // Esc only now - the button is gone
-            if (submit) {
-                wchar_t mfa[8] = {};
-                GetWindowTextW(g_hMfaEd, mfa, 8);
-                if (wcslen(mfa) != 6) {
-                    SetWindowTextW(g_hMfaNote, L"The code must be exactly 6 digits.");
-                    ShowWindow(g_hMfaNote, SW_SHOW);
-                    return 0;
-                }
-                if (WriteAllTextW(P.response, mfa)) {
-                    g_subOverride = L"MFA code accepted - establishing tunnel (DTLS handshake + route learning can take ~30s)...";
-                    CloseMfaDlg();
-                } else {
-                    SetWindowTextW(g_hMfaNote, L"Could not deliver the code.");
-                    ShowWindow(g_hMfaNote, SW_SHOW);
-                }
-                return 0;
-            }
-            if (cancel) {
-                // Cancel = abort the half-built session (harmless afterwards:
-                // guarded by state).
-                if (g_state != APP_CONNECTED) {
-                    WriteAllTextW(P.stop, L"stop");
-                    SetState(APP_IDLE);
-                }
-                CloseMfaDlg();
-                return 0;
-            }
-            return 0;
-        }
-        case WM_CLOSE:
-            if (g_state != APP_CONNECTED) {
-                // Only abort while the session is still being built; after
-                // CONNECTED the dialog closes itself and the tunnel lives on.
-                WriteAllTextW(P.stop, L"stop");
-                SetState(APP_IDLE);
-            }
-            CloseMfaDlg();
-            return 0;
+static void ClearLog() {
+    SetText("log-content", L"");
+    // Seek the cursor to the CURRENT end: -1 would re-read the last 4KB.
+    g_logPos = 0;
+    HANDLE lh = CreateFileW(P.log.c_str(), GENERIC_READ,
+        FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
+        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (lh != INVALID_HANDLE_VALUE) {
+        LARGE_INTEGER len;
+        if (GetFileSizeEx(lh, &len)) g_logPos = len.QuadPart;
+        CloseHandle(lh);
     }
-    return DefWindowProcW(h, m, w, l);
 }
 
-static void CloseMfaDlg() {
-    if (!g_hMfaDlg) return;
-    HWND h = g_hMfaDlg;
-    g_hMfaDlg = NULL; g_hMfaEd = NULL; g_hMfaNote = NULL;
-    DestroyWindow(h);
-    EnableWindow(hMain, TRUE);
-    SetForegroundWindow(hMain);
-}
+// ---------------------------------------------------------------- events
 
-static void OpenMfaDlg(bool rejected) {
-    if (g_hMfaDlg) {
-        // A rejected code: the worker asks again through a new marker.
-        SetWindowTextW(g_hMfaNote, L"The previous code was REJECTED - enter the one showing NOW.");
-        ShowWindow(g_hMfaNote, SW_SHOW);
-        SetWindowTextW(g_hMfaEd, L"");
-        SetForegroundWindow(g_hMfaDlg);
-        SetFocus(g_hMfaEd);
-        return;
+class UiEvents : public Rml::EventListener {
+public:
+    void ProcessEvent(Rml::Event& ev) override {
+        Rml::String id = ev.GetTargetElement()->GetId();
+        if (ev.GetType() == "click") {
+            if (id == "btn-connect" && BtnEnabled("btn-connect")) DoConnect();
+            else if (id == "btn-disconnect" && BtnEnabled("btn-disconnect")) DoDisconnect();
+            else if (id == "btn-clear") ClearLog();
+            else if (id == "btn-mfa") SubmitMfa();
+        } else if (ev.GetType() == "keydown") {
+            int key = ev.GetParameter<int>("key_identifier", 0);
+            if (id == "mfa-code") {
+                if (key == Rml::Input::KI_RETURN) { SubmitMfa(); ev.StopPropagation(); }
+                else if (key == Rml::Input::KI_ESCAPE) { CancelMfa(); ev.StopPropagation(); }
+            }
+        } else if (ev.GetType() == "submit") {
+            if (id == "mfa-code") SubmitMfa();
+        }
     }
-    RECT mr; GetWindowRect(hMain, &mr);
-    double s = g_scale;                     // scale the popup too: unscaled
-    int dw = (int)(380 * s), dh = (int)(130 * s);   // geometry is cramped on
-    int x = mr.left + ((mr.right - mr.left) - dw) / 2;   // high-DPI displays
-    int y = mr.top + ((mr.bottom - mr.top) - dh) / 2;
-    g_hMfaDlg = CreateWindowExW(WS_EX_DLGMODALFRAME, L"HkuMfaDlg",
-        L"HKU VPN - MFA code",
-        WS_POPUP | WS_CAPTION | WS_SYSMENU,
-        x, y, dw, dh, hMain, NULL, g_hInst, NULL);
-    auto place = [&](HWND c, int px, int py, int pw, int ph) {
-        MoveWindow(c, (int)(px * s), (int)(py * s), (int)(pw * s), (int)(ph * s), TRUE);
-    };
-    MkStatic(g_hMfaDlg, ID_MFA_TITLE, 0,
-             L"Enter the 6-digit Microsoft Authenticator code:");
-    SendMessageW(GetDlgItem(g_hMfaDlg, ID_MFA_TITLE), WM_SETFONT, (WPARAM)gFSub, TRUE);
-    place(GetDlgItem(g_hMfaDlg, ID_MFA_TITLE), 18, 16, 340, 20);
-    g_hMfaNote = MkStatic(g_hMfaDlg, ID_MFA_NOTE, 0,
-        rejected ? L"The previous code was REJECTED - enter the one showing NOW." : L"");
-    SendMessageW(g_hMfaNote, WM_SETFONT, (WPARAM)gFSub, TRUE);
-    place(g_hMfaNote, 18, 38, 340, 18);
-    ShowWindow(g_hMfaNote, rejected ? SW_SHOW : SW_HIDE);
-    g_hMfaEd = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
-        WS_CHILD | WS_VISIBLE | ES_NUMBER | ES_CENTER | ES_AUTOHSCROLL,
-        0, 0, 10, 10, g_hMfaDlg, (HMENU)IDC_ED_MFA, g_hInst, NULL);
-    SendMessageW(g_hMfaEd, WM_SETFONT, (WPARAM)gFMono, TRUE);
-    SendMessageW(g_hMfaEd, EM_SETLIMITTEXT, 6, 0);
-    place(g_hMfaEd, 18, 64, 200, 38);
-    HWND ok = CreateWindowExW(0, L"BUTTON", L"Submit",
-        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | BS_DEFPUSHBUTTON,
-        0, 0, 10, 10, g_hMfaDlg, (HMENU)ID_BTN_MFA, g_hInst, NULL);
-    SendMessageW(ok, WM_SETFONT, (WPARAM)gFButton, TRUE);
-    SetWindowSubclass(ok, BtnSubProc, 5, 0);
-    place(ok, 234, 64, 110, 38);
+};
+static UiEvents g_events;
 
-    EnableWindow(hMain, FALSE);
-    ShowWindow(g_hMfaDlg, SW_SHOWNORMAL);
-    SetForegroundWindow(g_hMfaDlg);
-    SetFocus(g_hMfaEd);
-}
-
-// ---------------------------------------------------------------- state machine
+// ---------------------------------------------------------------- tick
 
 static void Tick() {
     auto lines = ReadLinesW(P.markers);
@@ -831,18 +529,18 @@ static void Tick() {
         for (int i = g_seen; i < (int)lines.size(); i++) {
             const std::wstring& l = lines[i];
             if (l.find(L"HKUVPN_CONNECTED") != std::wstring::npos) {
-                CloseMfaDlg();
+                CloseMfa();
                 g_connectedTick = GetTickCount64();
                 SetState(APP_CONNECTED);
             } else if (l.find(L"HKUVPN_MFA_RESPONSE_REQUIRED") != std::wstring::npos &&
                        g_state == APP_CONNECTING) {
-                OpenMfaDlg(g_retry);
+                OpenMfa(g_retry);
                 g_retry = false;
             } else if (l.find(L"HKUVPN_MFA_RETRY") != std::wstring::npos) {
                 g_retry = true;
             } else if (l.find(L"HKUVPN_EXITED") != std::wstring::npos) {
                 if (g_state == APP_CONNECTING) {
-                    CloseMfaDlg();
+                    CloseMfa();
                     SetState(APP_IDLE);
                 }
             }
@@ -853,15 +551,15 @@ static void Tick() {
     if (g_state == APP_CONNECTED) {
         if (WorkerAlive()) {
             std::wstring ip = StateValue(L"IP4");
-            if (!ip.empty()) SetWindowTextW(hValVpn, ip.c_str());
+            if (!ip.empty()) SetText("val-vpn", ip);
             if (g_connectedTick) {
                 ULONGLONG el = (GetTickCount64() - g_connectedTick) / 1000;
-                SetWindowTextW(hValDuration, Fmt(L"%02d:%02d:%02d",
-                    (int)(el / 3600), (int)((el / 60) % 60), (int)(el % 60)).c_str());
+                SetText("val-duration", Fmt(L"%02d:%02d:%02d",
+                    (int)(el / 3600), (int)((el / 60) % 60), (int)(el % 60)));
             }
-            SetWindowTextW(hValRoutes, Fmt(L"%d learned route%s, heartbeat %s",
+            SetText("val-routes", Fmt(L"%d learned route%s, heartbeat %s",
                 LearnedCount(), LearnedCount() == 1 ? L"" : L"s",
-                HeartbeatFresh() ? L"OK" : L"STALE").c_str());
+                HeartbeatFresh() ? L"OK" : L"STALE"));
         } else {
             SetState(APP_IDLE);
         }
@@ -875,27 +573,20 @@ static void Tick() {
         }
     }
 
-    // Reconciliation: the line-cursor state machine is fragile against a
-    // markers file that was deleted/rewritten mid-connect (the cursor can
-    // end up past lines it never actually processed, leaving the UI stuck
-    // in CONNECTING while the session is up). Re-derive from the full file
-    // every tick while connecting: a live worker plus a CONNECTED marker
-    // means CONNECTED, whatever the cursor thinks.
+    // Reconciliation against a deleted/rewritten markers file.
     if (g_state == APP_CONNECTING && WorkerAlive()) {
         std::wstring all2;
         if (ReadAllTextW(P.markers, all2) &&
             all2.find(L"HKUVPN_CONNECTED") != std::wstring::npos) {
             int nl = 1;
             for (wchar_t c : all2) if (c == L'\n') nl++;
-            g_seen = nl;                      // resync the cursor
+            g_seen = nl;
             g_connectedTick = GetTickCount64();
-            CloseMfaDlg();
+            CloseMfa();
             SetState(APP_CONNECTED);
         }
     }
 
-    // Disconnecting phase: flip to IDLE only when the worker is really
-    // gone; if it refuses to die within 20s, restore the connected UI.
     if (g_disconnecting) {
         if (!WorkerAlive()) {
             g_disconnecting = false;
@@ -905,28 +596,21 @@ static void Tick() {
             SetState(APP_CONNECTED);
             g_subOverride = L"Disconnect timed out - the worker is still running; retry.";
         }
-        InvalidateRect(hMain, NULL, FALSE);
-        return;
     }
-
-    // repaint ONLY the header band (state colors); a full-window invalidate
-    // every tick makes the log and cards flicker
-    RECT rc; GetClientRect(hMain, &rc);
-    RECT hdr = { 0, 0, rc.right, (int)(88 * g_scale) };
-    InvalidateRect(hMain, &hdr, FALSE);
+    UpdateHeader();
 }
 
 // ---------------------------------------------------------------- log tail
 
 static void TailLog() {
     HANDLE h = CreateFileW(P.log.c_str(), GENERIC_READ,
-                           FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
-                           OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+        FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
+        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (h == INVALID_HANDLE_VALUE) return;
     LARGE_INTEGER len;
     if (!GetFileSizeEx(h, &len)) { CloseHandle(h); return; }
     if (g_logPos < 0) g_logPos = len.QuadPart > 4096 ? len.QuadPart - 4096 : 0;
-    if (len.QuadPart < g_logPos) g_logPos = 0;     // rotated/truncated
+    if (len.QuadPart < g_logPos) g_logPos = 0;
     if (len.QuadPart > g_logPos) {
         LARGE_INTEGER mv = { 0 }; mv.QuadPart = g_logPos;
         SetFilePointerEx(h, mv, NULL, FILE_BEGIN);
@@ -935,239 +619,93 @@ static void TailLog() {
         DWORD n = 0;
         while (ReadFile(h, buf, sizeof(buf), &n, NULL) && n > 0) {
             raw.append(buf, n);
-            if (raw.size() > 65536) break;   // don't pull the whole file at once
+            if (raw.size() > 65536) break;
         }
         g_logPos += (long long)raw.size();
-        if (!raw.empty()) {
-            int wl = MultiByteToWideChar(CP_ACP, 0, raw.c_str(),
-                                         (int)raw.size(), NULL, 0);
-            std::wstring w(wl, 0);
-            MultiByteToWideChar(CP_ACP, 0, raw.c_str(), (int)raw.size(),
-                                &w[0], wl);
-            int cur = GetWindowTextLengthW(hEdLog);
-            if (cur > 120000) {                          // trim old content
-                SendMessageW(hEdLog, EM_SETSEL, 0, 60000);
-                SendMessageW(hEdLog, EM_REPLACESEL, FALSE, (LPARAM)L"");
+        CloseHandle(h);
+        if (raw.empty()) return;
+        // openconnect writes plain ASCII; strip control characters and
+        // treat any of \r, \n, \r\n as a line break (progress output uses
+        // bare \r to redraw a line - each redraw becomes its own line).
+        std::string clean;
+        clean.reserve(raw.size());
+        for (size_t i = 0; i < raw.size(); i++) {
+            char c = raw[i];
+            if (c == '\r') {
+                if (i + 1 < raw.size() && raw[i + 1] == '\n') i++;   // \r\n
+                clean.push_back('\n');
+            } else if (c == '\n' || (c >= 32 && c < 127)) {
+                clean.push_back(c);
             }
-            SendMessageW(hEdLog, EM_SETSEL, -1, -1);
-            SendMessageW(hEdLog, EM_REPLACESEL, FALSE, (LPARAM)w.c_str());
-            SendMessageW(hEdLog, EM_SCROLLCARET, 0, 0);
         }
+        Rml::Element* content = El("log-content");
+        Rml::Element* view = El("log-view");
+        if (!content || !view) return;
+        // Append each log line as its own block <div> - RmlUi treats bare
+        // text + <br/> inconsistently for preformatted console output.
+        std::string cur = content->GetInnerRML();
+        if (cur.size() > 160000) cur = cur.substr(cur.size() - 80000);
+        std::string line;
+        std::string html;
+        auto flush = [&]() {
+            if (line.empty()) { html += "<div>&nbsp;</div>"; return; }
+            std::string esc;
+            esc.reserve(line.size());
+            for (char c : line) {
+                if (c == '&') esc += "&amp;";
+                else if (c == '<') esc += "&lt;";
+                else if (c == '>') esc += "&gt;";
+                else esc.push_back(c);
+            }
+            html += "<div>" + esc + "</div>";
+            line.clear();
+        };
+        for (char c : clean) {
+            if (c == '\n') flush();
+            else line.push_back(c);
+        }
+        if (!line.empty()) flush();
+        content->SetInnerRML(cur + html);
+        view->SetScrollTop(view->GetScrollHeight());
+        return;
     }
     CloseHandle(h);
 }
 
-// ---------------------------------------------------------------- tray
-
-static HICON StateIcon() {
-    switch (g_state) {
-        case APP_CONNECTED:  return (WorkerAlive() && HeartbeatFresh())
-                                    ? gIcoGreen : gIcoRed;
-        case APP_CONNECTING: return gIcoOrange;
-        default:            return gIcoGray;
-    }
-}
-
-static void UpdateTray() {
-    if (!g_nid.hWnd) return;
-    const wchar_t* tip = L"HKU VPN: disconnected";
-    if (g_state == APP_CONNECTED)
-        tip = (WorkerAlive() && HeartbeatFresh())
-            ? L"HKU VPN: connected" : L"HKU VPN: worker unresponsive";
-    else if (g_state == APP_CONNECTING) tip = L"HKU VPN: connecting";
-    lstrcpynW(g_nid.szTip, tip, 128);
-    g_nid.hIcon = StateIcon();
-    Shell_NotifyIconW(NIM_MODIFY, &g_nid);
-}
-
-static void ShowFromTray() {
-    ShowWindow(hMain, SW_SHOW);
-    ShowWindow(hMain, SW_RESTORE);
-    SetForegroundWindow(hMain);
-}
-
-// ---------------------------------------------------------------- layout
-
-static HWND MkStatic(HWND parent, int id, DWORD style, const wchar_t* txt) {
-    return CreateWindowExW(0, L"STATIC", txt,
-        WS_CHILD | WS_VISIBLE | SS_NOPREFIX | style,
-        0, 0, 10, 10, parent, (HMENU)(INT_PTR)id, NULL, NULL);
-}
-
-static void ScaleFonts() {
-    UINT dpi = GetDpiForWindow(hMain);
-    // Segoe UI Variable is the Windows 11 face; plain Segoe UI elsewhere.
-    static const wchar_t* kUiFont =
-        L"Segoe UI Variable Text";
-    auto mk = [&](int pt, int weight) {
-        HFONT f = CreateFontW(-MulDiv(pt, dpi, 72), 0, 0, 0, weight, FALSE,
-                              FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
-                              CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-                              DEFAULT_PITCH | FF_DONTCARE, kUiFont);
-        return f;
-    };
-    if (gFTitle) DeleteObject(gFTitle);
-    if (gFSub)   DeleteObject(gFSub);
-    if (gFBody)  DeleteObject(gFBody);
-    if (gFButton) DeleteObject(gFButton);
-    if (gFSemi9) DeleteObject(gFSemi9);
-    if (gFMono) {
-        DeleteObject(gFMono);
-    }
-    gFTitle  = mk(17, FW_SEMIBOLD);
-    gFSub    = mk(9,  FW_NORMAL);
-    gFBody   = mk(9,  FW_NORMAL);
-    gFSemi9  = mk(9,  FW_SEMIBOLD);
-    gFButton = mk(9, FW_SEMIBOLD);
-    UINT mdpi = dpi;
-    gFMono   = CreateFontW(-MulDiv(95, mdpi, 720), 0, 0, 0, FW_NORMAL, FALSE,
-                           FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
-                           CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-                           FIXED_PITCH | FF_MODERN, L"Cascadia Mono");
-}
-
-static void Move(HWND h, int x, int y, int w, int ht) {
-    MoveWindow(h, (int)(x * g_scale), (int)(y * g_scale),
-               (int)(w * g_scale), (int)(ht * g_scale), TRUE);
-}
-
-static void LayoutAll() {
-    RECT rc; GetClientRect(hMain, &rc);
-    (void)rc;
-    int cardW = 760 - 48;   // 24px outer margins -> 712
-
-    // --- Connection card: account over PIN, stacked buttons at right ---
-    Move(hPanelConn, 24, 84, cardW, 128);
-    SendMessageW(GetDlgItem(hPanelConn, ID_LBL_ACCOUNT), WM_SETFONT, (WPARAM)gFSub, TRUE);
-    SendMessageW(GetDlgItem(hPanelConn, ID_LBL_PIN), WM_SETFONT, (WPARAM)gFSub, TRUE);
-    Move(GetDlgItem(hPanelConn, ID_LBL_ACCOUNT), 16, 12, 300, 16);
-    Move(GetDlgItem(hPanelConn, ID_LBL_PIN), 16, 66, 300, 16);
-    SendMessageW(hEdAccount, WM_SETFONT, (WPARAM)gFBody, TRUE);
-    SendMessageW(hEdPin, WM_SETFONT, (WPARAM)gFBody, TRUE);
-    Move(hEdAccount, 16, 32, 540, 28);
-    Move(hEdPin, 16, 86, 540, 28);
-    SendMessageW(hBtnConnect, WM_SETFONT, (WPARAM)gFButton, TRUE);
-    SendMessageW(hBtnDisconnect, WM_SETFONT, (WPARAM)gFButton, TRUE);
-    Move(hBtnConnect, 572, 32, 128, 32);
-    Move(hBtnDisconnect, 572, 82, 128, 32);
-
-    // --- Session card: 2x2 stat grid ---
-    Move(hPanelSession, 24, 226, cardW, 86);
-    int capIds[] = { ID_CAP_VPN, ID_CAP_DURATION, ID_CAP_PROXY, ID_CAP_ROUTES };
-    int valIds[] = { ID_VAL_VPN, ID_VAL_DURATION, ID_VAL_PROXY, ID_VAL_ROUTES };
-    int colX[2] = { 16, 376 };
-    for (int i = 0; i < 4; i++) {
-        int col = i % 2, row = i / 2;
-        HWND cap = GetDlgItem(hPanelSession, capIds[i]);
-        HWND val = GetDlgItem(hPanelSession, valIds[i]);
-        SendMessageW(cap, WM_SETFONT, (WPARAM)gFSub, TRUE);
-        SendMessageW(val, WM_SETFONT, (WPARAM)gFBody, TRUE);
-        int x = colX[col], y = 14 + row * 32;
-        Move(cap, x, y, 340, 14);
-        Move(val, x, y + 15, 340, 17);
-    }
-
-    // --- Log card fills the rest ---
-    int logY = 326;
-    Move(hPanelLog, 24, logY, cardW, 616 - logY);
-    SendMessageW(GetDlgItem(hPanelLog, 0), WM_SETFONT, (WPARAM)gFSemi9, TRUE);
-    Move(GetDlgItem(hPanelLog, 0), 16, 10, 400, 18);
-    Move(hBtnClear, cardW - 88, 8, 72, 26);
-    SendMessageW(hBtnClear, WM_SETFONT, (WPARAM)gFSub, TRUE);
-    SendMessageW(hEdLog, WM_SETFONT, (WPARAM)gFMono, TRUE);
-    Move(hEdLog, 16, 38, cardW - 32, 616 - logY - 52);
-
-    InvalidateRect(hMain, NULL, TRUE);
-}
-
-// ---------------------------------------------------------------- wndproc
-
-static LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
-    switch (m) {
-        case WM_CREATE: {
-            BOOL dark = FALSE;   // light title bar to match the light theme
-            DwmSetWindowAttribute(h, 20, &dark, sizeof(dark));
-            return 0;
-        }
-        case WM_PAINT: {
-            PAINTSTRUCT ps;
-            HDC dc = BeginPaint(h, &ps);
-            RECT rc; GetClientRect(h, &rc);
-            // Always fill the client with the canvas color first: never rely
-            // on the erase pass (a stale un-erased area reads as black).
-            HBRUSH bg = CreateSolidBrush(C_BG);
-            FillRect(dc, &rc, bg);
-            DeleteObject(bg);
-            // Brand accent strip along the top edge.
-            RECT stripe = { 0, 0, rc.right, (int)(4 * g_scale) };
-            HBRUSH acc = CreateSolidBrush(C_ACCENT);
-            FillRect(dc, &stripe, acc);
-            DeleteObject(acc);
-            PaintHeader(dc, rc);
-            EndPaint(h, &ps);
-            return 0;
-        }
-        case WM_ERASEBKGND:
-            return 1;   // WM_PAINT fills the canvas itself
-        case WM_TIMER:
-            if (w == 1) Tick();
-            else if (w == 2) TailLog();
-            return 0;
-        case WM_DPICHANGED: {
-            UINT dpi = HIWORD(w);
-            g_scale = dpi / 96.0;
-            RECT* r = (RECT*)l;
-            SetWindowPos(h, NULL, r->left, r->top,
-                         r->right - r->left, r->bottom - r->top,
-                         SWP_NOZORDER | SWP_NOACTIVATE);
-            ScaleFonts();
-            LayoutAll();
-            return 0;
-        }
-        case WM_SIZE:
-            LayoutAll();
-            return 0;
-        case WM_APP_TRAY: {
-            if (l == WM_RBUTTONUP || l == WM_CONTEXTMENU) {
-                POINT pt; GetCursorPos(&pt);
-                HMENU menu = CreatePopupMenu();
-                AppendMenuW(menu, MF_STRING, 1, L"Show window");
-                AppendMenuW(menu, MF_SEPARATOR, 0, NULL);
-                AppendMenuW(menu, MF_STRING, 2, L"Exit (VPN keeps running)");
-                SetForegroundWindow(h);
-                int cmd = TrackPopupMenu(menu, TPM_RIGHTBUTTON | TPM_RETURNCMD,
-                                         pt.x, pt.y, 0, h, NULL);
-                DestroyMenu(menu);
-                if (cmd == 1) ShowFromTray();
-                else if (cmd == 2) { g_realExit = true; DestroyWindow(h); }
-            } else if (l == WM_LBUTTONDBLCLK) {
-                ShowFromTray();
-            }
-            return 0;
-        }
-        case WM_CLOSE:
-            // Closing always minimizes to tray; real exit is the tray menu.
-            if (!g_realExit) {
-                ShowWindow(h, SW_HIDE);
-                return 0;
-            }
-            DestroyWindow(h);
-            return 0;
-        case WM_DESTROY:
-            if (g_nid.hWnd) Shell_NotifyIconW(NIM_DELETE, &g_nid);
-            PostQuitMessage(0);
-            return 0;
-    }
-    return DefWindowProcW(h, m, w, l);
-}
-
 // ---------------------------------------------------------------- winmain
 
-int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
-    InitCommonControls();
-    SetProcessDPIAware();
+static bool TrayProc(MSG& msg) {
+    if (msg.message == WM_APP + 1 && msg.hwnd == g_hwnd) {
+        UINT ev = LOWORD(msg.lParam);
+        if (ev == WM_LBUTTONUP || ev == NIN_SELECT || ev == NIN_KEYSELECT) {
+            ShowFromTray();
+            return true;
+        }
+        if (ev == WM_RBUTTONUP) {
+            POINT pt; GetCursorPos(&pt);
+            HMENU menu = CreatePopupMenu();
+            AppendMenuW(menu, MF_STRING, 1, L"Open HKU VPN");
+            AppendMenuW(menu, MF_STRING, 2, L"Exit");
+            SetForegroundWindow(g_hwnd);
+            int cmd = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_NONOTIFY,
+                                     pt.x, pt.y, 0, g_hwnd, NULL);
+            DestroyMenu(menu);
+            if (cmd == 1) ShowFromTray();
+            if (cmd == 2) PostQuitMessage(0);
+            return true;
+        }
+    }
+    return false;
+}
 
-    // Paths
+int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
+    (void)nCmd;
+    g_hInst = hInst;
+    InitCommonControls();
+    // DPI awareness comes from the manifest (PerMonitorV2); do NOT call
+    // SetProcessDPIAware here - it would downgrade the process to
+    // system-DPI-aware and the backend would misread the window DPI.
+
     wchar_t tmp[MAX_PATH + 1] = {};
     GetTempPathW(MAX_PATH, tmp);
     P.base     = JoinPath(tmp, L"hkuvpn");
@@ -1180,171 +718,116 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
     P.stop     = JoinPath(P.base, L"stop.flag");
     FindLauncherAndAccount();
 
-    gBrBg     = CreateSolidBrush(C_BG);
-    gBrCard   = CreateSolidBrush(C_CARD);
-    gBrLogBg  = CreateSolidBrush(C_LOGBG);
     gIcoGray   = MakeDotIcon(RGB(150, 153, 158));
-    gIcoGreen  = MakeDotIcon(C_GREEN);
-    gIcoOrange = MakeDotIcon(C_ORANGE);
-    gIcoRed    = MakeDotIcon(C_RED);
-    gIcoApp    = (HICON)LoadImageW(hInst, MAKEINTRESOURCEW(1),
-                                   IMAGE_ICON, 0, 0, LR_DEFAULTSIZE);
+    gIcoGreen  = MakeDotIcon(RGB(26, 127, 55));
+    gIcoOrange = MakeDotIcon(RGB(154, 103, 0));
+    gIcoRed    = MakeDotIcon(RGB(207, 34, 46));
 
-    RegisterPanelClass(hInst);
-
-    WNDCLASSW wc = {};
-    wc.lpfnWndProc = WndProc;
-    wc.hInstance = hInst;
-    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wc.hbrBackground = gBrBg;
-    wc.hIcon = gIcoApp;
-    wc.lpszClassName = L"HkuMain";
-    RegisterClassW(&wc);
-
-    hMain = CreateWindowExW(WS_EX_COMPOSITED, L"HkuMain", L"HKU VPN",
-        WS_OVERLAPPEDWINDOW & ~(WS_MAXIMIZEBOX | WS_THICKFRAME),
-        CW_USEDEFAULT, CW_USEDEFAULT, 760, 616, NULL, NULL, hInst, NULL);
-    g_hInst = hInst;
-    {
-        UINT dpi = GetDpiForWindow(hMain);
-        g_scale = dpi / 96.0;
-        RECT adj = { 0, 0, (int)(760 * g_scale), (int)(616 * g_scale) };
-        AdjustWindowRectEx(&adj,
-            WS_OVERLAPPEDWINDOW & ~(WS_MAXIMIZEBOX | WS_THICKFRAME), FALSE, 0);
-        SetWindowPos(hMain, NULL, CW_USEDEFAULT, CW_USEDEFAULT,
-                     adj.right - adj.left, adj.bottom - adj.top,
-                     SWP_NOZORDER | SWP_NOMOVE);
+    if (!Backend::Initialize("HKU VPN", 860, 640, true)) return 1;
+    g_hwnd = FindWindowW(L"HKU VPN", NULL);
+    if (!g_hwnd) {
+        // Window class name == window title in the stock backend.
+        g_hwnd = GetForegroundWindow();
     }
 
-    ScaleFonts();
+    // Application icon on the window itself.
+    HICON appIco = (HICON)LoadImageW(hInst, MAKEINTRESOURCEW(1),
+                                     IMAGE_ICON, 0, 0, LR_DEFAULTSIZE);
+    SendMessageW(g_hwnd, WM_SETICON, ICON_BIG, (LPARAM)appIco);
+    SendMessageW(g_hwnd, WM_SETICON, ICON_SMALL, (LPARAM)appIco);
+    BOOL dark = FALSE;
+    DwmSetWindowAttribute(g_hwnd, 20, &dark, sizeof(dark));
 
-    // Session panel
-    static PanelStyle stCard = { C_CARD, C_BORDER, 10 };
-    hPanelSession = CreateWindowExW(0, L"HkuPanel", NULL, WS_CHILD | WS_VISIBLE,
-                                    0, 0, 10, 10, hMain, (HMENU)IDC_PANEL_SESSION, hInst, NULL);
-    SetWindowLongPtrW(hPanelSession, GWLP_USERDATA, (LONG_PTR)&stCard);
-    MkStatic(hPanelSession, ID_CAP_VPN, 0, L"VPN address");
-    MkStatic(hPanelSession, ID_CAP_DURATION, 0, L"Duration");
-    MkStatic(hPanelSession, ID_CAP_PROXY, 0, L"Local proxy");
-    MkStatic(hPanelSession, ID_CAP_ROUTES, 0, L"Routes");
-    hValVpn     = MkStatic(hPanelSession, ID_VAL_VPN, 0, L"-");
-    hValDuration= MkStatic(hPanelSession, ID_VAL_DURATION, 0, L"-");
-    MkStatic(hPanelSession, ID_VAL_PROXY, 0,
-             L"socks5://127.0.0.1:1080   http://127.0.0.1:1088");
-    hValRoutes  = MkStatic(hPanelSession, ID_VAL_ROUTES, 0, L"-");
+    Rml::SetSystemInterface(Backend::GetSystemInterface());
+    Rml::SetRenderInterface(Backend::GetRenderInterface());
+    static LogInterface logIf;
+    logIf.base = Backend::GetSystemInterface();
+    Rml::SetSystemInterface(&logIf);
+    Rml::Initialise();
 
-    // Connection panel (login-form style: account + PIN + both buttons)
-    static PanelStyle stConn = { C_CARD, C_BORDER, 10 };
-    hPanelConn = CreateWindowExW(0, L"HkuPanel", NULL, WS_CHILD | WS_VISIBLE,
-                                 0, 0, 10, 10, hMain, (HMENU)IDC_PANEL_CONN, hInst, NULL);
-    SetWindowLongPtrW(hPanelConn, GWLP_USERDATA, (LONG_PTR)&stConn);
-    MkStatic(hPanelConn, ID_LBL_ACCOUNT, 0, L"HKU account");
-    MkStatic(hPanelConn, ID_LBL_PIN, 0, L"Portal PIN");
-    hEdAccount = CreateWindowExW(0, L"EDIT", L"",
-        WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL,
-        0, 0, 10, 10, hPanelConn, (HMENU)IDC_ED_ACCOUNT, hInst, NULL);
-    SendMessageW(hEdAccount, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN,
-                 MAKELPARAM(6, 6));
-    hEdPin = CreateWindowExW(0, L"EDIT", L"",
-        WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL | ES_PASSWORD,
-        0, 0, 10, 10, hPanelConn, (HMENU)IDC_ED_PIN, hInst, NULL);
-    SendMessageW(hEdPin, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN,
-                 MAKELPARAM(6, 6));
-    SendMessageW(hEdPin, EM_SETPASSWORDCHAR, 0x25CF, 0);   // ●
-    // Prefill from the existing config, if any.
+    g_ctx = Rml::CreateContext("main", Rml::Vector2i(860, 640));
+    if (!g_ctx) return 1;
+
+    // Fonts from the Windows font directory.
+    std::wstring fonts = L"C:\\Windows\\Fonts\\";
+    Rml::LoadFontFace(Utf8(fonts + L"segoeui.ttf").c_str());
+    Rml::LoadFontFace(Utf8(fonts + L"segoeuib.ttf").c_str());
+    Rml::LoadFontFace(Utf8(fonts + L"CascadiaMono.ttf").c_str());
+    Rml::LoadFontFace(Utf8(fonts + L"consola.ttf").c_str());
+
+    g_doc = g_ctx->LoadDocument(Utf8(JoinPath(ExeDir(), L"ui\\app.rml")).c_str());
+    if (!g_doc) {
+        MessageBoxW(g_hwnd, L"Could not load ui\\app.rml - keep the ui folder next to HKUVPN.exe.",
+                    L"HKU VPN", MB_ICONERROR);
+        return 1;
+    }
+    g_doc->Show();
+
+    // Event wiring.
+    for (const char* id : { "btn-connect", "btn-disconnect", "btn-clear", "btn-mfa" })
+        El(id)->AddEventListener("click", &g_events);
+    El("mfa-code")->AddEventListener("keydown", &g_events);
+
+    // Prefill credentials.
+    SetInputValue("account", g_account == L"-" ? L"" : g_account);
     {
-        std::wstring envPath = JoinPath(JoinPath(HomeDir(), L".vpn"), L"hku.env");
-        for (auto& l : ReadLinesW(envPath)) {
-            if (l.rfind(L"HKU_USER=", 0) == 0) {
-                SetWindowTextW(hEdAccount, l.substr(9).c_str());
-                break;
-            }
-        }
         std::wstring pin;
         if (ReadAllTextW(JoinPath(JoinPath(HomeDir(), L".vpn"), L"hku.pass"), pin)) {
             while (!pin.empty() && (pin.back() == L'\r' || pin.back() == L'\n' ||
                                     pin.back() == L' ')) pin.pop_back();
-            SetWindowTextW(hEdPin, pin.c_str());
+            SetInputValue("pin", pin);
         }
     }
 
-    // MFA popup class (light background)
-    WNDCLASSW mwc = {};
-    mwc.lpfnWndProc = MfaDlgProc;
-    mwc.hInstance = hInst;
-    mwc.hCursor = LoadCursor(NULL, IDC_ARROW);
-    mwc.hIcon = gIcoApp;
-    mwc.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
-    mwc.lpszClassName = L"HkuMfaDlg";
-    RegisterClassW(&mwc);
-
-    // Buttons (children of the Connection card)
-    hBtnConnect = CreateWindowExW(0, L"BUTTON", L"Connect",
-        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
-        0, 0, 10, 10, hPanelConn, (HMENU)ID_BTN_CONNECT, hInst, NULL);
-    hBtnDisconnect = CreateWindowExW(0, L"BUTTON", L"Disconnect",
-        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_DISABLED,
-        0, 0, 10, 10, hPanelConn, (HMENU)ID_BTN_DISCONNECT, hInst, NULL);
-    SetWindowSubclass(hBtnConnect, BtnSubProc, 1, 0);
-    SetWindowSubclass(hBtnDisconnect, BtnSubProc, 2, 0);
-    SetWindowSubclass(hBtnClear, BtnSubProc, 4, 0);
-
-    // Log panel
-    static PanelStyle stLog = { C_CARD, C_BORDER, 10 };
-    hPanelLog = CreateWindowExW(0, L"HkuPanel", NULL, WS_CHILD | WS_VISIBLE,
-                                0, 0, 10, 10, hMain, NULL, hInst, NULL);
-    SetWindowLongPtrW(hPanelLog, GWLP_USERDATA, (LONG_PTR)&stLog);
-    MkStatic(hPanelLog, 0, 0, L"OpenConnect log  \u00B7  live");
-    hBtnClear = CreateWindowExW(0, L"BUTTON", L"Clear",
-        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
-        0, 0, 10, 10, hPanelLog, (HMENU)ID_BTN_CLEAR, hInst, NULL);
-    hEdLog = CreateWindowExW(0, L"EDIT", L"",
-        WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL | ES_MULTILINE |
-        ES_READONLY | ES_AUTOVSCROLL | ES_AUTOHSCROLL,
-        0, 0, 10, 10, hPanelLog, (HMENU)IDC_ED_LOG, hInst, NULL);
-
-    LayoutAll();
-
-    // Tray
+    // Tray icon.
     g_nid.cbSize = sizeof(g_nid);
-    g_nid.hWnd = hMain;
+    g_nid.hWnd = g_hwnd;
     g_nid.uID = 1;
     g_nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
-    g_nid.uCallbackMessage = WM_APP_TRAY;
+    g_nid.uCallbackMessage = WM_APP + 1;
     g_nid.hIcon = gIcoGray;
     lstrcpynW(g_nid.szTip, L"HKU VPN: disconnected", 128);
     Shell_NotifyIconW(NIM_ADD, &g_nid);
 
-    // Timers + boot state
-    SetTimer(hMain, 1, 400, NULL);
-    SetTimer(hMain, 2, 600, NULL);
-    if (WorkerAlive()) { g_seen = 0; }
+    // Boot state: adopt a running session.
+    if (WorkerAlive()) g_seen = 0;
     SetState(WorkerAlive() ? APP_CONNECTED : APP_IDLE);
-    // If the session is still mid-MFA (e.g. the app was reopened while the
-    // worker waits), surface the popup immediately.
-    if (g_state == APP_CONNECTING || WorkerAlive()) {
+    {
         std::wstring all;
-        if (ReadAllTextW(P.markers, all)) {
+        if ((g_state == APP_CONNECTING || WorkerAlive()) && ReadAllTextW(P.markers, all)) {
             size_t need = all.rfind(L"HKUVPN_MFA_RESPONSE_REQUIRED");
             size_t conn = all.rfind(L"HKUVPN_CONNECTED");
-            if (need != std::wstring::npos &&
-                (conn == std::wstring::npos || need > conn)) {
-                OpenMfaDlg(false);
-            }
+            if (need != std::wstring::npos && (conn == std::wstring::npos || need > conn))
+                OpenMfa(false);
         }
     }
 
-    ShowWindow(hMain, nCmd);
-    UpdateWindow(hMain);
+    ULONGLONG lastTick = 0, lastLog = 0;
+    bool running = true;
+    while (running) {
+        running = Backend::ProcessEvents(g_ctx);
 
-    MSG msg;
-    while (GetMessageW(&msg, NULL, 0, 0) > 0) {
-        if (g_hMfaDlg && IsDialogMessageW(g_hMfaDlg, &msg)) {
-            // handled by the MFA popup (Enter = Submit, Esc = Cancel)
-        } else if (!IsDialogMessageW(hMain, &msg)) {
-            TranslateMessage(&msg);
-            DispatchMessageW(&msg);
+        // Pump tray messages (the backend only forwards its own handlers).
+        MSG msg;
+        while (PeekMessage(&msg, NULL, WM_APP, WM_APP + 10, PM_REMOVE)) {
+            TrayProc(msg);
         }
+        if (msg.message == WM_QUIT) running = false;
+
+        ULONGLONG now = GetTickCount64();
+        if (now - lastTick >= 400) { lastTick = now; Tick(); }
+        if (now - lastLog >= 600) { lastLog = now; TailLog(); }
+
+        g_ctx->Update();
+        Backend::BeginFrame();
+        g_ctx->Render();
+        Backend::PresentFrame();
+        Sleep(8);
     }
-    return (int)msg.wParam;
+
+    Shell_NotifyIconW(NIM_DELETE, &g_nid);
+    g_doc->Close();
+    Rml::Shutdown();
+    Backend::Shutdown();
+    return 0;
 }

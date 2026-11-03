@@ -1,0 +1,85 @@
+<rml>
+<head>
+    <title>HKU VPN</title>
+    <link type="text/rcss" href="app.rcss"/>
+</head>
+<body>
+    <div id="stripe"></div>
+
+    <!-- Status header -->
+    <div id="header">
+        <div id="header-left">
+            <div id="status-line">
+                <span id="status-dot"></span>
+                <span id="status-title">Disconnected</span>
+            </div>
+            <div id="status-sub">Tunnel is down</div>
+        </div>
+        <div id="header-right">
+            <div id="server-name">HKU Portal VPN</div>
+            <div id="server-host">vpn2fa.hku.hk</div>
+        </div>
+    </div>
+
+    <!-- Connection card -->
+    <div class="card" id="conn-card">
+        <div id="conn-fields">
+            <div class="field">
+                <label for="account">HKU account</label>
+                <input id="account" type="text" placeholder="u1234567@connect.hku.hk"/>
+            </div>
+            <div class="field">
+                <label for="pin">Portal PIN</label>
+                <input id="pin" type="password" placeholder="Portal password"/>
+            </div>
+        </div>
+        <div id="conn-actions">
+            <button id="btn-connect" class="btn primary">Connect</button>
+            <button id="btn-disconnect" class="btn danger">Disconnect</button>
+        </div>
+    </div>
+
+    <!-- Session card -->
+    <div class="card" id="session-card">
+        <div class="stat">
+            <div class="stat-cap">VPN address</div>
+            <div class="stat-val" id="val-vpn">-</div>
+        </div>
+        <div class="stat">
+            <div class="stat-cap">Duration</div>
+            <div class="stat-val" id="val-duration">-</div>
+        </div>
+        <div class="stat">
+            <div class="stat-cap">Local proxy</div>
+            <div class="stat-val">socks5://127.0.0.1:1080 · http://127.0.0.1:1088</div>
+        </div>
+        <div class="stat">
+            <div class="stat-cap">Routes</div>
+            <div class="stat-val" id="val-routes">-</div>
+        </div>
+    </div>
+
+    <!-- Log card -->
+    <div class="card" id="log-card">
+        <div id="log-head">
+            <span id="log-title">OpenConnect log · live</span>
+            <button id="btn-clear" class="btn neutral">Clear</button>
+        </div>
+        <div id="log-view"><div id="log-content"></div></div>
+    </div>
+
+    <!-- MFA overlay -->
+    <div id="mfa-overlay">
+        <div id="mfa-dialog">
+            <div id="mfa-title">Microsoft Authenticator</div>
+            <div id="mfa-text">Enter the 6-digit code from your authenticator app:</div>
+            <div id="mfa-note"></div>
+            <div id="mfa-row">
+                <input id="mfa-code" type="text" maxlength="6"/>
+                <button id="btn-mfa" class="btn primary">Submit</button>
+            </div>
+            <div id="mfa-hint">Enter to submit · Esc to cancel the connection</div>
+        </div>
+    </div>
+</body>
+</rml>

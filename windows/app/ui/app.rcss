@@ -1,0 +1,373 @@
+/* HKU VPN - RmlUi stylesheet. dp units scale with the display DPI. */
+
+body
+{
+    background: #f5f6f8;
+    font-family: "Segoe UI";
+    font-size: 13dp;
+    color: #1c2024;
+    font-effect: none;
+}
+
+#stripe
+{
+    position: absolute;
+    left: 0dp; top: 0dp;
+    width: 860dp; height: 3dp;
+    background: #0a6cff;
+}
+
+/* ------------------------------------------------------------ header */
+
+#header
+{
+    position: absolute;
+    left: 24dp; top: 18dp;
+    width: 812dp; height: 54dp;
+}
+#header-left
+{
+    position: absolute;
+    left: 0dp; top: 0dp;
+    width: 560dp; height: 54dp;
+}
+#status-line
+{
+    height: 28dp;
+}
+#status-dot
+{
+    display: inline-block;
+    width: 10dp; height: 10dp;
+    margin-top: 8dp;
+    margin-right: 10dp;
+    border-radius: 5dp;
+    background: #95999e;
+}
+#status-title
+{
+    font-size: 22dp;
+    font-weight: bold;
+    color: #1c2024;
+}
+#status-line
+{
+    white-space: nowrap;
+}
+#status-sub
+{
+    display: block;
+    margin-top: 3dp;
+    margin-left: 20dp;
+    font-size: 12dp;
+    color: #697078;
+}
+#header-right
+{
+    position: absolute;
+    left: 612dp; top: 4dp;
+    width: 200dp; height: 40dp;
+    text-align: right;
+}
+#server-name
+{
+    display: block;
+    font-size: 12dp;
+    font-weight: bold;
+    color: #373e46;
+}
+#server-host
+{
+    display: block;
+    margin-top: 3dp;
+    font-size: 11dp;
+    color: #697078;
+}
+
+/* ------------------------------------------------------------- cards */
+
+.card
+{
+    background: #ffffff;
+    border: 1dp #e3e5ea;
+    border-radius: 8dp;
+}
+
+#conn-card
+{
+    position: absolute;
+    left: 24dp; top: 84dp;
+    width: 812dp; height: 150dp;
+}
+#conn-fields
+{
+    position: absolute;
+    left: 16dp; top: 12dp;
+    width: 620dp;
+}
+.field
+{
+    margin-bottom: 10dp;
+}
+.field label
+{
+    display: block;
+    font-size: 11dp;
+    color: #697078;
+    margin-bottom: 4dp;
+}
+.field input
+{
+    display: block;
+    box-sizing: border-box;
+    width: 620dp;
+    height: 30dp;
+    padding: 0dp 10dp;
+    background: #ffffff;
+    border: 1dp #d1d5da;
+    border-radius: 4dp;
+    font-size: 13dp;
+    color: #1c2024;
+    transition: border-color 0.12s;
+}
+.field input:focus
+{
+    border: 1dp #0a6cff;
+}
+.field input:hover
+{
+    border: 1dp #9aa1a9;
+}
+#conn-actions
+{
+    position: absolute;
+    left: 652dp; top: 24dp;
+    width: 144dp;
+}
+#conn-actions .btn
+{
+    display: block;
+    width: 144dp;
+    height: 32dp;
+    margin-bottom: 14dp;
+}
+
+/* ----------------------------------------------------------- buttons */
+
+.btn
+{
+    box-sizing: border-box;
+    border-radius: 5dp;
+    font-size: 12dp;
+    font-weight: bold;
+    text-align: center;
+    padding: 6dp 12dp;
+    cursor: pointer;
+    transition: background-color 0.12s, border-color 0.12s;
+}
+.btn.primary
+{
+    background: #0a6cff;
+    border: 1dp #0a6cff;
+    color: #ffffff;
+}
+.btn.primary:hover
+{
+    background: #2680ff;
+    border: 1dp #2680ff;
+}
+.btn.primary:active
+{
+    background: #0058d6;
+    border: 1dp #0058d6;
+}
+.btn.danger
+{
+    background: #ffffff;
+    border: 1dp #c42b2b;
+    color: #c42b2b;
+}
+.btn.danger:hover
+{
+    background: #fdf0f0;
+}
+.btn.danger:active
+{
+    background: #fbe3e3;
+}
+.btn.neutral
+{
+    background: #ffffff;
+    border: 1dp #d1d5da;
+    color: #373e46;
+    font-weight: normal;
+    font-size: 11dp;
+}
+.btn.neutral:hover
+{
+    background: #f3f5f7;
+}
+.btn.disabled
+{
+    background: #f7f8f9;
+    border: 1dp #d2d6db;
+    color: #a8acb2;
+    cursor: default;
+}
+
+/* ------------------------------------------------------------ session */
+
+#session-card
+{
+    position: absolute;
+    left: 24dp; top: 248dp;
+    width: 812dp; height: 92dp;
+}
+.stat
+{
+    float: left;
+    width: 386dp;
+    margin-left: 16dp;
+    margin-top: 12dp;
+}
+.stat-cap
+{
+    display: block;
+    font-size: 11dp;
+    color: #697078;
+}
+.stat-val
+{
+    display: block;
+    margin-top: 3dp;
+    font-size: 13dp;
+    color: #1c2024;
+}
+
+/* ---------------------------------------------------------------- log */
+
+#log-card
+{
+    position: absolute;
+    left: 24dp; top: 354dp;
+    width: 812dp; height: 254dp;
+}
+#log-head
+{
+    height: 40dp;
+}
+#log-title
+{
+    position: absolute;
+    left: 16dp; top: 12dp;
+    font-size: 12dp;
+    font-weight: bold;
+    color: #373e46;
+}
+#btn-clear
+{
+    position: absolute;
+    left: 724dp; top: 7dp;
+    width: 64dp;
+    height: 26dp;
+    padding: 3dp 8dp;
+}
+#log-view
+{
+    position: absolute;
+    left: 12dp; top: 40dp;
+    width: 786dp; height: 200dp;
+    background: #fbfcfd;
+    border: 1dp #eceef1;
+    border-radius: 4dp;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+#log-content
+{
+    padding: 6dp 8dp;
+    font-family: Consolas;
+    font-size: 11dp;
+    color: #24292f;
+    white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- mfa */
+
+#mfa-overlay
+{
+    display: none;
+    position: absolute;
+    left: 0dp; top: 0dp;
+    width: 860dp; height: 640dp;
+    background: #00000044;
+    z-index: 100;
+}
+#mfa-overlay.visible
+{
+    display: block;
+}
+#mfa-dialog
+{
+    position: absolute;
+    left: 240dp; top: 200dp;
+    width: 380dp;
+    height: 220dp;
+    background: #ffffff;
+    border: 1dp #e3e5ea;
+    border-radius: 10dp;
+    padding: 20dp;
+    box-sizing: border-box;
+}
+#mfa-title
+{
+    font-size: 16dp;
+    font-weight: bold;
+    color: #1c2024;
+}
+#mfa-text
+{
+    margin-top: 8dp;
+    font-size: 12dp;
+    color: #697078;
+}
+#mfa-note
+{
+    margin-top: 6dp;
+    font-size: 11dp;
+    color: #c42b2b;
+}
+#mfa-row
+{
+    margin-top: 12dp;
+}
+#mfa-code
+{
+    display: inline-block;
+    box-sizing: border-box;
+    width: 210dp;
+    height: 36dp;
+    padding: 0dp 12dp;
+    border: 1dp #d1d5da;
+    border-radius: 4dp;
+    font-family: Consolas;
+    font-size: 18dp;
+    text-align: center;
+}
+#mfa-code:focus
+{
+    border: 1dp #0a6cff;
+}
+#btn-mfa
+{
+    display: inline-block;
+    margin-left: 12dp;
+    width: 100dp;
+    height: 36dp;
+}
+#mfa-hint
+{
+    margin-top: 14dp;
+    font-size: 11dp;
+    color: #95999e;
+}
