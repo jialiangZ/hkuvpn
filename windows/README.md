@@ -137,13 +137,16 @@ hkuvpn --stop       # stop (live worker cleans up itself, no UAC; force-stopping
 
 Three long-session modes, by scenario (plus a tray app):
 
-- **Desktop app** (native Win32, `windows\app`): `HKUVPN.exe` (~800KB, zero
-  runtime dependencies, cross-built with MinGW - see `windows\app\build.sh`).
-  Status header, session info (account / VPN IP / duration / proxies /
-  learned routes + heartbeat), inline MFA entry while connecting, live log
-  view, and close-to-tray. Disconnect is UAC-free and exiting the app never
-  kills a session. A pure-PowerShell fallback exists as `bin\hkuvpn-app.ps1`
-  (no build required).
+- **Desktop app** (MyGo native UI, `windows\mygo-app`): `HKUVPN.exe` with a
+  compact window built from MyGo's official widgets - a status card (state,
+  tunnel address, duration, proxy, routes), labeled HKU account and portal
+  PIN fields (saved automatically when edited), one primary Connect /
+  Cancel / Disconnect button, a View log sheet and an MFA dialog, plus
+  close-to-tray. Built with Go alone (`GOOS=windows go build`, no cgo, no
+  webview) - see `windows\mygo-app\build.sh`. The tray icon is a 4-state
+  shield (grey / green / amber / red) rendered from
+  `windows\app\assets\tray-icon.svg`. Disconnect is UAC-free and exiting
+  the app never kills a session.
 - **Smart mode** (default): the session stays attached to its console;
   closing the window (or Ctrl+C) disconnects, like `hkuvpn -f` in the
   Docker edition. The natural fit for the desktop shortcut.
