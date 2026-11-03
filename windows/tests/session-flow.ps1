@@ -37,6 +37,9 @@
     Leave out the check that needs a live session (the one that asks for
     an MFA code).
 
+.PARAMETER LiveOnly
+    Only run the check that needs a live session.
+
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File windows\tests\session-flow.ps1
 #>
@@ -46,6 +49,7 @@ param(
     [switch]$WorkerOnly,
     [switch]$AppOnly,
     [switch]$SkipLive,
+    [switch]$LiveOnly,
     [string]$MfaCode = ''
 )
 
@@ -360,7 +364,7 @@ if (Test-WorkerAlive) {
 
 # --- 1. the worker: a stop while it waits for the code ----------------------
 
-if (-not $AppOnly) {
+if (-not $AppOnly -and -not $LiveOnly) {
     Write-Step 'Worker: a stop while it waits for the MFA code'
     Clear-SessionFiles
     $wedgeBefore = Get-WedgeStamp
@@ -385,7 +389,7 @@ if (-not $AppOnly) {
 
 # --- 2. the app: closing the MFA dialog, then a cancel ----------------------
 
-if (-not $WorkerOnly) {
+if (-not $WorkerOnly -and -not $LiveOnly) {
     Write-Step 'App: closing the MFA dialog, then cancelling'
     Clear-SessionFiles
     Stop-App
