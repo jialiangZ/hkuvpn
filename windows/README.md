@@ -149,7 +149,7 @@ Three long-session modes, by scenario (plus a tray app):
   close-to-tray. Built with Go alone (`GOOS=windows go build`, no cgo, no
   webview) - see `windows\mygo-app\build.sh`. The tray icon is a 4-state
   shield (grey / green / amber / red) rendered from
-  `windows\app\assets\tray-icon.svg`. Disconnect is UAC-free and exiting
+  `windows\mygo-app\assets\tray-icon.svg`. Disconnect is UAC-free and exiting
   the app never kills a session.
 - **Smart mode** (default): the session stays attached to its console;
   closing the window (or Ctrl+C) disconnects, like `hkuvpn -f` in the
