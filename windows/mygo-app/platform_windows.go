@@ -10,18 +10,21 @@ import (
 var (
 	kernel32 = syscall.NewLazyDLL("kernel32.dll")
 	shell32  = syscall.NewLazyDLL("shell32.dll")
+	user32   = syscall.NewLazyDLL("user32.dll")
 
 	procOpenProcess         = kernel32.NewProc("OpenProcess")
 	procGetExitCodeProcess  = kernel32.NewProc("GetExitCodeProcess")
 	procCloseHandle         = kernel32.NewProc("CloseHandle")
 	procMultiByteToWideChar = kernel32.NewProc("MultiByteToWideChar")
 	procShellExecuteW       = shell32.NewProc("ShellExecuteW")
+	procMessageBoxW         = user32.NewProc("MessageBoxW")
 )
 
 const (
 	processQueryLimitedInformation = 0x1000
 	stillActive                    = 259
 	swHide                         = 0
+	mbOKIconError                  = 0x00000010
 )
 
 func processAlive(pid int) bool {
@@ -87,4 +90,15 @@ func acpDecode(b []byte) string {
 		uintptr(unsafe.Pointer(&buf[0])), n,
 	)
 	return syscall.UTF16ToString(buf)
+}
+
+// showMessageBox puts a modal message on screen: the app has no console
+// window of its own to print to.
+func showMessageBox(title, msg string) {
+	titlePtr, _ := syscall.UTF16PtrFromString(title)
+	msgPtr, _ := syscall.UTF16PtrFromString(msg)
+	procMessageBoxW.Call(0,
+		uintptr(unsafe.Pointer(msgPtr)),
+		uintptr(unsafe.Pointer(titlePtr)),
+		mbOKIconError)
 }

@@ -13,6 +13,19 @@ vpnc-state.txt, response.txt, stop.flag).
 
 Go 1.27+ only; no C toolchain, no frontend build.
 
+The build passes `-H=windowsgui` (and `mygo.production=1`): the exe is a
+GUI app, so Windows does not attach a console to it and no terminal
+window opens next to the app. `go tool mygo build` adds the same flag on
+its own. `go tool mygo dev` is the exception - a dev build keeps the
+console for the inspector output.
+
+## Logs
+
+The app has no console, so its own diagnostics go to
+`%TEMP%\hkuvpn\app.log` (startup errors also pop a message box). The
+VPN session log is a separate file, `%TEMP%\hkuvpn\openconnect.log`,
+shown in the View log sheet.
+
 ## Develop
 
     go tool mygo dev    # live reload

@@ -11,5 +11,10 @@ if ! command -v go >/dev/null 2>&1; then
 fi
 
 mkdir -p publish
-GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o publish/HKUVPN.exe .
+# -H=windowsgui makes the exe a GUI app: without it Windows attaches a
+# console to it and a terminal window pops up next to the app.
+# production=1 disables the dev inspector, like "mygo build" does.
+GOOS=windows GOARCH=amd64 go build -trimpath \
+  -ldflags "-s -w -H=windowsgui -X github.com/egoist/mygo.production=1" \
+  -o publish/HKUVPN.exe .
 ls -la publish/HKUVPN.exe

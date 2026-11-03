@@ -11,3 +11,5 @@ func shellExecuteRunAs(exe, params string) (int, error) { return 0, nil }
 func shellExecuteHidden(exe, params string) {}
 
 func acpDecode(b []byte) string { return string(b) }
+
+func showMessageBox(title, msg string) {}

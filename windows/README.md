@@ -147,7 +147,9 @@ Three long-session modes, by scenario (plus a tray app):
   Cancel / Disconnect button, a View log sheet (per-session log with
   DBG/INF/WRN/ERR tags, a level filter, and Copy) and an MFA dialog, plus
   close-to-tray. Built with Go alone (`GOOS=windows go build`, no cgo, no
-  webview) - see `windows\mygo-app\build.sh`. The tray icon is a 4-state
+  webview) - see `windows\mygo-app\build.sh`. The exe is built as a GUI
+  app (`-H=windowsgui`), so it never opens a terminal window; its own
+  diagnostics go to `%TEMP%\hkuvpn\app.log`. The tray icon is a 4-state
   shield (grey / green / amber / red) rendered from
   `windows\mygo-app\assets\tray-icon.svg`. Disconnect is UAC-free and exiting
   the app never kills a session.

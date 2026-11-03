@@ -5,7 +5,6 @@ import (
 	"embed"
 	"image"
 	"image/png"
-	"log"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -51,7 +50,7 @@ func main() {
 
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { quitting = true })
 	if err := mygo.App.Run(); err != nil {
-		log.Fatal(err)
+		fatal("HKU VPN", "The app could not start: "+err.Error())
 	}
 }
 
@@ -70,7 +69,7 @@ func setupTray(a *app) {
 	})
 	icon, err := assets.ReadFile(a.trayIconName())
 	if err != nil {
-		log.Println("tray icon:", err)
+		logf("tray icon: %v", err)
 		return
 	}
 	t, err := mygo.NewTray(mygo.TrayOptions{
@@ -80,7 +79,7 @@ func setupTray(a *app) {
 		Menu:    menu,
 	})
 	if err != nil {
-		log.Println("tray:", err)
+		logf("tray: %v", err)
 		return
 	}
 	tray = t
