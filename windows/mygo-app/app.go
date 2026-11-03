@@ -397,9 +397,9 @@ func (a *app) writeStatus(alive, fresh bool) {
 	case connected:
 		state = "connected"
 	}
-	status := fmt.Sprintf("updated=%s\nstate=%s\nworker=%t\nheartbeat=%t\ncancelling=%t\ndisconnecting=%t\nmfa=%t\naddress=%s\n",
+	status := fmt.Sprintf("updated=%s\nstate=%s\nworker=%t\nheartbeat=%t\ncancelling=%t\ndisconnecting=%t\nmfa=%t\nmfaOpen=%t\naddress=%s\n",
 		time.Now().Format(time.RFC3339), state, alive, fresh,
-		a.cancelling, a.disconnecting, a.mfaPending, stateValue("IP4"))
+		a.cancelling, a.disconnecting, a.mfaPending, a.mfaOpen, stateValue("IP4"))
 	if status == a.statusLog {
 		return
 	}

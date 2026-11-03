@@ -116,9 +116,17 @@ function Write-Summary {
 
 # ------------------------------------------------------------- the protocol
 
+# The worker deletes markers.log when it cleans up, so the lines it wrote
+# are kept here once they have been seen.
+$script:SeenMarkers = @()
+
 function Get-MarkerLines {
-    if (-not (Test-Path $Markers)) { return @() }
-    return @(Get-Content $Markers -ErrorAction SilentlyContinue)
+    if (Test-Path $Markers) {
+        foreach ($l in @(Get-Content $Markers -ErrorAction SilentlyContinue)) {
+            if ($script:SeenMarkers -notcontains $l) { $script:SeenMarkers += $l }
+        }
+    }
+    return $script:SeenMarkers
 }
 
 function Wait-ForMarker([string]$Pattern, [int]$Seconds) {
@@ -255,40 +263,14 @@ function Wait-NoConsent([int]$Seconds = 240) {
     return $false
 }
 
-# The stops of Tab in the main window: the account field, the PIN field,
-# the primary button, then the buttons below it. Where the focus starts
-# depends on what had it before (a dialog that closes gives it back to
-# the window, a button keeps it), so the caller says what it expects and
-# the helper tries the plausible places and checks the app's status.
-function Press-AppButton([string]$Status, [string]$Value, [int[]]$TabCounts) {
-    foreach ($tabs in $TabCounts) {
-        if (-not (Focus-App)) { return $false }
-        Send-Keys ('{TAB}' * $tabs)
-        Send-Keys '{ENTER}'
-        Start-Sleep -Milliseconds 800
-        $h = Get-AppStatus
-        if ([string]$h[$Status] -eq $Value) { return $true }
-        # The wrong button was pressed: close whatever it opened.
-        Send-Keys '{ESC}'
-        Start-Sleep -Milliseconds 300
-    }
-    return $false
-}
-
-# The primary button (Connect, Cancel, Disconnect, Enter the code).
-function Press-AppPrimary {
-    return (Press-AppButton 'state' 'connecting' @(3, 4, 2, 1, 5, 6, 7))
-}
-
-# The cancel button next to the primary one while the app waits for the
-# code.
-function Press-AppCancel {
-    return (Press-AppButton 'cancelling' 'true' @(1, 4, 2, 3, 5, 6, 7))
-}
-
-# The disconnect button, which is the primary one in a live session.
-function Press-AppDisconnect {
-    return (Press-AppButton 'disconnecting' 'true' @(3, 4, 2, 1, 5, 6, 7))
+# The app answers Ctrl+Enter with its main action: connect, cancel,
+# disconnect. That is the same key a person would press, and it does not
+# depend on where the focus happens to be.
+function Press-AppMain {
+    if (-not (Focus-App)) { return $false }
+    Send-Keys '^({ENTER})'
+    Start-Sleep -Milliseconds 800
+    return $true
 }
 
 function Stop-App {
@@ -414,26 +396,40 @@ if (-not $WorkerOnly) {
         $wedgeBefore = Get-WedgeStamp
 
         Write-Note 'Approve the UAC prompt - the app starts the worker.'
-        Press-AppPrimary | Out-Null
+        Press-AppMain | Out-Null
         Wait-NoConsent | Out-Null
         $got = Wait-ForMarker 'HKUVPN_MFA_RESPONSE_REQUIRED' 120
         Check $got 'the app gets the MFA request' (Get-MarkerLines | Select-Object -Last 1)
         Check (Wait-AppStatus @{ state = 'connecting' } 20) 'the app is connecting'
         Check (Wait-AppStatus @{ mfa = 'true' } 20) 'the app knows a code is needed'
 
-        # Closing the dialog must not kill the session.
-        Focus-App | Out-Null
-        Send-Keys '{ESC}'
-        Start-Sleep -Seconds 2
+        # Closing the dialog must not kill the session. The first Escape
+        # closes it; the app's status file says whether it did.
+        $closed = $false
+        for ($i = 0; $i -lt 4 -and -not $closed; $i++) {
+            Focus-App | Out-Null
+            Send-Keys '{ESC}'
+            Start-Sleep -Milliseconds 800
+            $closed = ((Get-AppStatus)['mfaOpen'] -ne 'true')
+        }
+        Check $closed 'the MFA dialog closes on Escape'
         $h = Get-AppStatus
         Check ($h['state'] -eq 'connecting') 'closing the dialog keeps the session' ("state=" + $h['state'])
         Check (Test-WorkerAlive) 'the worker is still waiting for the code'
 
-        # Cancel.
-        Press-AppCancel | Out-Null
+        # Cancel: another Escape gives up the attempt. The app may be
+        # done with it before the next look, so the check is the outcome:
+        # the app is idle and the worker is gone.
+        Focus-App | Out-Null
+        Send-Keys '{ESC}'
         Wait-NoConsent | Out-Null
-        $cancelling = Wait-AppStatus @{ cancelling = 'true' } 10
-        Check $cancelling 'the app starts cancelling' 'the cancel button was not reached - the tab order may have changed'
+        $end = (Get-Date).AddSeconds(60)
+        while ((Get-Date) -lt $end) {
+            $h = Get-AppStatus
+            if ($h['state'] -eq 'idle' -and -not (Test-WorkerAlive)) { break }
+            Start-Sleep -Milliseconds 500
+        }
+        Check (-not (Test-WorkerAlive)) 'the worker is gone after the cancel'
 
         $end = (Get-Date).AddSeconds(60)
         while ((Get-Date) -lt $end) {
@@ -461,18 +457,24 @@ if (-not $WorkerOnly -and -not $SkipLive) {
     } else {
         $wedgeBefore = Get-WedgeStamp
         Write-Note 'Approve the UAC prompt - the app starts the worker.'
-        Press-AppPrimary | Out-Null
+        Press-AppMain | Out-Null
         Wait-NoConsent | Out-Null
         $got = Wait-ForMarker 'HKUVPN_MFA_RESPONSE_REQUIRED' 120
         Check $got 'the app gets the MFA request' (Get-MarkerLines | Select-Object -Last 1)
 
         if (-not $MfaCode) {
-            # The clipboard first: the user can copy the code there, and
-            # Read-Host needs a console the user can type in.
-            try {
-                $clip = (Get-Clipboard -Raw -ErrorAction Stop).Trim()
-                if ($clip -match '^\d{6}$') { $MfaCode = $clip }
-            } catch {}
+            # The clipboard first: the user copies the code there while
+            # the MFA dialog waits for it (the code is only good for
+            # about 30 seconds, so it cannot be asked for earlier).
+            Write-Note 'Copy the code from your Authenticator to the clipboard.'
+            $end = (Get-Date).AddSeconds(90)
+            while ((Get-Date) -lt $end -and -not $MfaCode) {
+                try {
+                    $clip = (Get-Clipboard -Raw -ErrorAction Stop).Trim()
+                    if ($clip -match '^\d{6}$') { $MfaCode = $clip }
+                } catch {}
+                if (-not $MfaCode) { Start-Sleep -Seconds 2 }
+            }
         }
         if (-not $MfaCode) {
             Write-Note 'Type the code from your Authenticator now (it is valid for about 30 seconds).'
@@ -492,7 +494,7 @@ if (-not $WorkerOnly -and -not $SkipLive) {
             Check ($h['address'] -match '^\d+\.\d+\.\d+\.\d+$') 'the app shows the VPN address' ("address=" + $h['address'])
 
             # The disconnect button is the primary one now.
-            Press-AppDisconnect | Out-Null
+            Press-AppMain | Out-Null
             $end = (Get-Date).AddSeconds(60)
             while ((Get-Date) -lt $end) {
                 $h = Get-AppStatus

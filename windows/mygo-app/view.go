@@ -25,6 +25,24 @@ func (a *app) theme(c *ui.Context) *ui.Theme {
 func (a *app) view(c *ui.Context) {
 	t := a.theme(c)
 
+	// Escape gives up an attempt that is being built. In the MFA dialog
+	// it closes the dialog instead (the dialog takes the key first), so
+	// the session only ends when the user asks twice.
+	if a.state == connecting && !a.mfaOpen && c.Shortcut(0, ui.KeyEscape) {
+		a.cancel()
+	}
+	// Ctrl+Enter is the main action: connect, cancel, disconnect.
+	if c.Shortcut(ui.Ctrl, ui.KeyEnter) {
+		switch {
+		case a.state == connecting:
+			a.cancel()
+		case a.state == connected:
+			a.disconnect()
+		default:
+			a.connect()
+		}
+	}
+
 	// A message the app queued is shown once, over the window.
 	if a.pendingToast != "" {
 		text := a.pendingToast
@@ -110,6 +128,7 @@ func detailRow(c *ui.Context, t *ui.Theme, label, value string) {
 }
 
 func (a *app) primaryAction(c *ui.Context, t *ui.Theme) {
+	// The tooltip names the shortcut, so the key is discoverable.
 	switch a.state {
 	case connecting:
 		if a.mfaPending {
@@ -124,14 +143,17 @@ func (a *app) primaryAction(c *ui.Context, t *ui.Theme) {
 		}
 		ui.Button(c, "Cancel").FillWidth().Height(38).
 			Background(t.Warning).TextColor(ui.Hex("#FFFFFF")).
+			Tooltip("Give up this attempt (Ctrl+Enter)").
 			OnClick(a.cancel)
 	case connected:
 		ui.Button(c, "Disconnect").FillWidth().Height(38).
 			TextColor(t.Danger).Border(1, t.Danger).
 			Disabled(a.disconnecting).
+			Tooltip("Disconnect (Ctrl+Enter)").
 			OnClick(a.disconnect)
 	default:
 		ui.PrimaryButton(c, "Connect").FillWidth().Height(38).
+			Tooltip("Connect (Ctrl+Enter)").
 			OnClick(a.connect)
 	}
 }
