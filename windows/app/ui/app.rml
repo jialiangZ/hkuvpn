@@ -12,9 +12,6 @@
         <div id="app-title">HKU VPN</div>
         <div id="app-sub">HKU Portal VPN &#183; vpn2fa.hku.hk</div>
       </div>
-      <div id="btn-settings" class="icon-btn" title="Account settings">
-        <img src="assets/settings.tga"/>
-      </div>
     </div>
 
     <div id="status-card">
@@ -32,33 +29,22 @@
       </div>
     </div>
 
+    <div id="account-card">
+      <div id="account-title">Account</div>
+      <div class="field-label" id="lbl-account">HKU account</div>
+      <input id="account" type="text" placeholder="u1234567@connect.hku.hk"/>
+      <div class="field-label" id="lbl-pin">Portal PIN</div>
+      <input id="pin" type="password" placeholder="Portal password"/>
+    </div>
+
     <div id="btn-connect" class="primary">Connect</div>
 
     <div id="btn-log" class="ghost">
       <img src="assets/log.tga"/>
       <span>View log</span>
     </div>
+    <div id="btn-save-account" class="ghost">Save</div>
     <div id="footer-hint">Closing this window keeps the VPN running in the tray.</div>
-  </div>
-
-  <!-- Account settings -->
-  <div id="settings-overlay" class="overlay">
-    <div id="settings-dialog" class="dialog">
-      <div class="dlg-title">Account</div>
-      <div class="dlg-sub">Credentials for the HKU Portal VPN.</div>
-      <div class="field">
-        <div class="field-label">HKU account</div>
-        <input id="account" type="text" placeholder="u1234567@connect.hku.hk"/>
-      </div>
-      <div class="field">
-        <div class="field-label">Portal PIN</div>
-        <input id="pin" type="password" placeholder="Portal password"/>
-      </div>
-      <div class="dlg-buttons">
-        <div id="btn-settings-save" class="btn primary">Save</div>
-        <div id="btn-settings-close" class="btn">Cancel</div>
-      </div>
-    </div>
   </div>
 
   <!-- Log -->

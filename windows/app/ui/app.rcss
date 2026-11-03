@@ -12,7 +12,7 @@ body {
 
 #app {
     width: 420dp;
-    height: 380dp;
+    height: 468dp;
     background: #f4f5f7;
 }
 
@@ -55,38 +55,14 @@ body {
     color: #6b7280;
 }
 
-.icon-btn {
-    position: absolute;
-    left: 342dp;
-    top: 2dp;
-    width: 30dp;
-    height: 30dp;
-    background: #ffffff;
-    border: 1dp #e2e5ea;
-    border-radius: 8dp;
-}
-
-.icon-btn:hover {
-    background: #eef2f7;
-    border: 1dp #c9d2dc;
-}
-
-.icon-btn img {
-    position: absolute;
-    left: 7dp;
-    top: 7dp;
-    width: 16dp;
-    height: 16dp;
-}
-
 /* ------------------------------------------------------------ status card */
 
 #status-card {
     position: absolute;
     left: 24dp;
-    top: 84dp;
+    top: 76dp;
     width: 372dp;
-    height: 140dp;
+    height: 114dp;
     background: #ffffff;
     border: 1dp #e6e8ec;
     border-radius: 12dp;
@@ -95,7 +71,7 @@ body {
 #status-dot {
     position: absolute;
     left: 18dp;
-    top: 21dp;
+    top: 17dp;
     width: 9dp;
     height: 9dp;
     border-radius: 5dp;
@@ -105,7 +81,7 @@ body {
 #status-text {
     position: absolute;
     left: 34dp;
-    top: 14dp;
+    top: 10dp;
     width: 200dp;
     height: 22dp;
     font-size: 13dp;
@@ -116,7 +92,7 @@ body {
 #status-duration {
     position: absolute;
     left: 240dp;
-    top: 16dp;
+    top: 12dp;
     width: 114dp;
     text-align: right;
     font-family: Consolas;
@@ -127,9 +103,9 @@ body {
 #primary-value {
     position: absolute;
     left: 18dp;
-    top: 40dp;
+    top: 34dp;
     width: 336dp;
-    height: 30dp;
+    height: 28dp;
     font-size: 20dp;
     font-weight: bold;
     color: #0f172a;
@@ -149,7 +125,7 @@ body {
 }
 
 #row-proxy {
-    top: 82dp;
+    top: 68dp;
 }
 
 .detail-label {
@@ -167,7 +143,93 @@ body {
 }
 
 #row-routes {
+    top: 88dp;
+}
+
+/* --------------------------------------------------------- account card */
+
+#account-card {
+    position: absolute;
+    left: 24dp;
+    top: 202dp;
+    width: 372dp;
+    height: 140dp;
+    background: #ffffff;
+    border: 1dp #e6e8ec;
+    border-radius: 12dp;
+}
+
+#account-title {
+    position: absolute;
+    left: 16dp;
+    top: 13dp;
+    font-size: 12dp;
+    font-weight: bold;
+    color: #374151;
+}
+
+#btn-save-account {
+    position: absolute;
+    left: 292dp;
+    top: 410dp;
+    width: 104dp;
+    height: 32dp;
+    box-sizing: border-box;
+    line-height: 30dp;
+    text-align: center;
+    font-size: 12dp;
+    color: #374151;
+    background: #ffffff;
+    border: 1dp #e2e5ea;
+    border-radius: 8dp;
+}
+
+#btn-save-account:hover {
+    background: #eef2f7;
+    border: 1dp #c9d2dc;
+}
+
+.field-label {
+    font-size: 11dp;
+    color: #6b7280;
+}
+
+#lbl-account {
+    position: absolute;
+    left: 16dp;
+    top: 38dp;
+}
+
+#lbl-pin {
+    position: absolute;
+    left: 16dp;
+    top: 88dp;
+}
+
+#account, #pin {
+    position: absolute;
+    left: 16dp;
+    box-sizing: border-box;
+    width: 340dp;
+    height: 30dp;
+    padding: 0dp 9dp;
+    font-size: 13dp;
+    color: #0f172a;
+    background: #ffffff;
+    border: 1dp #d8dce2;
+    border-radius: 7dp;
+}
+
+#account {
+    top: 52dp;
+}
+
+#pin {
     top: 102dp;
+}
+
+#account:focus, #pin:focus {
+    border: 1dp #0b6b45;
 }
 
 /* --------------------------------------------------------------- actions */
@@ -175,7 +237,7 @@ body {
 #btn-connect {
     position: absolute;
     left: 24dp;
-    top: 240dp;
+    top: 354dp;
     width: 372dp;
     height: 44dp;
     box-sizing: border-box;
@@ -225,7 +287,7 @@ body {
 #btn-log {
     position: absolute;
     left: 24dp;
-    top: 298dp;
+    top: 410dp;
     width: 118dp;
     height: 32dp;
     box-sizing: border-box;
@@ -258,7 +320,7 @@ body {
 #footer-hint {
     position: absolute;
     left: 24dp;
-    top: 342dp;
+    top: 448dp;
     width: 372dp;
     font-size: 10dp;
     color: #9aa1a9;
@@ -272,7 +334,7 @@ body {
     left: 0dp;
     top: 0dp;
     width: 420dp;
-    height: 380dp;
+    height: 468dp;
     background: #0f172a33;
     z-index: 100;
 }
@@ -350,43 +412,6 @@ body {
     color: #9aa1a9;
     background: #f4f5f7;
     border: 1dp #e2e5ea;
-}
-
-/* settings */
-#settings-dialog {
-    left: 40dp;
-    top: 66dp;
-    width: 340dp;
-    height: 232dp;
-}
-
-.field {
-    display: block;
-    margin-top: 12dp;
-}
-
-.field-label {
-    display: block;
-    margin-bottom: 4dp;
-    font-size: 11dp;
-    color: #6b7280;
-}
-
-.field input {
-    display: block;
-    box-sizing: border-box;
-    width: 300dp;
-    height: 32dp;
-    padding: 0dp 9dp;
-    font-size: 13dp;
-    color: #0f172a;
-    background: #ffffff;
-    border: 1dp #d8dce2;
-    border-radius: 7dp;
-}
-
-.field input:focus {
-    border: 1dp #0b6b45;
 }
 
 /* log */

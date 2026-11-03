@@ -338,7 +338,7 @@ static void SetOverlay(const char* id, bool visible) {
     if (Rml::Element* o = El(id)) o->SetClass("visible", visible);
     if (!g_doc) return;
     bool any = false;
-    for (const char* overlay : { "settings-overlay", "log-overlay", "mfa-overlay", "about-overlay" })
+    for (const char* overlay : { "log-overlay", "mfa-overlay" })
         if (Rml::Element* o = El(overlay))
             if (o->IsClassSet("visible")) any = true;
     if (Rml::Element* mb = El("menubar"))
@@ -379,6 +379,16 @@ static void CancelMfa() {
 }
 
 // ---------------------------------------------------------------- actions
+
+static const wchar_t* kDefaultHint =
+    L"Closing this window keeps the VPN running in the tray.";
+static ULONGLONG g_hintUntil = 0;
+static ULONGLONG g_savedUntil = 0;
+
+static void SetHint(const std::wstring& text) {
+    SetText("footer-hint", text);
+    g_hintUntil = GetTickCount64() + 2500;
+}
 
 static std::wstring GetInputValue(const char* id) {
     auto* in = static_cast<Rml::ElementFormControlInput*>(El(id));
@@ -437,7 +447,7 @@ static bool PersistCredentials() {
 static void DoConnect() {
     std::wstring account = GetInputValue("account");
     if (account.empty()) {
-        SetOverlay("settings-overlay", true);
+        SetHint(L"Enter your HKU account first.");
         if (auto* in = static_cast<Rml::ElementFormControlInput*>(El("account"))) in->Focus();
         return;
     }
@@ -506,6 +516,24 @@ static void ClearLog() {
 
 // ---------------------------------------------------------------- events
 
+static bool AnyOverlayVisible() {
+    for (const char* id : { "log-overlay", "mfa-overlay" })
+        if (Rml::Element* o = El(id))
+            if (o->IsClassSet("visible")) return true;
+    return false;
+}
+
+static bool ActionAllowedWithOverlay(const std::string& id) {
+    if (Rml::Element* o = El("mfa-overlay"))
+        if (o->IsClassSet("visible"))
+            return id == "btn-mfa" || id == "mfa-code" || id == "mfa-overlay";
+    if (Rml::Element* o = El("log-overlay"))
+        if (o->IsClassSet("visible"))
+            return id == "btn-log-clear" || id == "btn-log-close" ||
+                   id == "log-view" || id == "log-content" || id == "log-overlay";
+    return true;
+}
+
 static std::string ActionId(Rml::Element* element) {
     for (int depth = 0; depth < 8 && element; depth++) {
         const Rml::String& id = element->GetId();
@@ -521,6 +549,8 @@ public:
         const std::string id = ActionId(ev.GetTargetElement());
 
         if (ev.GetType() == "click") {
+            // Modal dialogs swallow clicks meant for the window underneath.
+            if (AnyOverlayVisible() && !ActionAllowedWithOverlay(id)) return;
             if (id == "btn-connect") {
                 if (!BtnEnabled("btn-connect")) return;
                 if (g_state == APP_CONNECTED) DoDisconnect();
@@ -530,13 +560,18 @@ public:
                 } else DoConnect();
             }
             else if (id == "btn-log") SetOverlay("log-overlay", true);
-            else if (id == "btn-settings") SetOverlay("settings-overlay", true);
+
             else if (id == "btn-mfa") SubmitMfa();
             else if (id == "btn-log-clear") ClearLog();
             else if (id == "btn-log-close") SetOverlay("log-overlay", false);
-            else if (id == "btn-settings-close") SetOverlay("settings-overlay", false);
-            else if (id == "btn-settings-save") {
-                if (PersistCredentials()) SetOverlay("settings-overlay", false);
+            else if (id == "log-overlay") SetOverlay("log-overlay", false);
+
+            else if (id == "btn-save-account") {
+                if (PersistCredentials()) {
+                    SetHint(L"Credentials saved.");
+                    SetText("btn-save-account", L"Saved");
+                    g_savedUntil = GetTickCount64() + 2000;
+                }
             }
         }
         else if (ev.GetType() == "keydown") {
@@ -620,6 +655,15 @@ static void Tick() {
         }
     }
     UpdateStatus();
+
+    if (g_hintUntil && GetTickCount64() > g_hintUntil) {
+        g_hintUntil = 0;
+        SetText("footer-hint", kDefaultHint);
+    }
+    if (g_savedUntil && GetTickCount64() > g_savedUntil) {
+        g_savedUntil = 0;
+        SetText("btn-save-account", L"Save");
+    }
 }
 
 // ---------------------------------------------------------------- log tail
@@ -740,7 +784,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
     gIcoOrange = MakeDotIcon(RGB(154, 103, 0));
     gIcoRed    = MakeDotIcon(RGB(207, 34, 46));
 
-    if (!Backend::Initialize("HKU VPN", 420, 380, false)) return 1;
+    if (!Backend::Initialize("HKU VPN", 420, 468, false)) return 1;
     g_hwnd = FindWindowW(L"HKU VPN", NULL);
     if (!g_hwnd) {
         // Window class name == window title in the stock backend.
@@ -759,7 +803,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
     Rml::SetRenderInterface(Backend::GetRenderInterface());
     Rml::Initialise();
 
-    g_ctx = Rml::CreateContext("main", Rml::Vector2i(420, 380));
+    g_ctx = Rml::CreateContext("main", Rml::Vector2i(420, 468));
     if (!g_ctx) return 1;
 
     // Fonts from the Windows font directory.
