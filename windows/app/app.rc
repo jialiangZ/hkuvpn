@@ -1,8 +1,7 @@
 // Resource script for HKUVPN.exe (kept header-free so llvm-rc / windres
 // both preprocess it without a Windows SDK on the include path).
 
-// Application icon (multi-size).
-1 ICON "app.ico"
+// No application icon on purpose: the exe/window stays icon-less.
 
 // Tray icons: multi-size ICOs whose colour encodes the connection state.
 10 ICON "tray-gray.ico"    // disconnected

@@ -7,7 +7,6 @@
   <div id="app">
 
     <div id="header">
-      <img id="badge" src="assets/badge.tga"/>
       <div id="titles">
         <div id="app-title">HKU VPN</div>
         <div id="app-sub">HKU Portal VPN &#183; vpn2fa.hku.hk</div>

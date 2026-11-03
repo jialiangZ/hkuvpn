@@ -190,6 +190,38 @@ static void FindLauncherAndAccount() {
 
 // ---------------------------------------------------------------- tray
 
+static HICON MakeBlankIcon() {
+    const int S = 16;
+    HDC dc = GetDC(NULL);
+    BITMAPINFO bi = {};
+    bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+    bi.bmiHeader.biWidth = S;
+    bi.bmiHeader.biHeight = -S;
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    bi.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
+    HBITMAP colour = CreateDIBSection(dc, &bi, DIB_RGB_COLORS, &bits, NULL, 0);
+    ReleaseDC(NULL, dc);
+    if (colour && bits) ZeroMemory(bits, S * S * 4);   // alpha = 0 everywhere
+    HBITMAP mask = CreateBitmap(S, S, 1, 1, NULL);
+    if (mask) {
+        // AND mask all ones => the icon is transparent even on code paths
+        // that consult the mask instead of the alpha channel.
+        BYTE ones[(S * S) / 8];
+        memset(ones, 0xFF, sizeof(ones));
+        SetBitmapBits(mask, sizeof(ones), ones);
+    }
+    ICONINFO ii = {};
+    ii.fIcon = TRUE;
+    ii.hbmMask = mask;
+    ii.hbmColor = colour;
+    HICON icon = CreateIconIndirect(&ii);
+    if (mask) DeleteObject(mask);
+    if (colour) DeleteObject(colour);
+    return icon;
+}
+
 static HICON LoadTrayIcon(int resource_id) {
     // Load at the taskbar's small-icon size so Windows picks the matching
     // frame out of the multi-size ICO instead of downscaling one bitmap.
@@ -763,11 +795,13 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
         g_hwnd = GetForegroundWindow();
     }
 
-    // Application icon on the window itself.
-    HICON appIco = (HICON)LoadImageW(hInst, MAKEINTRESOURCEW(1),
-                                     IMAGE_ICON, 0, 0, LR_DEFAULTSIZE);
-    SendMessageW(g_hwnd, WM_SETICON, ICON_BIG, (LPARAM)appIco);
-    SendMessageW(g_hwnd, WM_SETICON, ICON_SMALL, (LPARAM)appIco);
+    // Intentionally icon-less: a fully transparent icon keeps the title bar
+    // and the taskbar button free of any glyph (the tray icon carries state).
+    HICON blank = MakeBlankIcon();
+    SendMessageW(g_hwnd, WM_SETICON, ICON_BIG, (LPARAM)blank);
+    SendMessageW(g_hwnd, WM_SETICON, ICON_SMALL, (LPARAM)blank);
+    SetClassLongPtrW(g_hwnd, GCLP_HICON, (LONG_PTR)blank);
+    SetClassLongPtrW(g_hwnd, GCLP_HICONSM, (LONG_PTR)blank);
     BOOL dark = FALSE;
     DwmSetWindowAttribute(g_hwnd, 20, &dark, sizeof(dark));
 
@@ -829,7 +863,10 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
     SetState(WorkerAlive() ? APP_CONNECTED : APP_IDLE);
     {
         std::wstring all;
-        if ((g_state == APP_CONNECTING || WorkerAlive()) && ReadAllTextW(P.markers, all)) {
+        // Only resurface the MFA prompt for a live, healthy worker: a stale
+        // heartbeat means the leftover session is wedged, not waiting for us.
+        if ((g_state == APP_CONNECTING || WorkerAlive()) && HeartbeatFresh() &&
+            ReadAllTextW(P.markers, all)) {
             size_t need = all.rfind(L"HKUVPN_MFA_RESPONSE_REQUIRED");
             size_t conn = all.rfind(L"HKUVPN_CONNECTED");
             if (need != std::wstring::npos && (conn == std::wstring::npos || need > conn))

@@ -1,27 +1,26 @@
 #!/usr/bin/env python3
-"""Generate HKU VPN icon assets from the SVG sources in assets/.
+"""Generate the HKU VPN tray icons from the SVG sources in assets/.
 
-Needs: python3 with cairosvg + Pillow (pip install cairosvg pillow).
+The application itself has no icon: only the notification-area icon is
+generated, with its colour encoding the connection state.
+
+Needs: python3 with cairosvg (pip install cairosvg).
 Run from windows/app:  python3 make-icons.py
 
-Small sizes (<= 40px) are rendered from the *-small.svg variants, which
-drop the fine detail that only turns into noise at taskbar sizes.
+Small sizes (<= 40px) come from tray-icon-small.svg, which drops detail
+that only turns into noise at taskbar sizes.
 
 Outputs:
-  app.ico                           multi-size window/exe icon
-  tray-{gray,green,amber,red}.ico   multi-size tray icons (state colours)
-  ui/assets/badge.tga               96px badge used by the RmlUi header
+  tray-{gray,green,amber,red}.ico   multi-size tray icons
 """
 import struct
 from pathlib import Path
 
 import cairosvg
-from PIL import Image
 
 HERE = Path(__file__).resolve().parent
 ASSETS = HERE / "assets"
 
-APP_SIZES = [16, 20, 24, 32, 40, 48, 64, 128, 256]
 TRAY_SIZES = [16, 20, 24, 32, 40, 48, 64]
 SMALL_CUTOFF = 48
 
@@ -65,18 +64,9 @@ def build_icon(name: str, sizes, out: Path, tmp: Path, **subs: str) -> None:
     write_ico(entries, out)
 
 
-def build_badge(svg: Path, size: int, out: Path, tmp: Path) -> None:
-    png = tmp / f"{out.stem}.png"
-    render_png(svg, size, png)
-    Image.open(png).convert("RGBA").save(out)
-
-
 def main() -> None:
     tmp = HERE / ".icon-tmp"
     tmp.mkdir(exist_ok=True)
-
-    build_icon("app-icon", APP_SIZES, HERE / "app.ico", tmp)
-    build_badge(ASSETS / "app-icon.svg", 96, HERE / "ui" / "assets" / "badge.tga", tmp)
 
     for name, colour in STATES.items():
         build_icon("tray-icon", TRAY_SIZES, HERE / f"tray-{name}.ico", tmp,
@@ -85,7 +75,7 @@ def main() -> None:
     for f in tmp.iterdir():
         f.unlink()
     tmp.rmdir()
-    print("icons written: app.ico, tray-*.ico, ui/assets/badge.tga")
+    print("icons written: tray-*.ico")
 
 
 if __name__ == "__main__":

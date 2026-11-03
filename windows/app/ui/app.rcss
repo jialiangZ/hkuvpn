@@ -26,19 +26,11 @@ body {
     height: 52dp;
 }
 
-#badge {
+#titles {
     position: absolute;
     left: 0dp;
     top: 2dp;
-    width: 46dp;
-    height: 46dp;
-}
-
-#titles {
-    position: absolute;
-    left: 60dp;
-    top: 1dp;
-    width: 340dp;
+    width: 424dp;
 }
 
 #app-title {
