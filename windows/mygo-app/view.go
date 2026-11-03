@@ -133,15 +133,28 @@ func (a *app) mfaDialog(c *ui.Context, t *ui.Theme) {
 
 func (a *app) logDialog(c *ui.Context, t *ui.Theme) {
 	ui.Modal(c, &a.logOpen, func() {
-		ui.Text(c, "Connection log").FontSize(18).Bold()
-		ui.Scroll(c).Height(320).TrackScroll(&a.logScroll).Children(func() {
-			for _, line := range a.logLines {
-				ui.Text(c, line).Font("monospace").FontSize(12)
-			}
-		})
-		ui.Row(c).Justify(ui.End).Gap(8).Children(func() {
-			ui.Button(c, "Clear").OnClick(a.clearLog)
-			ui.PrimaryButton(c, "Close").OnClick(func() { a.logOpen = false })
+		// A fixed width keeps the dialog from resizing with the log content
+		// (clearing it used to shrink the panel).
+		ui.Column(c).Width(380).Gap(12).Children(func() {
+			ui.Text(c, "Connection log").FontSize(18).Bold()
+			// The official list virtualizes long logs and FollowEnd keeps the
+			// newest line in view; a border on each row separates entries.
+			ui.List(c, &a.logList, len(a.logLines), func(i int) {
+				ui.Row(c).RowWidth(372).Padding(6, 8).
+					BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
+					// A fixed width wraps long lines here instead of
+					// widening the row and scrolling sideways.
+					ui.Text(c, a.logLines[i]).Width(360).Font("monospace").FontSize(12)
+				})
+			}).RowWidth(372).Height(300).Children(func() {
+				if len(a.logLines) == 0 {
+					ui.Text(c, "No log lines yet").TextColor(t.TextMuted).Padding(12)
+				}
+			})
+			ui.Row(c).Justify(ui.End).Gap(8).Children(func() {
+				ui.Button(c, "Clear").OnClick(a.clearLog)
+				ui.PrimaryButton(c, "Close").OnClick(func() { a.logOpen = false })
+			})
 		})
 	})
 }

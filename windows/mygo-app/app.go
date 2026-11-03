@@ -60,7 +60,7 @@ type app struct {
 	logOpen        bool
 	logLines       []string
 	logOffset      int64
-	logScroll      ui.ScrollState
+	logList        ui.ListState
 	lastLogRefresh time.Time
 
 	// Hints and credential autosave.
@@ -79,6 +79,8 @@ func newApp() *app {
 		pin:     storedPIN(),
 		hint:    defaultHint,
 	}
+	// The log follows its newest line until the user scrolls away.
+	a.logList.FollowEnd = true
 	// Adopt a session that survived a frontend restart.
 	if workerAlive() && heartbeatFresh() {
 		a.state = connected

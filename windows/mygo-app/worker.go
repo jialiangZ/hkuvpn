@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"math"
 	"os"
 	"regexp"
 	"strconv"
@@ -300,7 +299,6 @@ func (a *app) appendLogBytes(b []byte, replace bool) {
 	if n := len(a.logLines); n > 400 {
 		a.logLines = a.logLines[n-400:]
 	}
-	a.logScroll.Y = math.MaxFloat32 // stick to the newest line
 }
 
 func (a *app) clearLog() {
