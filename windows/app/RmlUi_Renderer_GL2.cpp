@@ -234,6 +234,12 @@ Rml::TextureHandle RenderInterface_GL2::LoadTexture(Rml::Vector2i& texture_dimen
 	Rml::FileHandle file_handle = file_interface->Open(source);
 	if (!file_handle)
 	{
+		char dbg[512];
+		snprintf(dbg, sizeof(dbg), "LoadTexture: failed to open '%s'\r\n", source.c_str());
+		HANDLE fh = CreateFileA("C:\\Users\\Pineapple\\AppData\\Local\\Temp\\hkuvpn\\rmlui.log",
+			GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
+			OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+		if (fh != INVALID_HANDLE_VALUE) { SetFilePointer(fh, 0, NULL, FILE_END); DWORD n; WriteFile(fh, dbg, (DWORD)strlen(dbg), &n, NULL); CloseHandle(fh); }
 		return false;
 	}
 

@@ -4,81 +4,108 @@
     <link type="text/rcss" href="app.rcss"/>
 </head>
 <body>
-    <div id="stripe"></div>
-
-    <!-- Status header -->
-    <div id="header">
-        <div id="header-left">
-            <div id="status-line">
-                <span id="status-dot"></span>
-                <span id="status-title">Disconnected</span>
-            </div>
-            <div id="status-sub">Tunnel is down</div>
+    <div id="main-bg">
+        <div id="menu-bar">
+            <input type="button" class="menu" id="menu-file" value="File"/>
+            <input type="button" class="menu" id="menu-view" value="View"/>
+            <input type="button" class="menu" id="menu-settings" value="Settings"/>
+            <input type="button" class="menu" id="menu-help" value="Help"/>
         </div>
-        <div id="header-right">
-            <div id="server-name">HKU Portal VPN</div>
-            <div id="server-host">vpn2fa.hku.hk</div>
+
+        <div id="tabs">
+            <div class="tab active" id="tab-main">Main</div>
+            <div class="tab" id="tab-vpninfo">VPN Info</div>
+        </div>
+
+        <div id="page-main">
+            <div id="panel">
+                <img id="lock-icon" src="assets/lock-red.tga"/>
+                <div id="content">
+                    <div id="server-row">
+                        <label id="server-label">Server:</label>
+                        <div id="server-box"><span id="server-value">vpn2fa.hku.hk</span></div>
+                        <div id="btn-settings" class="icon-btn" title="HKU account settings"><img src="assets/settings.tga"/></div>
+                    </div>
+                    <div id="status-row">Disconnected</div>
+                    <div id="button-row">
+                        <input type="button" id="btn-connect" class="btn primary" value="Connect"/>
+                        <input type="button" id="btn-log" class="btn" value="View log"/>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="page-vpninfo">
+            <div class="info-grid">
+                <div class="info-row"><div class="info-label">IPv4:</div><div class="info-value" id="info-ip4">-</div></div>
+                <div class="info-row"><div class="info-label">IPv6:</div><div class="info-value" id="info-ip6">-</div></div>
+                <div class="info-row"><div class="info-label">DNS:</div><div class="info-value" id="info-dns">-</div></div>
+                <div class="info-row"><div class="info-label">Cipher:</div><div class="info-value" id="info-cipher">-</div></div>
+                <div class="info-row"><div class="info-label">Status:</div><div class="info-value" id="info-status">-</div></div>
+                <div class="info-row"><div class="info-label">Duration:</div><div class="info-value" id="info-duration">-</div></div>
+                <div class="info-row"><div class="info-label">Routes:</div><div class="info-value" id="info-routes">-</div></div>
+                <div class="info-row"><div class="info-label">Heartbeat:</div><div class="info-value" id="info-hb">-</div></div>
+            </div>
         </div>
     </div>
 
-    <!-- Connection card -->
-    <div class="card" id="conn-card">
-        <div id="conn-fields">
+    <!-- Settings dialog -->
+    <div id="settings-overlay">
+        <div id="settings-dialog">
+            <div class="dlg-title">HKU Account Settings</div>
             <div class="field">
-                <label for="account">HKU account</label>
+                <label>HKU account</label>
                 <input id="account" type="text" placeholder="u1234567@connect.hku.hk"/>
             </div>
             <div class="field">
-                <label for="pin">Portal PIN</label>
+                <label>Portal PIN</label>
                 <input id="pin" type="password" placeholder="Portal password"/>
             </div>
-        </div>
-        <div id="conn-actions">
-            <button id="btn-connect" class="btn primary">Connect</button>
-            <button id="btn-disconnect" class="btn danger">Disconnect</button>
-        </div>
-    </div>
-
-    <!-- Session card -->
-    <div class="card" id="session-card">
-        <div class="stat">
-            <div class="stat-cap">VPN address</div>
-            <div class="stat-val" id="val-vpn">-</div>
-        </div>
-        <div class="stat">
-            <div class="stat-cap">Duration</div>
-            <div class="stat-val" id="val-duration">-</div>
-        </div>
-        <div class="stat">
-            <div class="stat-cap">Local proxy</div>
-            <div class="stat-val">socks5://127.0.0.1:1080 · http://127.0.0.1:1088</div>
-        </div>
-        <div class="stat">
-            <div class="stat-cap">Routes</div>
-            <div class="stat-val" id="val-routes">-</div>
+            <div class="field">
+                <label>Server</label>
+                <input id="server-edit" type="text" value="vpn2fa.hku.hk"/>
+            </div>
+            <div class="dlg-buttons">
+                <input type="button" id="btn-settings-save" class="btn primary" value="Save"/>
+                <input type="button" id="btn-settings-close" class="btn" value="Close"/>
+            </div>
         </div>
     </div>
 
-    <!-- Log card -->
-    <div class="card" id="log-card">
-        <div id="log-head">
-            <span id="log-title">OpenConnect log · live</span>
-            <button id="btn-clear" class="btn neutral">Clear</button>
+    <!-- Log dialog -->
+    <div id="log-overlay">
+        <div id="log-dialog">
+            <div class="dlg-title">OpenConnect Log</div>
+            <div id="log-view"><div id="log-content"></div></div>
+            <div class="dlg-buttons">
+                <input type="button" id="btn-log-clear" class="btn" value="Clear"/>
+                <input type="button" id="btn-log-close" class="btn" value="Close"/>
+            </div>
         </div>
-        <div id="log-view"><div id="log-content"></div></div>
     </div>
 
-    <!-- MFA overlay -->
+    <!-- MFA dialog -->
     <div id="mfa-overlay">
         <div id="mfa-dialog">
-            <div id="mfa-title">Microsoft Authenticator</div>
-            <div id="mfa-text">Enter the 6-digit code from your authenticator app:</div>
+            <div class="dlg-title">Microsoft Authenticator</div>
+            <div class="mfa-text">Enter the 6-digit code from your authenticator app:</div>
             <div id="mfa-note"></div>
-            <div id="mfa-row">
+            <div class="mfa-row">
                 <input id="mfa-code" type="text" maxlength="6"/>
-                <button id="btn-mfa" class="btn primary">Submit</button>
+                <input type="button" id="btn-mfa" class="btn primary" value="Submit"/>
             </div>
-            <div id="mfa-hint">Enter to submit · Esc to cancel the connection</div>
+            <div class="mfa-hint">Enter to submit &#183; Esc to cancel the connection</div>
+        </div>
+    </div>
+
+    <!-- About dialog -->
+    <div id="about-overlay">
+        <div id="about-dialog">
+            <div class="dlg-title">About HKU VPN</div>
+            <div class="about-text">HKU campus VPN frontend for the HKU Portal 2FA gateway.<br/>Server: vpn2fa.hku.hk</div>
+            <div class="dlg-buttons">
+                <input type="button" id="btn-about-close" class="btn" value="Close"/>
+            </div>
         </div>
     </div>
 </body>

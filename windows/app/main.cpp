@@ -267,14 +267,6 @@ static void ShowFromTray() {
 
 // ------------------------------------------------------------- ui update
 
-static const char* StateDotColor() {
-    if (g_disconnecting) return "#9a6700";
-    switch (g_state) {
-        case APP_CONNECTED:  return (WorkerAlive() && HeartbeatFresh()) ? "#1a7f37" : "#cf222e";
-        case APP_CONNECTING: return "#9a6700";
-        default:             return "#95999e";
-    }
-}
 static void SetBtnEnabled(const char* id, bool on) {
     Rml::Element* e = El(id);
     if (!e) return;
@@ -286,52 +278,49 @@ static bool BtnEnabled(const char* id) {
     return e && !e->IsClassSet("disabled");
 }
 
-static void UpdateHeader() {
-    std::wstring title, sub;
-    bool accentSub = false;
-    if (g_disconnecting) title = L"Disconnecting...";
+static void UpdateStatus() {
+    std::wstring s;
+    if (g_disconnecting) s = L"Disconnecting...";
     else switch (g_state) {
         case APP_CONNECTED:
-            title = (WorkerAlive() && HeartbeatFresh())
+            s = (WorkerAlive() && HeartbeatFresh())
                 ? L"Connected" : L"Worker unresponsive"; break;
-        case APP_CONNECTING: title = L"Connecting..."; break;
-        default:             title = L"Disconnected"; break;
+        case APP_CONNECTING: s = L"Connecting..."; break;
+        default:             s = L"Disconnected"; break;
     }
-    if (!g_subOverride.empty()) {
-        sub = g_subOverride; accentSub = true;
-    } else switch (g_state) {
-        case APP_CONNECTED:
-            sub = (WorkerAlive() && HeartbeatFresh())
-                ? L"Tunnel is up - traffic via 127.0.0.1:1080/1088 goes through HKU"
-                : L"The worker loop stopped - use Disconnect to recover"; break;
-        case APP_CONNECTING: sub = L"Requesting elevation / bringing the tunnel up"; break;
-        default:             sub = L"Tunnel is down"; break;
+    SetText("status-row", s);
+    if (Rml::Element* img = El("lock-icon")) {
+        img->SetAttribute("src",
+            g_state == APP_CONNECTED ? "assets/lock-green.tga" :
+            g_state == APP_CONNECTING ? "assets/lock-orange.tga" : "assets/lock-red.tga");
     }
-    SetText("status-title", title);
-    SetText("status-sub", sub);
-    if (Rml::Element* d = El("status-dot")) d->SetProperty("background", StateDotColor());
-    if (Rml::Element* s = El("status-sub"))
-        s->SetProperty("color", accentSub ? "#0a6cff" : "#697078");
+    UpdateTray();
 }
 
 static void SetState(App_State s) {
     g_state = s;
     g_subOverride.clear();
     SetBtnEnabled("btn-connect", s == APP_IDLE);
-    SetBtnEnabled("btn-disconnect", s != APP_IDLE);
-    SetText("btn-disconnect", s == APP_CONNECTING ? L"Cancel" : L"Disconnect");
+    // Classic OpenConnect UI: Connect becomes Disconnect while connected,
+    // and Cancel while connecting.
+    SetText("btn-connect", s == APP_CONNECTING ? L"Cancel" :
+                           s == APP_CONNECTED ? L"Disconnect" : L"Connect");
     if (s == APP_CONNECTED) {
         g_connectedTick = g_connectedTick ? g_connectedTick : GetTickCount64();
         std::wstring ip = StateValue(L"IP4");
-        SetText("val-vpn", ip.empty() ? L"-" : ip);
+        SetText("info-ip4", ip.empty() ? L"-" : ip);
     } else {
         g_connectedTick = 0;
-        SetText("val-vpn", L"-");
-        SetText("val-duration", L"-");
-        SetText("val-routes", L"-");
+        SetText("info-ip4", L"-");
+        SetText("info-ip6", L"-");
+        SetText("info-dns", L"-");
+        SetText("info-cipher", L"-");
+        SetText("info-status", L"-");
+        SetText("info-duration", L"-");
+        SetText("info-routes", L"-");
+        SetText("info-hb", L"-");
     }
-    UpdateHeader();
-    UpdateTray();
+    UpdateStatus();
 }
 
 // ---------------------------------------------------------------- mfa
@@ -341,8 +330,12 @@ static void CloseMfa() {
     g_mfaVisible = false;
     if (Rml::Element* o = El("mfa-overlay")) o->SetClass("visible", false);
 }
+
+static void SetOverlay(const char* id, bool visible) {
+    if (Rml::Element* o = El(id)) o->SetClass("visible", visible);
+}
 static void OpenMfa(bool rejected) {
-    if (Rml::Element* o = El("mfa-overlay")) o->SetClass("visible", true);
+    SetOverlay("mfa-overlay", true);
     g_mfaVisible = true;
     SetText("mfa-note", rejected
         ? L"The previous code was REJECTED - enter the one showing NOW." : L"");
@@ -362,7 +355,7 @@ static void SubmitMfa() {
     if (WriteAllTextW(P.response, std::wstring(v.begin(), v.end()))) {
         g_subOverride = L"MFA code accepted - establishing tunnel (DTLS handshake + route learning can take ~30s)...";
         CloseMfa();
-        UpdateHeader();
+        UpdateStatus();
     } else {
         SetText("mfa-note", L"Could not deliver the code.");
     }
@@ -476,8 +469,7 @@ static void DoDisconnect() {
     g_disconnectStart = GetTickCount64();
     g_subOverride = L"Disconnecting - waiting for the worker to clean up...";
     SetBtnEnabled("btn-connect", false);
-    SetBtnEnabled("btn-disconnect", false);
-    UpdateHeader();
+    UpdateStatus();
     std::wstring args = L"-NoProfile -ExecutionPolicy Bypass -File \"" +
                         g_launcher + L"\" \"--stop\"";
     ShellExecuteW(g_hwnd, NULL, L"powershell.exe", args.c_str(), NULL, SW_HIDE);
@@ -504,10 +496,37 @@ public:
     void ProcessEvent(Rml::Event& ev) override {
         Rml::String id = ev.GetTargetElement()->GetId();
         if (ev.GetType() == "click") {
-            if (id == "btn-connect" && BtnEnabled("btn-connect")) DoConnect();
-            else if (id == "btn-disconnect" && BtnEnabled("btn-disconnect")) DoDisconnect();
-            else if (id == "btn-clear") ClearLog();
+            if (id == "btn-connect" || id == "content" || id == "button-row" || id == "panel" || id == "page-main" || id == "main-bg") {
+                if (BtnEnabled("btn-connect")) {
+                    if (g_state == APP_CONNECTED) DoDisconnect();
+                    else if (g_state == APP_CONNECTING) { WriteAllTextW(P.stop, L"stop"); SetState(APP_IDLE); }
+                    else DoConnect();
+                }
+            }
+            else if (id == "btn-log") SetOverlay("log-overlay", true);
+            else if (id == "btn-settings") SetOverlay("settings-overlay", true);
             else if (id == "btn-mfa") SubmitMfa();
+            else if (id == "btn-log-clear") ClearLog();
+            else if (id == "btn-log-close") SetOverlay("log-overlay", false);
+            else if (id == "btn-settings-close") SetOverlay("settings-overlay", false);
+            else if (id == "btn-settings-save") { PersistCredentials(); SetOverlay("settings-overlay", false); }
+            else if (id == "btn-about-close") SetOverlay("about-overlay", false);
+            else if (id == "tab-main") {
+                El("page-main")->SetClass("active", true);
+                El("page-vpninfo")->SetProperty("display", "none");
+                El("tab-main")->SetClass("active", true);
+                El("tab-vpninfo")->SetClass("active", false);
+            }
+            else if (id == "tab-vpninfo") {
+                El("page-main")->SetProperty("display", "none");
+                El("page-vpninfo")->SetProperty("display", "block");
+                El("tab-vpninfo")->SetClass("active", true);
+                El("tab-main")->SetClass("active", false);
+            }
+            else if (id == "menu-file") { /* no extra profiles in HKU build */ }
+            else if (id == "menu-view") SetOverlay("log-overlay", true);
+            else if (id == "menu-settings") SetOverlay("settings-overlay", true);
+            else if (id == "menu-help") SetOverlay("about-overlay", true);
         } else if (ev.GetType() == "keydown") {
             int key = ev.GetParameter<int>("key_identifier", 0);
             if (id == "mfa-code") {
@@ -551,15 +570,15 @@ static void Tick() {
     if (g_state == APP_CONNECTED) {
         if (WorkerAlive()) {
             std::wstring ip = StateValue(L"IP4");
-            if (!ip.empty()) SetText("val-vpn", ip);
+            if (!ip.empty()) SetText("info-ip4", ip);
             if (g_connectedTick) {
                 ULONGLONG el = (GetTickCount64() - g_connectedTick) / 1000;
-                SetText("val-duration", Fmt(L"%02d:%02d:%02d",
+                SetText("info-duration", Fmt(L"%02d:%02d:%02d",
                     (int)(el / 3600), (int)((el / 60) % 60), (int)(el % 60)));
             }
-            SetText("val-routes", Fmt(L"%d learned route%s, heartbeat %s",
-                LearnedCount(), LearnedCount() == 1 ? L"" : L"s",
-                HeartbeatFresh() ? L"OK" : L"STALE"));
+            SetText("info-routes", Fmt(L"%d learned route%s", LearnedCount(), LearnedCount() == 1 ? L"" : L"s"));
+            SetText("info-hb", HeartbeatFresh() ? L"OK" : L"STALE");
+            SetText("info-status", WorkerAlive() ? L"Worker running" : L"Worker exited");
         } else {
             SetState(APP_IDLE);
         }
@@ -597,7 +616,7 @@ static void Tick() {
             g_subOverride = L"Disconnect timed out - the worker is still running; retry.";
         }
     }
-    UpdateHeader();
+    UpdateStatus();
 }
 
 // ---------------------------------------------------------------- log tail
@@ -723,7 +742,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
     gIcoOrange = MakeDotIcon(RGB(154, 103, 0));
     gIcoRed    = MakeDotIcon(RGB(207, 34, 46));
 
-    if (!Backend::Initialize("HKU VPN", 860, 640, true)) return 1;
+    if (!Backend::Initialize("HKU VPN", 434, 206, false)) return 1;
     g_hwnd = FindWindowW(L"HKU VPN", NULL);
     if (!g_hwnd) {
         // Window class name == window title in the stock backend.
@@ -745,7 +764,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
     Rml::SetSystemInterface(&logIf);
     Rml::Initialise();
 
-    g_ctx = Rml::CreateContext("main", Rml::Vector2i(860, 640));
+    g_ctx = Rml::CreateContext("main", Rml::Vector2i(434, 206));
     if (!g_ctx) return 1;
 
     // Fonts from the Windows font directory.
@@ -764,12 +783,17 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
     g_doc->Show();
 
     // Event wiring.
-    for (const char* id : { "btn-connect", "btn-disconnect", "btn-clear", "btn-mfa" })
+    for (const char* id : { "btn-connect", "btn-log", "btn-settings", "btn-mfa",
+                            "btn-log-clear", "btn-log-close", "btn-settings-close", "btn-settings-save",
+                            "btn-about-close", "tab-main", "tab-vpninfo", "menu-file", "menu-view",
+                            "menu-settings", "menu-help" })
         El(id)->AddEventListener("click", &g_events);
     El("mfa-code")->AddEventListener("keydown", &g_events);
+    g_doc->AddEventListener("click", &g_events);
 
     // Prefill credentials.
     SetInputValue("account", g_account == L"-" ? L"" : g_account);
+    SetInputValue("server-edit", L"vpn2fa.hku.hk");
     {
         std::wstring pin;
         if (ReadAllTextW(JoinPath(JoinPath(HomeDir(), L".vpn"), L"hku.pass"), pin)) {
