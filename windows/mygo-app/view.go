@@ -43,7 +43,12 @@ func (a *app) view(c *ui.Context) {
 					if a.headlineMuted {
 						ui.Text(c, a.headline).FontSize(17).TextColor(t.TextMuted)
 					} else {
-						ui.Text(c, a.headline).FontSize(26).Bold()
+						// The big number is the tunnel adapter address, not
+						// the public IP: label it so it reads at a glance.
+						ui.Row(c).AlignItems(ui.Baseline).Gap(10).Children(func() {
+							ui.Text(c, "VPN address").FontSize(13).TextColor(t.TextMuted)
+							ui.Text(c, a.headline).FontSize(26).Bold()
+						})
 					}
 					detailRow(c, t, "Proxy", "socks5://127.0.0.1:1080 · http://127.0.0.1:1088")
 					detailRow(c, t, "Routes", a.routes)

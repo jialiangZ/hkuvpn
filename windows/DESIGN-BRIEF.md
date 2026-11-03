@@ -91,7 +91,7 @@
 | 状态点 | 9–11 px 圆点 | 颜色 = 状态色，见第 5 节 |
 | 状态文字 | `Disconnected` / `Connecting` / `Connected` / `Disconnecting` / `Worker unresponsive` | 15 / Semibold |
 | 计时 | `--:--:--` 或 `00:12:34` | 右对齐，等宽字体（Consolas）14 / `#8A9199` |
-| 主值 | `Not connected` / `Waiting for sign-in` / 隧道 IP `10.64.199.140` | 未连接 19 / Regular 灰；已连接 26 / Semibold 深色 |
+| 主值 | 未连接 `Not connected` / 连接中 `Waiting for sign-in` / 已连接 `VPN address` + 隧道 IP（如 `10.64.199.140`） | 未连接 17 / Regular 灰；已连接 IP 26 / Semibold 深色，前面带 13 / 灰的 `VPN address` 标签 |
 | 明细 1 | `Proxy` + `socks5://127.0.0.1:1080 · http://127.0.0.1:1088` | 标签 13 灰，值 13 深灰 |
 | 明细 2 | `Routes` + `3 learned routes · heartbeat OK` | 同上；异常时显示 `heartbeat stale` |
 
