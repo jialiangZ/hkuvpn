@@ -35,6 +35,7 @@ static const COLORREF C_BORDER = RGB(227, 229, 234);
 static const COLORREF C_LOGBG  = RGB(255, 255, 255);
 static const COLORREF C_TEXT   = RGB(28, 32, 36);
 static const COLORREF C_MUTED  = RGB(105, 112, 120);
+static const COLORREF C_SEMI   = RGB(55, 62, 70);   // card titles / emphasized labels
 static const COLORREF C_ACCENT = RGB(10, 108, 255);
 static const COLORREF C_GREEN  = RGB(26, 127, 55);
 static const COLORREF C_ORANGE = RGB(154, 103, 0);
@@ -85,6 +86,7 @@ static HWND hValVpn, hValDuration, hValRoutes;
 static HINSTANCE g_hInst = NULL;
 
 static HFONT gFTitle, gFSub, gFBody, gFMono, gFButton;
+static HFONT gFSemi9;               // 9pt semibold: card titles
 static HICON gIcoGray, gIcoGreen, gIcoOrange, gIcoRed, gIcoApp;
 static NOTIFYICONDATAW g_nid = {};
 
@@ -368,12 +370,11 @@ static COLORREF HeaderColor() {
 }
 
 static void PaintHeader(HDC dc, const RECT& rc) {
-    int s = (int)(g_scale * 96) / 96; (void)s;
     // State dot
     HBRUSH dot = CreateSolidBrush(HeaderColor());
-    int dotSz = (int)(20 * g_scale);
-    RECT dr = { (int)(20 * g_scale), (int)(22 * g_scale),
-                (int)(20 * g_scale) + dotSz, (int)(22 * g_scale) + dotSz };
+    int dotSz = (int)(16 * g_scale);
+    int dotX = (int)(20 * g_scale), dotY = (int)(30 * g_scale);
+    RECT dr = { dotX, dotY, dotX + dotSz, dotY + dotSz };
     HBRUSH ob = (HBRUSH)SelectObject(dc, dot);
     HPEN np = CreatePen(PS_NULL, 0, 0);
     HPEN op = (HPEN)SelectObject(dc, np);
@@ -395,7 +396,7 @@ static void PaintHeader(HDC dc, const RECT& rc) {
     }
     SetTextColor(dc, HeaderColor());
     HFONT of = (HFONT)SelectObject(dc, gFTitle);
-    TextOutW(dc, (int)(52 * g_scale), (int)(14 * g_scale), title, (int)wcslen(title));
+    TextOutW(dc, (int)(48 * g_scale), (int)(22 * g_scale), title, (int)wcslen(title));
     SelectObject(dc, gFSub);
     SetTextColor(dc, C_MUTED);
     const wchar_t* sub;
@@ -412,11 +413,11 @@ static void PaintHeader(HDC dc, const RECT& rc) {
             default:            sub = L"Tunnel is down"; break;
         }
     }
-    TextOutW(dc, (int)(52 * g_scale), (int)(46 * g_scale), sub, (int)wcslen(sub));
+    TextOutW(dc, (int)(50 * g_scale), (int)(54 * g_scale), sub, (int)wcslen(sub));
     SelectObject(dc, of);
 
     // Server, right aligned
-    RECT right = { rc.right - (int)(200 * g_scale), (int)(16 * g_scale),
+    RECT right = { rc.right - (int)(210 * g_scale), (int)(24 * g_scale),
                    rc.right - (int)(20 * g_scale), rc.bottom };
     SetTextColor(dc, C_ACCENT);
     SelectObject(dc, gFSub);
@@ -970,15 +971,17 @@ static void ScaleFonts() {
     if (gFSub)   DeleteObject(gFSub);
     if (gFBody)  DeleteObject(gFBody);
     if (gFButton) DeleteObject(gFButton);
+    if (gFSemi9) DeleteObject(gFSemi9);
     if (gFMono) {
         DeleteObject(gFMono);
     }
     gFTitle  = mk(20, FW_SEMIBOLD);
     gFSub    = mk(9,  FW_NORMAL);
     gFBody   = mk(9,  FW_NORMAL);
+    gFSemi9  = mk(9,  FW_SEMIBOLD);
     gFButton = mk(11, FW_SEMIBOLD);
     UINT mdpi = dpi;
-    gFMono   = CreateFontW(-MulDiv(10, mdpi, 72), 0, 0, 0, FW_NORMAL, FALSE,
+    gFMono   = CreateFontW(-MulDiv(95, mdpi, 720), 0, 0, 0, FW_NORMAL, FALSE,
                            FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
                            CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
                            FIXED_PITCH | FF_MODERN, L"Cascadia Mono");
@@ -990,7 +993,7 @@ static void Move(HWND h, int x, int y, int w, int ht) {
 }
 
 static void LayoutAll() {
-    int W = 760, H = 740;
+    int W = 760, H = 620;
     RECT rc; GetClientRect(hMain, &rc);
     W = rc.right; H = rc.bottom;
     (void)W; (void)H;
@@ -998,26 +1001,26 @@ static void LayoutAll() {
     int cardW = 760 - 40;
 
     // Credentials card
-    Move(hPanelCreds, 20, 88, cardW, 108);
+    Move(hPanelCreds, 20, 86, cardW, 96);
     SendMessageW(GetDlgItem(hPanelCreds, ID_CRED_TITLE), WM_SETFONT,
-                 (WPARAM)gFSub, TRUE);
-    Move(GetDlgItem(hPanelCreds, ID_CRED_TITLE), 18, 12, 200, 20);
-    SendMessageW(GetDlgItem(hPanelCreds, ID_LBL_ACCOUNT), WM_SETFONT,
-                 (WPARAM)gFSub, TRUE);
-    Move(GetDlgItem(hPanelCreds, ID_LBL_ACCOUNT), 18, 44, 90, 20);
-    SendMessageW(hEdAccount, WM_SETFONT, (WPARAM)gFBody, TRUE);
-    Move(hEdAccount, 112, 40, 260, 30);
-    SendMessageW(GetDlgItem(hPanelCreds, ID_LBL_PIN), WM_SETFONT,
-                 (WPARAM)gFSub, TRUE);
-    Move(GetDlgItem(hPanelCreds, ID_LBL_PIN), 400, 44, 80, 20);
-    SendMessageW(hEdPin, WM_SETFONT, (WPARAM)gFBody, TRUE);
-    Move(hEdPin, 490, 40, 120, 30);
+                 (WPARAM)gFSemi9, TRUE);
+    Move(GetDlgItem(hPanelCreds, ID_CRED_TITLE), 18, 10, 200, 18);
     SendMessageW(GetDlgItem(hPanelCreds, ID_CRED_NOTE), WM_SETFONT,
                  (WPARAM)gFSub, TRUE);
-    Move(GetDlgItem(hPanelCreds, ID_CRED_NOTE), 18, 78, cardW - 36, 18);
+    Move(GetDlgItem(hPanelCreds, ID_CRED_NOTE), cardW - 380, 12, 362, 16);
+    SendMessageW(GetDlgItem(hPanelCreds, ID_LBL_ACCOUNT), WM_SETFONT,
+                 (WPARAM)gFSub, TRUE);
+    Move(GetDlgItem(hPanelCreds, ID_LBL_ACCOUNT), 18, 44, 90, 18);
+    SendMessageW(hEdAccount, WM_SETFONT, (WPARAM)gFBody, TRUE);
+    Move(hEdAccount, 112, 40, 240, 28);
+    SendMessageW(GetDlgItem(hPanelCreds, ID_LBL_PIN), WM_SETFONT,
+                 (WPARAM)gFSub, TRUE);
+    Move(GetDlgItem(hPanelCreds, ID_LBL_PIN), 400, 44, 80, 18);
+    SendMessageW(hEdPin, WM_SETFONT, (WPARAM)gFBody, TRUE);
+    Move(hEdPin, 490, 40, 120, 28);
 
     // Session card
-    Move(hPanelSession, 20, 208, cardW, 140);
+    Move(hPanelSession, 20, 194, cardW, 124);
     int capIds[] = { ID_CAP_VPN, ID_CAP_DURATION, ID_CAP_PROXY, ID_CAP_ROUTES };
     int valIds[] = { ID_VAL_VPN, ID_VAL_DURATION, ID_VAL_PROXY, ID_VAL_ROUTES };
     for (int i = 0; i < 4; i++) {
@@ -1025,24 +1028,24 @@ static void LayoutAll() {
         HWND val = GetDlgItem(hPanelSession, valIds[i]);
         SendMessageW(cap, WM_SETFONT, (WPARAM)gFSub, TRUE);
         SendMessageW(val, WM_SETFONT, (WPARAM)gFBody, TRUE);
-        Move(cap, 18, 16 + i * 27, 120, 20);
-        Move(val, 150, 16 + i * 27, cardW - 175, 20);
+        Move(cap, 18, 14 + i * 24, 130, 18);
+        Move(val, 150, 14 + i * 24, cardW - 170, 18);
     }
 
     // Buttons
     SendMessageW(hBtnConnect, WM_SETFONT, (WPARAM)gFButton, TRUE);
     SendMessageW(hBtnDisconnect, WM_SETFONT, (WPARAM)gFButton, TRUE);
-    Move(hBtnConnect, 20, 362, 180, 42);
-    Move(hBtnDisconnect, 212, 362, 150, 42);
+    Move(hBtnConnect, 20, 334, 180, 42);
+    Move(hBtnDisconnect, 212, 334, 150, 42);
 
     // Log panel extends to the bottom edge now that the footer row is gone.
-    Move(hPanelLog, 20, 416, cardW, 740 - 416 - 16);
+    Move(hPanelLog, 20, 388, cardW, 620 - 388);
     SendMessageW(GetDlgItem(hPanelLog, 0), WM_SETFONT, (WPARAM)gFSub, TRUE);
-    Move(GetDlgItem(hPanelLog, 0), 18, 10, 300, 20);
-    Move(hBtnClear, cardW - 94, 8, 76, 26);
+    Move(GetDlgItem(hPanelLog, 0), 18, 8, 300, 18);
+    Move(hBtnClear, cardW - 94, 6, 76, 24);
     SendMessageW(hBtnClear, WM_SETFONT, (WPARAM)gFSub, TRUE);
     SendMessageW(hEdLog, WM_SETFONT, (WPARAM)gFMono, TRUE);
-    Move(hEdLog, 14, 42, cardW - 28, 740 - 416 - 16 - 58);
+    Move(hEdLog, 14, 36, cardW - 28, 620 - 388 - 50);
 
     InvalidateRect(hMain, NULL, TRUE);
 }
@@ -1065,6 +1068,11 @@ static LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             HBRUSH bg = CreateSolidBrush(C_BG);
             FillRect(dc, &rc, bg);
             DeleteObject(bg);
+            // Brand accent strip along the top edge.
+            RECT stripe = { 0, 0, rc.right, (int)(4 * g_scale) };
+            HBRUSH acc = CreateSolidBrush(C_ACCENT);
+            FillRect(dc, &stripe, acc);
+            DeleteObject(acc);
             PaintHeader(dc, rc);
             EndPaint(h, &ps);
             return 0;
@@ -1199,12 +1207,12 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
 
     hMain = CreateWindowExW(WS_EX_COMPOSITED, L"HkuMain", L"HKU VPN",
         WS_OVERLAPPEDWINDOW & ~(WS_MAXIMIZEBOX | WS_THICKFRAME),
-        CW_USEDEFAULT, CW_USEDEFAULT, 760, 740, NULL, NULL, hInst, NULL);
+        CW_USEDEFAULT, CW_USEDEFAULT, 760, 620, NULL, NULL, hInst, NULL);
     g_hInst = hInst;
     {
         UINT dpi = GetDpiForWindow(hMain);
         g_scale = dpi / 96.0;
-        RECT adj = { 0, 0, (int)(760 * g_scale), (int)(740 * g_scale) };
+        RECT adj = { 0, 0, (int)(760 * g_scale), (int)(620 * g_scale) };
         AdjustWindowRectEx(&adj,
             WS_OVERLAPPEDWINDOW & ~(WS_MAXIMIZEBOX | WS_THICKFRAME), FALSE, 0);
         SetWindowPos(hMain, NULL, CW_USEDEFAULT, CW_USEDEFAULT,
@@ -1237,7 +1245,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
     MkStatic(hPanelCreds, ID_CRED_TITLE, 0, L"Credentials");
     MkStatic(hPanelCreds, ID_LBL_ACCOUNT, 0, L"HKU account");
     MkStatic(hPanelCreds, ID_LBL_PIN, 0, L"Portal PIN");
-    MkStatic(hPanelCreds, ID_CRED_NOTE, 0,
+    MkStatic(hPanelCreds, ID_CRED_NOTE, SS_RIGHT,
              L"Stored locally in %USERPROFILE%\\.vpn  (hku.env / hku.pass).");
     hEdAccount = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
         WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
