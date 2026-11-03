@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"regexp"
@@ -203,6 +204,40 @@ func stopWorker(script string) {
 	shellExecuteHidden("powershell.exe", params)
 }
 
+// lastCompleteLineEnd returns the offset just past the last '\n' in b, or
+// 0 when b holds no complete line (a trailing partial write is excluded).
+func lastCompleteLineEnd(b []byte) int64 {
+	end := bytes.LastIndexByte(b, '\n')
+	if end < 0 {
+		return 0
+	}
+	return int64(end + 1)
+}
+
+// newMarkerLines returns the complete marker lines written after offset.
+// A trailing partial line (the worker is mid-write) is held back and the
+// offset does not advance past it, so a marker is never half-read and then
+// skipped.
+func newMarkerLines(b []byte, offset int64) ([]string, int64) {
+	if int64(len(b)) <= offset {
+		return nil, offset
+	}
+	chunk := b[offset:]
+	end := bytes.LastIndexByte(chunk, '\n')
+	if end < 0 {
+		return nil, offset // no complete line yet
+	}
+	next := offset + int64(end) + 1
+	text := strings.TrimSuffix(string(chunk[:end]), "\r")
+	var lines []string
+	for _, line := range strings.Split(text, "\n") {
+		if strings.TrimSpace(line) != "" {
+			lines = append(lines, line)
+		}
+	}
+	return lines, next
+}
+
 // ------------------------------------------------------------------- log
 
 var sixDigits = regexp.MustCompile(`^\d{6}$`)
@@ -220,16 +255,15 @@ func (a *app) openLog() {
 }
 
 func (a *app) readWholeLog() {
-	info, err := os.Stat(p.log)
-	if err != nil {
-		return
-	}
 	b, err := os.ReadFile(p.log)
 	if err != nil {
 		return
 	}
-	a.logOffset = info.Size()
-	a.appendLogBytes(b, true)
+	// Only complete lines: the tail is held back until it ends with '\n'.
+	a.logOffset = lastCompleteLineEnd(b)
+	if a.logOffset > 0 {
+		a.appendLogBytes(b[:a.logOffset], true)
+	}
 }
 
 func (a *app) refreshLog() {
@@ -254,8 +288,13 @@ func (a *app) refreshLog() {
 	}
 	buf := make([]byte, 256*1024)
 	n, _ := f.Read(buf)
-	a.logOffset += int64(n)
-	a.appendLogBytes(buf[:n], false)
+	// Hold back a trailing partial line until it ends with '\n'.
+	keep := bytes.LastIndexByte(buf[:n], '\n')
+	if keep < 0 {
+		return
+	}
+	a.logOffset += int64(keep + 1)
+	a.appendLogBytes(buf[:keep+1], false)
 }
 
 // decodeLogLine picks the encoding of one log line: UTF-8 when it is (or

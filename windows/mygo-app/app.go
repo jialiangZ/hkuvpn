@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -50,12 +51,14 @@ type app struct {
 
 	// Session.
 	state         session
-	seen          int
+	markersOffset int64
 	retry         bool
 	subOverride   string
 	connectedAt   time.Time
 	disconnecting bool
 	disconnectAt  time.Time
+	cancelling    bool
+	cancelAt      time.Time
 
 	// Derived display values.
 	statusText    string
@@ -120,6 +123,7 @@ func (a *app) setState(s session) {
 		a.subOverride = ""
 		a.mfaOpen = false
 		a.disconnecting = false
+		a.cancelling = false
 	case connecting:
 		a.connectedAt = time.Time{}
 		a.subOverride = ""
@@ -137,7 +141,7 @@ func (a *app) connect() {
 		return
 	}
 	if err := persistCredentials(account, a.pin); err != nil {
-		mygo.Dialog.Error("HKU VPN", "Could not save the credentials: "+err.Error())
+		go mygo.Dialog.Error("HKU VPN", "Could not save the credentials: "+err.Error())
 		return
 	}
 	if workerAlive() {
@@ -155,9 +159,9 @@ func (a *app) connect() {
 	}
 	script := findLauncher()
 	if script == "" {
-		mygo.Dialog.Error("HKU VPN",
+		go mygo.Dialog.Error("HKU VPN",
 			"hkuvpn.ps1 was not found. Place HKUVPN.exe inside the hkuvpn repo "+
-				`(windows\app\publish) or clone the repo to %USERPROFILE%\hkuvpn.`)
+				`(windows\mygo-app\publish) or clone the repo to %USERPROFILE%\hkuvpn.`)
 		return
 	}
 	code, err := startWorker(script)
@@ -165,11 +169,20 @@ func (a *app) connect() {
 		if code == 5 { // SE_ERR_ACCESSDENIED
 			a.showHint("Elevation was declined.")
 		} else {
-			mygo.Dialog.Error("HKU VPN", fmt.Sprintf("Could not start the worker (ShellExecute=%d).", code))
+			go mygo.Dialog.Error("HKU VPN", fmt.Sprintf("Could not start the worker (ShellExecute=%d).", code))
 		}
 		return
 	}
-	a.seen = len(readLines(p.markers))
+	// The worker deletes markers.log when it starts, so the cursor begins
+	// at zero for the new session.
+	// Skip the previous session's markers (the file still exists at this
+	// point; the worker deletes and rewrites it as it starts). Advance past
+	// complete lines only, so nothing half-written is ever counted.
+	if b, err := os.ReadFile(p.markers); err == nil {
+		a.markersOffset = lastCompleteLineEnd(b)
+	} else {
+		a.markersOffset = 0
+	}
 	a.retry = false
 	// The worker starts a fresh log for every session: read it from the top
 	// the next time the log window opens.
@@ -178,8 +191,17 @@ func (a *app) connect() {
 }
 
 func (a *app) cancel() {
+	if script := findLauncher(); script != "" {
+		stopWorker(script)
+	}
 	_ = writeText(p.stop, "stop")
-	a.setState(idle)
+	a.mfaOpen = false
+	// Do not jump to idle: a Cancel in the first seconds races with the
+	// worker's own startup, which erases stop.flag. Watch the worker and
+	// keep re-asserting the flag until it is really gone.
+	a.cancelling = true
+	a.cancelAt = time.Now()
+	a.subOverride = "Cancelling - waiting for the worker to exit..."
 }
 
 func (a *app) disconnect() {
@@ -238,7 +260,9 @@ func (a *app) tick(now time.Time) {
 	// Reconciliation: a rewritten markers file can leave the cursor past
 	// the CONNECTED line, so trust the file while the worker is alive.
 	if a.state == connecting && alive && markerContains("HKUVPN_CONNECTED") {
-		a.seen = len(readLines(p.markers))
+		if b, err := os.ReadFile(p.markers); err == nil {
+			a.markersOffset = lastCompleteLineEnd(b)
+		}
 		a.connectedAt = now
 		a.mfaOpen = false
 		a.setState(connected)
@@ -279,11 +303,21 @@ func (a *app) tick(now time.Time) {
 }
 
 func (a *app) processMarkers() {
-	lines := readLines(p.markers)
-	if len(lines) <= a.seen {
+	b, err := os.ReadFile(p.markers)
+	if err != nil {
 		return
 	}
-	for _, line := range lines[a.seen:] {
+	// A file shorter than the cursor means the worker started a new session
+	// (markers.log is deleted and rewritten): restart the cursor at zero.
+	if int64(len(b)) < a.markersOffset {
+		a.markersOffset = 0
+	}
+	lines, next := newMarkerLines(b, a.markersOffset)
+	if next == a.markersOffset {
+		return
+	}
+	a.markersOffset = next
+	for _, line := range lines {
 		switch {
 		case strings.Contains(line, "HKUVPN_CONNECTED"):
 			a.mfaOpen = false
@@ -307,7 +341,6 @@ func (a *app) processMarkers() {
 			}
 		}
 	}
-	a.seen = len(lines)
 }
 
 func markerContains(marker string) bool {
@@ -369,6 +402,10 @@ func (a *app) refreshStatus(now time.Time, alive, fresh bool) {
 			hb = "stale"
 		}
 		a.routes = fmt.Sprintf("%d learned route%s · heartbeat %s", routes, plural, hb)
+	}
+	if a.cancelling {
+		a.statusText = "Cancelling"
+		a.statusColor = colorAmber
 	}
 	if a.disconnecting {
 		a.statusText = "Disconnecting"

@@ -37,3 +37,22 @@ func TestTrayIconFollowsTheSession(t *testing.T) {
 		t.Errorf("unresponsive icon = %q", got)
 	}
 }
+
+// A read that lands while the worker is mid-write must not swallow a
+// marker: the trailing partial line is held back until it is complete.
+func TestNewMarkerLinesHoldsBackPartialLines(t *testing.T) {
+	first := "HKUVPN_MFA_RESPONSE_REQUIRED"
+	b := []byte(first + "\nHKUVPN_CONN")
+	lines, next := newMarkerLines(b, 0)
+	if len(lines) != 1 || lines[0] != first {
+		t.Fatalf("lines %q, want %q", lines, first)
+	}
+	if next != int64(len(first)+1) {
+		t.Fatalf("next %d, want %d", next, len(first)+1)
+	}
+	b = []byte(first + "\nHKUVPN_CONNECTED\n")
+	lines, next = newMarkerLines(b, next)
+	if len(lines) != 1 || lines[0] != "HKUVPN_CONNECTED" {
+		t.Fatalf("lines %q after completion", lines)
+	}
+}

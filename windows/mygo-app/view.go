@@ -7,7 +7,9 @@ import (
 // theme copies the official light/dark theme and only swaps the accent for
 // HKU green, so every control keeps the stock MyGo metrics and colors.
 func (a *app) theme(c *ui.Context) *ui.Theme {
-	if a.uiTheme == nil {
+	// Re-copy when the system appearance flips, so dark mode is followed
+	// instead of freezing the first frame's theme forever.
+	if a.uiTheme == nil || a.uiTheme.Dark != c.Theme().Dark {
 		t := *c.Theme()
 		t.Accent = ui.Hex("#0B6B45")
 		t.AccentHover = ui.Hex("#0A5C3C")
