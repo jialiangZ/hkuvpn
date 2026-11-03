@@ -442,7 +442,17 @@ static LRESULT CALLBACK PanelProc(HWND h, UINT m, WPARAM w, LPARAM l) {
                 if (id == ID_BTN_DISCONNECT) { DoDisconnect(); return 0; }
                 if (id == ID_BTN_CLEAR) {
                     SetWindowTextW(hEdLog, L"");
-                    g_logPos = -1;
+                    // Skip to the CURRENT end of the file: -1 would make
+                    // TailLog re-read the last 4KB and "resurrect" old lines.
+                    g_logPos = 0;
+                    HANDLE lh = CreateFileW(P.log.c_str(), GENERIC_READ,
+                        FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
+                        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+                    if (lh != INVALID_HANDLE_VALUE) {
+                        LARGE_INTEGER len;
+                        if (GetFileSizeEx(lh, &len)) g_logPos = len.QuadPart;
+                        CloseHandle(lh);
+                    }
                     return 0;
                 }
             }
@@ -1026,23 +1036,23 @@ static void LayoutAll() {
     (void)rc;
     int cardW = 760 - 48;   // 24px outer margins -> 712
 
-    // --- Connection card: label-over-field login form + actions ---
-    Move(hPanelConn, 24, 84, cardW, 78);
+    // --- Connection card: account over PIN, stacked buttons at right ---
+    Move(hPanelConn, 24, 84, cardW, 128);
     SendMessageW(GetDlgItem(hPanelConn, ID_LBL_ACCOUNT), WM_SETFONT, (WPARAM)gFSub, TRUE);
     SendMessageW(GetDlgItem(hPanelConn, ID_LBL_PIN), WM_SETFONT, (WPARAM)gFSub, TRUE);
     Move(GetDlgItem(hPanelConn, ID_LBL_ACCOUNT), 16, 12, 300, 16);
-    Move(GetDlgItem(hPanelConn, ID_LBL_PIN), 332, 12, 200, 16);
+    Move(GetDlgItem(hPanelConn, ID_LBL_PIN), 16, 66, 300, 16);
     SendMessageW(hEdAccount, WM_SETFONT, (WPARAM)gFBody, TRUE);
     SendMessageW(hEdPin, WM_SETFONT, (WPARAM)gFBody, TRUE);
-    Move(hEdAccount, 16, 32, 300, 30);
-    Move(hEdPin, 332, 32, 200, 30);
+    Move(hEdAccount, 16, 32, 540, 28);
+    Move(hEdPin, 16, 86, 540, 28);
     SendMessageW(hBtnConnect, WM_SETFONT, (WPARAM)gFButton, TRUE);
     SendMessageW(hBtnDisconnect, WM_SETFONT, (WPARAM)gFButton, TRUE);
-    Move(hBtnConnect, 548, 30, 74, 32);
-    Move(hBtnDisconnect, 628, 30, 74, 32);
+    Move(hBtnConnect, 572, 32, 128, 32);
+    Move(hBtnDisconnect, 572, 82, 128, 32);
 
     // --- Session card: 2x2 stat grid ---
-    Move(hPanelSession, 24, 176, cardW, 86);
+    Move(hPanelSession, 24, 226, cardW, 86);
     int capIds[] = { ID_CAP_VPN, ID_CAP_DURATION, ID_CAP_PROXY, ID_CAP_ROUTES };
     int valIds[] = { ID_VAL_VPN, ID_VAL_DURATION, ID_VAL_PROXY, ID_VAL_ROUTES };
     int colX[2] = { 16, 376 };
@@ -1058,14 +1068,14 @@ static void LayoutAll() {
     }
 
     // --- Log card fills the rest ---
-    int logY = 276;
-    Move(hPanelLog, 24, logY, cardW, 556 - logY);
+    int logY = 326;
+    Move(hPanelLog, 24, logY, cardW, 616 - logY);
     SendMessageW(GetDlgItem(hPanelLog, 0), WM_SETFONT, (WPARAM)gFSemi9, TRUE);
     Move(GetDlgItem(hPanelLog, 0), 16, 10, 400, 18);
     Move(hBtnClear, cardW - 88, 8, 72, 26);
     SendMessageW(hBtnClear, WM_SETFONT, (WPARAM)gFSub, TRUE);
     SendMessageW(hEdLog, WM_SETFONT, (WPARAM)gFMono, TRUE);
-    Move(hEdLog, 16, 38, cardW - 32, 556 - logY - 52);
+    Move(hEdLog, 16, 38, cardW - 32, 616 - logY - 52);
 
     InvalidateRect(hMain, NULL, TRUE);
 }
@@ -1193,12 +1203,12 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
 
     hMain = CreateWindowExW(WS_EX_COMPOSITED, L"HkuMain", L"HKU VPN",
         WS_OVERLAPPEDWINDOW & ~(WS_MAXIMIZEBOX | WS_THICKFRAME),
-        CW_USEDEFAULT, CW_USEDEFAULT, 760, 560, NULL, NULL, hInst, NULL);
+        CW_USEDEFAULT, CW_USEDEFAULT, 760, 616, NULL, NULL, hInst, NULL);
     g_hInst = hInst;
     {
         UINT dpi = GetDpiForWindow(hMain);
         g_scale = dpi / 96.0;
-        RECT adj = { 0, 0, (int)(760 * g_scale), (int)(560 * g_scale) };
+        RECT adj = { 0, 0, (int)(760 * g_scale), (int)(616 * g_scale) };
         AdjustWindowRectEx(&adj,
             WS_OVERLAPPEDWINDOW & ~(WS_MAXIMIZEBOX | WS_THICKFRAME), FALSE, 0);
         SetWindowPos(hMain, NULL, CW_USEDEFAULT, CW_USEDEFAULT,
