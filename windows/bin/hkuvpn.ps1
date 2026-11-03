@@ -741,7 +741,7 @@ function Invoke-DisconnectScript {
         # Bounded: the cscript replay (netsh calls inside) must not hang the
         # teardown; a timed-out replay is harmless - force-stop follows.
         $null = Invoke-BoundedProcess 'cscript.exe' `
-            ("//nologo \"" + $Script:VpncScript + "\"") 10000
+            ('//nologo "' + $Script:VpncScript + '"') 10000
     } catch {
     } finally {
         foreach ($k in $old.Keys) {
