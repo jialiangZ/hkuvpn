@@ -748,32 +748,38 @@ static void OpenMfaDlg(bool rejected) {
         return;
     }
     RECT mr; GetWindowRect(hMain, &mr);
-    int dw = 380, dh = 130;
-    int x = mr.left + ((mr.right - mr.left) - dw) / 2;
+    double s = g_scale;                     // scale the popup too: unscaled
+    int dw = (int)(380 * s), dh = (int)(130 * s);   // geometry is cramped on
+    int x = mr.left + ((mr.right - mr.left) - dw) / 2;   // high-DPI displays
     int y = mr.top + ((mr.bottom - mr.top) - dh) / 2;
     g_hMfaDlg = CreateWindowExW(WS_EX_DLGMODALFRAME, L"HkuMfaDlg",
         L"HKU VPN - MFA code",
         WS_POPUP | WS_CAPTION | WS_SYSMENU,
         x, y, dw, dh, hMain, NULL, g_hInst, NULL);
+    auto place = [&](HWND c, int px, int py, int pw, int ph) {
+        MoveWindow(c, (int)(px * s), (int)(py * s), (int)(pw * s), (int)(ph * s), TRUE);
+    };
     MkStatic(g_hMfaDlg, ID_MFA_TITLE, 0,
              L"Enter the 6-digit Microsoft Authenticator code:");
     SendMessageW(GetDlgItem(g_hMfaDlg, ID_MFA_TITLE), WM_SETFONT, (WPARAM)gFSub, TRUE);
-    MoveWindow(GetDlgItem(g_hMfaDlg, ID_MFA_TITLE), 18, 16, 340, 20, TRUE);
+    place(GetDlgItem(g_hMfaDlg, ID_MFA_TITLE), 18, 16, 340, 20);
     g_hMfaNote = MkStatic(g_hMfaDlg, ID_MFA_NOTE, 0,
         rejected ? L"The previous code was REJECTED - enter the one showing NOW." : L"");
     SendMessageW(g_hMfaNote, WM_SETFONT, (WPARAM)gFSub, TRUE);
-    MoveWindow(g_hMfaNote, 18, 38, 340, 18, TRUE);
+    place(g_hMfaNote, 18, 38, 340, 18);
     ShowWindow(g_hMfaNote, rejected ? SW_SHOW : SW_HIDE);
     g_hMfaEd = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
         WS_CHILD | WS_VISIBLE | ES_NUMBER | ES_CENTER | ES_AUTOHSCROLL,
-        18, 64, 200, 38, g_hMfaDlg, (HMENU)IDC_ED_MFA, g_hInst, NULL);
+        0, 0, 10, 10, g_hMfaDlg, (HMENU)IDC_ED_MFA, g_hInst, NULL);
     SendMessageW(g_hMfaEd, WM_SETFONT, (WPARAM)gFMono, TRUE);
     SendMessageW(g_hMfaEd, EM_SETLIMITTEXT, 6, 0);
+    place(g_hMfaEd, 18, 64, 200, 38);
     HWND ok = CreateWindowExW(0, L"BUTTON", L"Submit",
         WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | BS_DEFPUSHBUTTON,
-        234, 64, 110, 38, g_hMfaDlg, (HMENU)ID_BTN_MFA, g_hInst, NULL);
+        0, 0, 10, 10, g_hMfaDlg, (HMENU)ID_BTN_MFA, g_hInst, NULL);
     SendMessageW(ok, WM_SETFONT, (WPARAM)gFButton, TRUE);
     SetWindowSubclass(ok, BtnSubProc, 5, 0);
+    place(ok, 234, 64, 110, 38);
 
     EnableWindow(hMain, FALSE);
     ShowWindow(g_hMfaDlg, SW_SHOWNORMAL);
