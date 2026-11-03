@@ -383,7 +383,6 @@ static void CancelMfa() {
 static const wchar_t* kDefaultHint =
     L"Closing this window keeps the VPN running in the tray.";
 static ULONGLONG g_hintUntil = 0;
-static ULONGLONG g_savedUntil = 0;
 
 static void SetHint(const std::wstring& text) {
     SetText("footer-hint", text);
@@ -404,7 +403,7 @@ static void SetInputValue(const char* id, const std::wstring& v) {
     if (in) in->SetValue(Utf8(v));
 }
 
-static bool PersistCredentials() {
+static bool PersistCredentials(bool quiet = false) {
     std::wstring account = GetInputValue("account"), pin = GetInputValue("pin");
     auto trim = [](std::wstring& s) {
         while (!s.empty() && (s.front() == L' ' || s.front() == L'\t')) s.erase(0, 1);
@@ -413,8 +412,9 @@ static bool PersistCredentials() {
     };
     trim(account); trim(pin);
     if (account.empty()) {
-        MessageBoxW(g_hwnd, L"Enter your HKU account first (e.g. u1234567@connect.hku.hk).",
-                    L"HKU VPN", MB_ICONWARNING);
+        if (!quiet)
+            MessageBoxW(g_hwnd, L"Enter your HKU account first (e.g. u1234567@connect.hku.hk).",
+                        L"HKU VPN", MB_ICONWARNING);
         return false;
     }
     std::wstring vpnDir = JoinPath(HomeDir(), L".vpn");
@@ -566,11 +566,11 @@ public:
             else if (id == "btn-log-close") SetOverlay("log-overlay", false);
             else if (id == "log-overlay") SetOverlay("log-overlay", false);
 
-            else if (id == "btn-save-account") {
-                if (PersistCredentials()) {
-                    SetHint(L"Credentials saved.");
-                    SetText("btn-save-account", L"Saved");
-                    g_savedUntil = GetTickCount64() + 2000;
+        }
+        else if (ev.GetType() == "change") {
+            if (id == "account" || id == "pin") {
+                if (!GetInputValue("account").empty()) {
+                    if (PersistCredentials(true)) SetHint(L"Account details saved.");
                 }
             }
         }
@@ -659,10 +659,6 @@ static void Tick() {
     if (g_hintUntil && GetTickCount64() > g_hintUntil) {
         g_hintUntil = 0;
         SetText("footer-hint", kDefaultHint);
-    }
-    if (g_savedUntil && GetTickCount64() > g_savedUntil) {
-        g_savedUntil = 0;
-        SetText("btn-save-account", L"Save");
     }
 }
 
@@ -826,6 +822,8 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
     // ancestor that carries an action id (buttons may contain icon images).
     g_doc->AddEventListener("click", &g_events);
     El("mfa-code")->AddEventListener("keydown", &g_events);
+    El("account")->AddEventListener("change", &g_events);
+    El("pin")->AddEventListener("change", &g_events);
     g_doc->AddEventListener("click", &g_events);
 
     // Prefill credentials.

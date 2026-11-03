@@ -43,7 +43,6 @@
       <img src="assets/log.tga"/>
       <span>View log</span>
     </div>
-    <div id="btn-save-account" class="ghost">Save</div>
     <div id="footer-hint">Closing this window keeps the VPN running in the tray.</div>
   </div>
 

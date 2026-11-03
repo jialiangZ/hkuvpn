@@ -294,27 +294,6 @@ body {
     color: #374151;
 }
 
-#btn-save-account {
-    position: absolute;
-    left: 332dp;
-    top: 538dp;
-    width: 120dp;
-    height: 40dp;
-    box-sizing: border-box;
-    line-height: 38dp;
-    text-align: center;
-    font-size: 14dp;
-    color: #374151;
-    background: #ffffff;
-    border: 1dp #e2e5ea;
-    border-radius: 9dp;
-}
-
-#btn-save-account:hover {
-    background: #eef2f7;
-    border: 1dp #c9d2dc;
-}
-
 #footer-hint {
     position: absolute;
     left: 28dp;
