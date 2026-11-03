@@ -1661,6 +1661,25 @@ switch ($command) {
         Stop-TreeProcess $gostPid
         Invoke-CleanupSession -RemovePidFile $false   # keep pids for the report above
         if ($wPid -gt 0 -and $wPid -ne $PID) { Stop-TreeProcess $wPid }
+
+        # Sweep orphans whose pids.txt entry was lost or overwritten by a
+        # newer session (e.g. the app was force-killed between connect
+        # attempts): our openconnect lives in the official install dir and
+        # our gost in the tools dir - anything else is not ours to kill.
+        foreach ($p in @(Get-Process -Name openconnect, gost -ErrorAction SilentlyContinue)) {
+            $pp = $null
+            try { $pp = $p.Path } catch {}
+            $ours = $false
+            if ($p.ProcessName -eq 'openconnect' -and $pp -and
+                $pp.StartsWith((Join-Path $env:ProgramFiles 'OpenConnect'),
+                               [StringComparison]::OrdinalIgnoreCase)) { $ours = $true }
+            if ($p.ProcessName -eq 'gost' -and $pp -and
+                $pp.StartsWith($Script:VpnHome, [StringComparison]::OrdinalIgnoreCase)) { $ours = $true }
+            if ($ours) {
+                Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+                Write-Info ("stopped leftover {0} (pid {1})" -f $p.ProcessName, $p.Id)
+            }
+        }
         Remove-Item $Script:PidFile -Force -ErrorAction SilentlyContinue
         Write-Info 'HKU VPN stopped.'
         exit 0
