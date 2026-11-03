@@ -100,14 +100,14 @@ func (a *app) view(c *ui.Context) {
 				// Primary action.
 				a.primaryAction(c, t)
 
-				// Panels.
+				// The panels, as a row of icons: each one names itself in
+				// a tip when the pointer rests on it.
 				ui.Row(c).Gap(8).Children(func() {
-					ui.Button(c, "View log").Grow(1).OnClick(a.openLog)
-					ui.Button(c, "Diagnostics").Grow(1).OnClick(a.openDiagnostics)
-				})
-				ui.Row(c).Gap(8).Children(func() {
-					ui.Button(c, "Routes").Grow(1).OnClick(a.openRoutes)
-					ui.Button(c, "Settings").Grow(1).OnClick(a.openSettings)
+					ui.Spacer(c)
+					iconButton(c, iconLog, "View log", a.openLog)
+					iconButton(c, iconDiagnostics, "Diagnostics", a.openDiagnostics)
+					iconButton(c, iconRoutes, "Routes", a.openRoutes)
+					iconButton(c, iconSettings, "Settings", a.openSettings)
 				})
 			})
 		})
@@ -118,6 +118,17 @@ func (a *app) view(c *ui.Context) {
 		a.diagnosticsDialog(c, t)
 		a.settingsDialog(c, t)
 	})
+}
+
+// iconButton is a button that shows only an icon. The tip names it, and
+// so does the label, for the screen readers that do not see the icon.
+func iconButton(c *ui.Context, icon *ui.SVG, label string, action func()) {
+	ui.Button(c, "").Label(label).Tooltip(label).
+		Width(38).Height(34).
+		Children(func() {
+			ui.Icon(c, icon).FontSize(18)
+		}).
+		OnClick(action)
 }
 
 func detailRow(c *ui.Context, t *ui.Theme, label, value string) {

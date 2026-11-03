@@ -49,6 +49,10 @@ shown in the View log sheet.
 - **Log**: the session log with severity tags, a level filter, a search
   field, copy and export.
 
+The panels sit under the window as a row of icons (`assets/ui/*.svg`,
+Lucide-style outlines that take the text color, so they follow the
+theme). Each one names itself in a tip.
+
 The app's own state (preferences and the start time of the running
 session) lives in `%USERPROFILE%\.vpn\app-state.json`.
 
