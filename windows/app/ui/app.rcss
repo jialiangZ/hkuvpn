@@ -1,380 +1,558 @@
-/* Classic OpenConnect-style UI for HKU VPN, rebuilt in RmlUi. */
+/* HKU VPN - classic desktop layout with a clean, flat finish.
+   Sizes are in dp: RmlUi scales them with the monitor DPI. */
 
 body {
+    margin: 0dp;
+    padding: 0dp;
     font-family: "Segoe UI";
     font-size: 13dp;
-    color: #1f1f1f;
-    background: #f0f0f0;
+    color: #1b1f23;
+    background: #f3f4f6;
 }
 
-#main-bg {
-    width: 434dp;
-    height: 206dp;
-    background: #f0f0f0;
+#app {
+    z-index: 0;
+    width: 470dp;
+    height: 232dp;
+    background: #f3f4f6;
 }
 
-/* menu */
-#menu-bar {
+/* ------------------------------------------------------------- menu bar */
+
+#menubar {
     position: absolute;
-    left: 0dp;
+    left: 4dp;
     top: 0dp;
-    width: 434dp;
-    height: 22dp;
-    background: #f0f0f0;
-}
-.menu {
-    float: left;
-    height: 22dp;
-    padding: 2dp 8dp;
-    background: #f0f0f0;
-    color: #000;
-    border: 0dp;
-    font-size: 13dp;
-    text-align: left;
-}
-.menu:hover {
-    background: #e5f1fb;
-    border: 1dp #99d1ff;
+    width: 470dp;
+    height: 24dp;
+    background: #f3f4f6;
 }
 
-/* tabs */
+.menu {
+    display: inline-block;
+    height: 24dp;
+    padding: 0dp 10dp;
+    line-height: 24dp;
+    font-size: 12dp;
+    color: #202428;
+    background: #f3f4f6;
+}
+
+.menu:hover {
+    background: #e2ecf7;
+}
+
+/* ---------------------------------------------------------------- tabs */
+
 #tabs {
     position: absolute;
     left: 10dp;
-    top: 24dp;
-    width: 414dp;
-    height: 24dp;
-}
-.tab {
-    display: inline-block;
-    padding: 4dp 12dp;
-    background: #d9d9d9;
-    border-top-left-radius: 3dp;
-    border-top-right-radius: 3dp;
-    border: 1dp #a0a0a0;
-    border-bottom: 0dp;
-    margin-right: 4dp;
-    color: #000;
-    font-size: 13dp;
-}
-.tab.active {
-    background: #ffffff;
+    top: 25dp;
+    width: 450dp;
+    height: 26dp;
 }
 
-/* main page */
-#page-main {
+.tab {
+    display: inline-block;
+    height: 25dp;
+    padding: 0dp 16dp;
+    margin-right: 3dp;
+    line-height: 25dp;
+    font-size: 12dp;
+    color: #4a5158;
+    background: transparent;
+    border: 1dp transparent;
+    border-bottom: 0dp;
+    border-top-left-radius: 4dp;
+    border-top-right-radius: 4dp;
+}
+
+.tab:hover {
+    background: #e7eaee;
+}
+
+.tab.active {
+    height: 26dp;
+    background: #ffffff;
+    color: #111518;
+    font-weight: bold;
+}
+
+/* --------------------------------------------------------------- pages */
+
+.page {
+    display: none;
     position: absolute;
     left: 10dp;
-    top: 48dp;
-    width: 414dp;
-    height: 150dp;
-}
-#panel {
-    position: relative;
-    width: 414dp;
-    height: 150dp;
+    top: 50dp;
+    width: 450dp;
+    height: 148dp;
     background: #ffffff;
-    border: 1dp #a0a0a0;
-    border-top: 0dp;
+    border: 1dp #b6babf;
 }
-#lock-icon {
+
+.page.active {
+    display: block;
+}
+
+/* ------------------------------------------------------------ main page */
+
+#lock-wrap {
     position: absolute;
-    left: 14dp;
-    top: 27dp;
+    left: 18dp;
+    top: 40dp;
     width: 72dp;
     height: 72dp;
 }
-#content {
+
+#main-right {
     position: absolute;
-    left: 96dp;
-    top: 24dp;
-    width: 304dp;
-    height: 104dp;
+    left: 106dp;
+    top: 30dp;
+    width: 330dp;
 }
-#button-row {
-    position: absolute;
-    left: 98dp;
-    top: 89dp;
-    width: 302dp;
-    height: 28dp;
-}
-#status-row {
-    position: absolute;
-    left: 98dp;
-    top: 55dp;
-    width: 302dp;
-    height: 20dp;
-    font-size: 13dp;
-    color: #555;
-}
+
 #server-row {
-    height: 23dp;
+    height: 24dp;
 }
+
 #server-label {
     display: inline-block;
-    width: 44dp;
-    height: 22dp;
-    vertical-align: middle;
-}
-#server-box {
-    display: inline-block;
-    width: 216dp;
-    height: 22dp;
-    background: #ffffff;
-    border: 1dp #7a7a7a;
-    vertical-align: middle;
-}
-#server-value {
-    margin-left: 4dp;
-    margin-top: 2dp;
+    width: 50dp;
+    height: 24dp;
+    line-height: 24dp;
     font-size: 13dp;
-    color: #000;
+    color: #202428;
 }
+
+#server-combo {
+    display: inline-block;
+    width: 202dp;
+    height: 24dp;
+    background: #ffffff;
+    border: 1dp #8c9096;
+    border-radius: 2dp;
+}
+
+#server-value {
+    display: inline-block;
+    margin-left: 7dp;
+    margin-top: 2dp;
+    width: 165dp;
+    font-size: 13dp;
+    color: #1b1f23;
+}
+
+#combo-arrow {
+    display: inline-block;
+    width: 12dp;
+    height: 24dp;
+    margin-left: 4dp;
+}
+
+#combo-arrow img {
+    margin-top: 7dp;
+    width: 12dp;
+    height: 12dp;
+}
+
 .icon-btn {
     display: inline-block;
-    width: 22dp;
-    height: 22dp;
-    margin-left: 4dp;
-    background: #e1e1e1;
-    border: 1dp #adadad;
-    vertical-align: middle;
+    width: 26dp;
+    height: 24dp;
+    margin-left: 6dp;
+    background: #f6f7f8;
+    border: 1dp #b6babf;
+    border-radius: 2dp;
 }
+
+.icon-btn:hover {
+    background: #eaf2fa;
+    border: 1dp #8fb8dd;
+}
+
 .icon-btn img {
-    margin-top: 2dp;
-    margin-left: 2dp;
+    margin-left: 5dp;
+    margin-top: 4dp;
     width: 16dp;
     height: 16dp;
 }
 
+#actions {
+    margin-top: 28dp;
+    height: 30dp;
+}
+
+/* -------------------------------------------------------------- buttons */
+
 .btn {
     display: inline-block;
-    width: 112dp;
-    height: 24dp;
-    line-height: 20dp;
-    padding: 2dp 6dp;
-    background: #e1e1e1;
-    border: 1dp #adadad;
-    color: #000;
+    box-sizing: border-box;
+    width: 142dp;
+    height: 27dp;
+    padding: 0dp 10dp;
+    line-height: 25dp;
     font-size: 13dp;
     text-align: center;
-    vertical-align: middle;
-}
-.btn.primary {
-    background: #e1e1e1;
-    border: 1dp #0078d7;
-    color: #000;
-}
-.btn:hover {
-    background: #e5f1fb;
-    border: 1dp #0078d7;
-}
-.btn:active {
-    background: #cce4f7;
-    border: 1dp #005499;
-}
-.btn.disabled {
-    background: #f0f0f0;
-    border: 1dp #bfbfbf;
-    color: #838383;
-}
-#btn-log {
-    margin-left: 8dp;
-    width: 118dp;
+    color: #1b1f23;
+    background: #f7f8f9;
+    border: 1dp #b6babf;
+    border-radius: 3dp;
 }
 
-/* vpn info */
-#page-vpninfo {
-    display: none;
-    position: absolute;
-    left: 10dp;
-    top: 48dp;
-    width: 414dp;
-    height: 150dp;
+.btn:hover {
+    background: #eef5fb;
+    border: 1dp #8fb8dd;
+}
+
+.btn:active {
+    background: #dfeaf5;
+    border: 1dp #6d9cc4;
+}
+
+.btn.primary {
+    color: #ffffff;
+    background: #0f6b46;
+    border: 1dp #0f6b46;
+}
+
+.btn.primary:hover {
+    background: #138054;
+    border: 1dp #138054;
+}
+
+.btn.primary:active {
+    background: #0b5638;
+    border: 1dp #0b5638;
+}
+
+.btn.danger {
+    color: #b42318;
     background: #ffffff;
-    border: 1dp #a0a0a0;
-    border-top: 0dp;
+    border: 1dp #d92d20;
 }
-.info-grid {
-    margin: 10dp;
-    width: 394dp;
+
+.btn.danger:hover {
+    background: #fef3f2;
 }
+
+.btn.disabled {
+    color: #9aa0a6;
+    background: #f2f3f4;
+    border: 1dp #d5d8db;
+}
+
+#btn-log {
+    width: 128dp;
+    margin-left: 8dp;
+}
+
+#btn-log img {
+    display: inline-block;
+    width: 14dp;
+    height: 14dp;
+    margin-right: 6dp;
+    margin-top: 6dp;
+}
+
+#btn-log span {
+    display: inline-block;
+    height: 25dp;
+    line-height: 25dp;
+}
+
+/* ------------------------------------------------------------ vpn info */
+
+#page-vpninfo {
+    padding: 12dp 18dp;
+    box-sizing: border-box;
+}
+
 .info-row {
-    height: 20dp;
-    margin-bottom: 2dp;
+    height: 17dp;
+    margin-bottom: 3dp;
 }
+
 .info-label {
     display: inline-block;
-    width: 70dp;
-    font-weight: bold;
-    font-size: 13dp;
-}
-.info-value {
-    display: inline-block;
-    width: 318dp;
-    font-size: 13dp;
-    color: #000;
+    width: 118dp;
+    font-size: 12dp;
+    color: #6a7178;
 }
 
-/* overlays */
-#settings-overlay, #log-overlay, #mfa-overlay, #about-overlay {
+.info-value {
+    display: inline-block;
+    width: 290dp;
+    font-size: 13dp;
+    color: #1b1f23;
+}
+
+/* ----------------------------------------------------------- status bar */
+
+#statusbar {
+    position: absolute;
+    left: 0dp;
+    top: 204dp;
+    width: 470dp;
+    height: 24dp;
+    box-sizing: border-box;
+    background: #eceef1;
+    border-top: 1dp #d5d8db;
+}
+
+#status-dot {
+    display: inline-block;
+    width: 8dp;
+    height: 8dp;
+    margin-left: 12dp;
+    margin-top: 8dp;
+    margin-right: 8dp;
+    border-radius: 4dp;
+    background: #8b9096;
+}
+
+#status-text {
+    display: inline-block;
+    height: 23dp;
+    line-height: 23dp;
+    font-size: 11dp;
+    color: #3d444c;
+}
+
+#status-meta {
+    display: inline-block;
+    height: 23dp;
+    line-height: 23dp;
+    margin-left: 12dp;
+    font-size: 11dp;
+    color: #6a7178;
+}
+
+/* -------------------------------------------------------------- dialogs */
+
+.overlay {
     display: none;
     position: absolute;
     left: 0dp;
     top: 0dp;
-    width: 434dp;
-    height: 206dp;
-    background: #00000044;
-    z-index: 20;
+    width: 470dp;
+    height: 232dp;
+    background: #1b1f2340;
+    z-index: 200;
 }
-#settings-overlay.visible, #log-overlay.visible, #mfa-overlay.visible, #about-overlay.visible {
+
+.overlay.visible {
     display: block;
 }
 
-/* dialogs */
-#settings-dialog {
+.dialog {
     position: absolute;
-    left: 67dp;
-    top: 30dp;
-    width: 300dp;
-    height: 146dp;
     background: #ffffff;
-    border: 1dp #9a9a9a;
-    padding: 10dp;
+    border: 1dp #9aa0a6;
+    border-radius: 5dp;
+    padding: 16dp;
     box-sizing: border-box;
 }
+
 .dlg-title {
-    font-size: 13dp;
-    font-weight: bold;
-    margin-bottom: 8dp;
-}
-.field {
-    margin-bottom: 6dp;
-}
-.field label {
     display: block;
-    font-size: 12dp;
-    color: #555;
-    margin-bottom: 2dp;
+    font-size: 15dp;
+    font-weight: bold;
+    color: #111518;
 }
+
+.dlg-sub {
+    display: block;
+    margin-top: 3dp;
+    font-size: 11dp;
+    color: #6a7178;
+}
+
+.dlg-buttons {
+    position: absolute;
+    right: 16dp;
+    bottom: 14dp;
+}
+
+.dlg-buttons .btn {
+    width: 78dp;
+    height: 25dp;
+    line-height: 23dp;
+    margin-left: 8dp;
+    font-size: 12dp;
+}
+
+/* settings */
+#settings-dialog {
+    left: 75dp;
+    top: 13dp;
+    width: 320dp;
+    height: 206dp;
+}
+
+.field {
+    display: block;
+    margin-top: 10dp;
+}
+
+.field-label {
+    display: block;
+    font-size: 11dp;
+    color: #4a5158;
+    margin-bottom: 3dp;
+}
+
 .field input {
     display: block;
     box-sizing: border-box;
-    width: 278dp;
+    width: 288dp;
     height: 24dp;
-    padding: 1dp 4dp;
-    background: #ffffff;
-    border: 1dp #7a7a7a;
+    padding: 0dp 7dp;
     font-size: 13dp;
-    color: #000;
-}
-.dlg-buttons {
-    margin-top: 8dp;
-    text-align: right;
-}
-.dlg-buttons .btn {
-    min-width: 72dp;
-    height: 23dp;
-    margin-left: 6dp;
-    padding: 1dp 8dp;
+    color: #1b1f23;
+    background: #ffffff;
+    border: 1dp #8c9096;
+    border-radius: 2dp;
 }
 
-#log-dialog {
-    position: absolute;
-    left: 17dp;
-    top: 25dp;
-    width: 400dp;
-    height: 160dp;
-    background: #ffffff;
-    border: 1dp #9a9a9a;
-    padding: 8dp;
-    box-sizing: border-box;
+.field input:focus {
+    border: 1dp #0f6b46;
 }
+
+/* log */
+#log-dialog {
+    left: 20dp;
+    top: 7dp;
+    width: 430dp;
+    height: 218dp;
+    padding: 14dp;
+}
+
 #log-view {
     position: absolute;
-    left: 8dp;
-    top: 30dp;
-    width: 384dp;
-    height: 94dp;
-    background: #ffffff;
-    border: 1dp #7a7a7a;
+    left: 14dp;
+    top: 48dp;
+    width: 402dp;
+    height: 128dp;
+    background: #fbfcfd;
+    border: 1dp #d5d8db;
+    border-radius: 2dp;
     overflow-y: auto;
-    overflow-x: auto;
-}
-#log-content {
-    padding: 2dp 4dp;
-    font-family: Consolas;
-    font-size: 11dp;
-    color: #000;
-    white-space: nowrap;
-}
-#log-content div {
-    height: 14dp;
-}
-#log-dialog .dlg-buttons {
-    position: absolute;
-    right: 8dp;
-    bottom: 6dp;
+    overflow-x: hidden;
 }
 
-#mfa-dialog {
-    position: absolute;
-    left: 77dp;
-    top: 42dp;
-    width: 280dp;
-    height: 120dp;
-    background: #ffffff;
-    border: 1dp #9a9a9a;
-    padding: 10dp;
-    box-sizing: border-box;
-}
-.mfa-text {
-    font-size: 12dp;
-    margin-bottom: 4dp;
-}
-#mfa-note {
+#log-content {
+    padding: 5dp 7dp;
+    font-family: Consolas;
     font-size: 11dp;
-    color: #c42b2b;
+    color: #24292f;
+    white-space: normal;
+}
+
+#log-content div {
+    display: block;
+    width: 384dp;
+    margin-bottom: 1dp;
+}
+
+#log-dialog .dlg-buttons {
+    bottom: 12dp;
+}
+
+/* mfa */
+#mfa-dialog {
+    left: 75dp;
+    top: 32dp;
+    width: 320dp;
+    height: 168dp;
+}
+
+#mfa-note {
+    display: block;
+    margin-top: 8dp;
     height: 14dp;
+    font-size: 11dp;
+    color: #b42318;
 }
-.mfa-row {
+
+#mfa-row {
     margin-top: 4dp;
+    height: 28dp;
 }
+
 #mfa-code {
     display: inline-block;
     box-sizing: border-box;
-    width: 160dp;
-    height: 24dp;
-    padding: 1dp 6dp;
-    border: 1dp #7a7a7a;
+    width: 180dp;
+    height: 27dp;
+    padding: 0dp 10dp;
     font-family: Consolas;
-    font-size: 14dp;
+    font-size: 16dp;
     text-align: center;
-}
-#btn-mfa {
-    display: inline-block;
-    margin-left: 6dp;
-    min-width: 72dp;
-    height: 24dp;
-}
-.mfa-hint {
-    margin-top: 8dp;
-    font-size: 10dp;
-    color: #777;
+    color: #1b1f23;
+    background: #ffffff;
+    border: 1dp #8c9096;
+    border-radius: 2dp;
 }
 
-#about-dialog {
-    position: absolute;
-    left: 92dp;
-    top: 58dp;
-    width: 250dp;
-    height: 90dp;
-    background: #ffffff;
-    border: 1dp #9a9a9a;
-    padding: 10dp;
-    box-sizing: border-box;
+#mfa-code:focus {
+    border: 1dp #0f6b46;
 }
-.about-text {
+
+#btn-mfa {
+    width: 100dp;
+    margin-left: 8dp;
+}
+
+#mfa-hint {
+    display: block;
+    margin-top: 10dp;
+    font-size: 10dp;
+    color: #8b9096;
+}
+
+/* about */
+#about-dialog {
+    left: 105dp;
+    top: 28dp;
+    width: 260dp;
+    height: 176dp;
+}
+
+.about-line {
+    display: block;
+    margin-top: 6dp;
     font-size: 12dp;
-    color: #333;
-    margin-bottom: 8dp;
+    color: #3d444c;
+}
+
+/* ------------------------------------------------------------ file menu */
+
+#file-menu {
+    display: none;
+    position: absolute;
+    left: 8dp;
+    top: 25dp;
+    width: 132dp;
+    background: #ffffff;
+    border: 1dp #b6babf;
+    z-index: 40;
+}
+
+#file-menu.visible {
+    display: block;
+}
+
+.file-item {
+    display: block;
+    height: 26dp;
+    padding: 0dp 12dp;
+    line-height: 26dp;
+    font-size: 12dp;
+    color: #202428;
+    background: #ffffff;
+}
+
+.file-item:hover {
+    background: #e8f1fa;
 }

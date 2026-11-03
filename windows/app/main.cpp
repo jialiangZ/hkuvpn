@@ -258,16 +258,26 @@ static bool BtnEnabled(const char* id) {
 }
 
 static void UpdateStatus() {
-    std::wstring s;
-    if (g_disconnecting) s = L"Disconnecting...";
+    std::wstring text, meta;
+    const char* dot = "#8b9096";
+    if (g_disconnecting) { text = L"Disconnecting..."; dot = "#c47f17"; }
     else switch (g_state) {
         case APP_CONNECTED:
-            s = (WorkerAlive() && HeartbeatFresh())
-                ? L"Connected" : L"Worker unresponsive"; break;
-        case APP_CONNECTING: s = L"Connecting..."; break;
-        default:             s = L"Disconnected"; break;
+            if (WorkerAlive() && HeartbeatFresh()) { text = L"Connected"; dot = "#12873e"; }
+            else { text = L"Worker unresponsive"; dot = "#cf222e"; }
+            break;
+        case APP_CONNECTING: text = L"Connecting..."; dot = "#c47f17"; break;
+        default: text = L"Disconnected"; break;
     }
-    SetText("status-row", s);
+    if (g_state == APP_CONNECTED) {
+        std::wstring ip = StateValue(L"IP4");
+        if (!ip.empty()) meta = ip;
+    }
+    if (!g_subOverride.empty()) meta = g_subOverride;
+
+    SetText("status-text", text);
+    SetText("status-meta", meta);
+    if (Rml::Element* d = El("status-dot")) d->SetProperty("background", dot);
     if (Rml::Element* img = El("lock-icon")) {
         img->SetAttribute("src",
             g_state == APP_CONNECTED ? "assets/lock-green.tga" :
@@ -279,11 +289,14 @@ static void UpdateStatus() {
 static void SetState(App_State s) {
     g_state = s;
     g_subOverride.clear();
-    SetBtnEnabled("btn-connect", s == APP_IDLE);
-    // Classic OpenConnect UI: Connect becomes Disconnect while connected,
-    // and Cancel while connecting.
+    SetBtnEnabled("btn-connect", true);
+    // Connect -> Cancel -> Disconnect on the same button.
     SetText("btn-connect", s == APP_CONNECTING ? L"Cancel" :
                            s == APP_CONNECTED ? L"Disconnect" : L"Connect");
+    if (Rml::Element* b = El("btn-connect")) {
+        b->SetClass("primary", s != APP_CONNECTED);
+        b->SetClass("danger", s == APP_CONNECTED);
+    }
     if (s == APP_CONNECTED) {
         g_connectedTick = g_connectedTick ? g_connectedTick : GetTickCount64();
         std::wstring ip = StateValue(L"IP4");
@@ -312,6 +325,13 @@ static void CloseMfa() {
 
 static void SetOverlay(const char* id, bool visible) {
     if (Rml::Element* o = El(id)) o->SetClass("visible", visible);
+    if (!g_doc) return;
+    bool any = false;
+    for (const char* overlay : { "settings-overlay", "log-overlay", "mfa-overlay", "about-overlay" })
+        if (Rml::Element* o = El(overlay))
+            if (o->IsClassSet("visible")) any = true;
+    if (Rml::Element* mb = El("menubar"))
+        mb->SetProperty("display", any ? "none" : "block");
 }
 static void OpenMfa(bool rejected) {
     SetOverlay("mfa-overlay", true);
@@ -470,17 +490,28 @@ static void ClearLog() {
 
 // ---------------------------------------------------------------- events
 
+static std::string ActionId(Rml::Element* element) {
+    for (int depth = 0; depth < 8 && element; depth++) {
+        const Rml::String& id = element->GetId();
+        if (!id.empty()) return id;
+        element = element->GetParentNode();
+    }
+    return std::string();
+}
+
 class UiEvents : public Rml::EventListener {
 public:
     void ProcessEvent(Rml::Event& ev) override {
-        Rml::String id = ev.GetTargetElement()->GetId();
+        const std::string id = ActionId(ev.GetTargetElement());
+
         if (ev.GetType() == "click") {
-            if (id == "btn-connect" || id == "content" || id == "button-row" || id == "panel" || id == "page-main" || id == "main-bg") {
-                if (BtnEnabled("btn-connect")) {
-                    if (g_state == APP_CONNECTED) DoDisconnect();
-                    else if (g_state == APP_CONNECTING) { WriteAllTextW(P.stop, L"stop"); SetState(APP_IDLE); }
-                    else DoConnect();
-                }
+            if (id == "btn-connect") {
+                if (!BtnEnabled("btn-connect")) return;
+                if (g_state == APP_CONNECTED) DoDisconnect();
+                else if (g_state == APP_CONNECTING) {
+                    WriteAllTextW(P.stop, L"stop");
+                    SetState(APP_IDLE);
+                } else DoConnect();
             }
             else if (id == "btn-log") SetOverlay("log-overlay", true);
             else if (id == "btn-settings") SetOverlay("settings-overlay", true);
@@ -488,32 +519,30 @@ public:
             else if (id == "btn-log-clear") ClearLog();
             else if (id == "btn-log-close") SetOverlay("log-overlay", false);
             else if (id == "btn-settings-close") SetOverlay("settings-overlay", false);
-            else if (id == "btn-settings-save") { PersistCredentials(); SetOverlay("settings-overlay", false); }
+            else if (id == "btn-settings-save") {
+                if (PersistCredentials()) SetOverlay("settings-overlay", false);
+            }
             else if (id == "btn-about-close") SetOverlay("about-overlay", false);
-            else if (id == "tab-main") {
-                El("page-main")->SetClass("active", true);
-                El("page-vpninfo")->SetProperty("display", "none");
-                El("tab-main")->SetClass("active", true);
-                El("tab-vpninfo")->SetClass("active", false);
+            else if (id == "tab-main" || id == "tab-vpninfo") {
+                const bool main = (id == "tab-main");
+                El("tab-main")->SetClass("active", main);
+                El("tab-vpninfo")->SetClass("active", !main);
+                El("page-main")->SetClass("active", main);
+                El("page-vpninfo")->SetClass("active", !main);
             }
-            else if (id == "tab-vpninfo") {
-                El("page-main")->SetProperty("display", "none");
-                El("page-vpninfo")->SetProperty("display", "block");
-                El("tab-vpninfo")->SetClass("active", true);
-                El("tab-main")->SetClass("active", false);
-            }
-            else if (id == "menu-file") { /* no extra profiles in HKU build */ }
-            else if (id == "menu-view") SetOverlay("log-overlay", true);
+            else if (id == "menu-file") SetOverlay("file-menu", true);
+            else if (id == "menu-view") SetOverlay("file-menu", false), SetOverlay("log-overlay", true);
             else if (id == "menu-settings") SetOverlay("settings-overlay", true);
             else if (id == "menu-help") SetOverlay("about-overlay", true);
-        } else if (ev.GetType() == "keydown") {
+            else if (id == "file-hide") { SetOverlay("file-menu", false); ShowWindow(g_hwnd, SW_HIDE); }
+            else if (id == "file-exit") PostQuitMessage(0);
+        }
+        else if (ev.GetType() == "keydown") {
             int key = ev.GetParameter<int>("key_identifier", 0);
             if (id == "mfa-code") {
                 if (key == Rml::Input::KI_RETURN) { SubmitMfa(); ev.StopPropagation(); }
                 else if (key == Rml::Input::KI_ESCAPE) { CancelMfa(); ev.StopPropagation(); }
             }
-        } else if (ev.GetType() == "submit") {
-            if (id == "mfa-code") SubmitMfa();
         }
     }
 };
@@ -721,7 +750,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
     gIcoOrange = MakeDotIcon(RGB(154, 103, 0));
     gIcoRed    = MakeDotIcon(RGB(207, 34, 46));
 
-    if (!Backend::Initialize("HKU VPN", 434, 206, false)) return 1;
+    if (!Backend::Initialize("HKU VPN", 470, 232, false)) return 1;
     g_hwnd = FindWindowW(L"HKU VPN", NULL);
     if (!g_hwnd) {
         // Window class name == window title in the stock backend.
@@ -740,7 +769,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
     Rml::SetRenderInterface(Backend::GetRenderInterface());
     Rml::Initialise();
 
-    g_ctx = Rml::CreateContext("main", Rml::Vector2i(434, 206));
+    g_ctx = Rml::CreateContext("main", Rml::Vector2i(470, 232));
     if (!g_ctx) return 1;
 
     // Fonts from the Windows font directory.
@@ -759,11 +788,9 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
     g_doc->Show();
 
     // Event wiring.
-    for (const char* id : { "btn-connect", "btn-log", "btn-settings", "btn-mfa",
-                            "btn-log-clear", "btn-log-close", "btn-settings-close", "btn-settings-save",
-                            "btn-about-close", "tab-main", "tab-vpninfo", "menu-file", "menu-view",
-                            "menu-settings", "menu-help" })
-        El(id)->AddEventListener("click", &g_events);
+    // One listener on the document: each click resolves to the nearest
+    // ancestor that carries an action id (buttons may contain icon images).
+    g_doc->AddEventListener("click", &g_events);
     El("mfa-code")->AddEventListener("keydown", &g_events);
     g_doc->AddEventListener("click", &g_events);
 

@@ -92,7 +92,7 @@ hkuvpn --stop       # 停止（活跃 worker 自清理，免 UAC；死会话强�
 
 三种长会话模式按场景选：
 
-- **桌面 App**（原生 Win32，`windows\app`）：`HKUVPN.exe`（约 800KB，无任何运行时依赖，MinGW 交叉构建，见 `windows\app\build.sh`）。状态头、会话信息（账号/VPN IP/时长/代理/学习路由+心跳）、连接中行内 MFA 输入、实时日志视窗、托盘最小化；断开免 UAC，退出 App 不影响会话。另有纯 PowerShell 备胎 `bin\hkuvpn-app.ps1`（无需构建即可用）。
+- **桌面 App**（RmlUi 前端，`windows\app`）：`HKUVPN.exe`，经典 OpenConnect 风格窗口 —— 菜单栏、Main / VPN Info 标签、锁形状态图标、服务器行、Connect / View log，另有账号设置对话框、日志窗口、MFA 提示框、关闭到托盘。界面由 `ui/*.rml`、`ui/*.rcss` 与静态链接的 RmlUi 组成，见 `windows\app\build.sh`（首次需 `./build.sh deps` 构建 RmlUi/FreeType）。断开免 UAC，退出 App 不影响会话。
 - **智能模式**（默认）：整个会话挂在当前控制台，关窗/Ctrl+C 即断开，适合双击图标使用；
 - **`-t` 终端模式**：隧道跑在隐藏的提权 worker 里，MFA 直接在你的终端输入（投递空码或超时会自动停掉 worker）。连接后**关闭终端不影响 VPN**，适合日常从终端启动；
 - **`-d` 后台模式**：无交互启动，配合 `--mfa` 投递，适合脚本。
