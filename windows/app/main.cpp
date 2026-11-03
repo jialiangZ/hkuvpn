@@ -72,6 +72,7 @@ static bool g_realExit = false;
 static ULONGLONG g_connectedTick = 0;
 static long long g_logPos = -1;
 static std::wstring g_launcher, g_account = L"-";
+static std::wstring g_subOverride;   // transient header sub-line while connecting
 static double g_scale = 1.0;
 
 static HWND hMain, hPanelSession, hPanelCreds, hPanelLog;
@@ -395,13 +396,18 @@ static void PaintHeader(HDC dc, const RECT& rc) {
     SelectObject(dc, gFSub);
     SetTextColor(dc, C_MUTED);
     const wchar_t* sub;
-    switch (g_state) {
-        case APP_CONNECTED:
-            sub = (WorkerAlive() && HeartbeatFresh())
-                ? L"Tunnel is up - traffic via 127.0.0.1:1080/1088 goes through HKU"
-                : L"The worker loop stopped - use Disconnect to recover"; break;
-        case APP_CONNECTING: sub = L"Requesting elevation / bringing the tunnel up"; break;
-        default:            sub = L"Tunnel is down"; break;
+    if (!g_subOverride.empty()) {
+        sub = g_subOverride.c_str();
+        SetTextColor(dc, C_ACCENT);
+    } else {
+        switch (g_state) {
+            case ST_CONNECTED:
+                sub = (WorkerAlive() && HeartbeatFresh())
+                    ? L"Tunnel is up - traffic via 127.0.0.1:1080/1088 goes through HKU"
+                    : L"The worker loop stopped - use Disconnect to recover"; break;
+            case ST_CONNECTING: sub = L"Requesting elevation / bringing the tunnel up"; break;
+            default:            sub = L"Tunnel is down"; break;
+        }
     }
     TextOutW(dc, (int)(52 * g_scale), (int)(46 * g_scale), sub, (int)wcslen(sub));
     SelectObject(dc, of);
@@ -548,6 +554,7 @@ static bool PersistCredentials() {
 
 static void SetState(App_State s) {
     g_state = s;
+    g_subOverride.clear();
     bool busy = (s != APP_IDLE);
     EnableWindow(hBtnConnect, s == APP_IDLE);
     EnableWindow(hBtnDisconnect, busy);
@@ -658,7 +665,7 @@ static LRESULT CALLBACK MfaDlgProc(HWND h, UINT m, WPARAM w, LPARAM l) {
                     return 0;
                 }
                 if (WriteAllTextW(P.response, code)) {
-                    CloseMfaDlg();
+                    g_subOverride = L"MFA code accepted - establishing tunnel (DTLS handshake + route learning can take ~30s)...";
                 } else {
                     SetWindowTextW(g_hMfaNote, L"Could not deliver the code.");
                     ShowWindow(g_hMfaNote, SW_SHOW);
@@ -666,18 +673,25 @@ static LRESULT CALLBACK MfaDlgProc(HWND h, UINT m, WPARAM w, LPARAM l) {
                 return 0;
             }
             if (LOWORD(w) == ID_BTN_DISCONNECT && HIWORD(w) == BN_CLICKED) {
-                // Cancel = abort the half-built session.
-                WriteAllTextW(P.stop, L"stop");
+                // Cancel = abort the half-built session (harmless afterwards:
+                // guarded by state).
+                if (g_state != APP_CONNECTED) {
+                    WriteAllTextW(P.stop, L"stop");
+                    SetState(APP_IDLE);
+                }
                 CloseMfaDlg();
-                SetState(APP_IDLE);
                 return 0;
             }
             return 0;
         }
         case WM_CLOSE:
-            WriteAllTextW(P.stop, L"stop");
+            if (g_state != APP_CONNECTED) {
+                // Only abort while the session is still being built; after
+                // CONNECTED the dialog closes itself and the tunnel lives on.
+                WriteAllTextW(P.stop, L"stop");
+                SetState(APP_IDLE);
+            }
             CloseMfaDlg();
-            SetState(APP_IDLE);
             return 0;
     }
     return DefWindowProcW(h, m, w, l);
