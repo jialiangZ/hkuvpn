@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- State colour is substituted by make-icons.py (STATE_COLOR). -->
+  <path d="M128 26 L212 58 V130 C212 182 176 219 128 238 C80 219 44 182 44 130 V58 Z"
+        fill="STATE_COLOR" stroke="#FFFFFF" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M74 110 C94 101 116 104 128 115 L128 165 C116 154 94 151 74 160 Z" fill="#FFFFFF"/>
+  <path d="M182 110 C162 101 140 104 128 115 L128 165 C140 154 162 151 182 160 Z" fill="#FFFFFF"/>
+</svg>

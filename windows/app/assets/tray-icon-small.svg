@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- Simplified tray mark for 16-24px taskbar slots. -->
+  <path d="M128 22 L214 56 V130 C214 184 178 222 128 242 C78 222 42 184 42 130 V56 Z"
+        fill="STATE_COLOR" stroke="#FFFFFF" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M70 106 C92 96 116 99 128 111 L128 168 C116 156 92 153 70 163 Z" fill="#FFFFFF"/>
+  <path d="M186 106 C164 96 140 99 128 111 L128 168 C140 156 164 153 186 163 Z" fill="#FFFFFF"/>
+  <path d="M128 111 V168" stroke="STATE_COLOR" stroke-width="12" stroke-linecap="round"/>
+</svg>

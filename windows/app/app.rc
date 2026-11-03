@@ -4,5 +4,11 @@
 // Application icon (multi-size).
 1 ICON "app.ico"
 
+// Tray icons: multi-size ICOs whose colour encodes the connection state.
+10 ICON "tray-gray.ico"    // disconnected
+11 ICON "tray-green.ico"   // connected
+12 ICON "tray-amber.ico"   // connecting
+13 ICON "tray-red.ico"     // worker unresponsive
+
 // Common-controls v6 + PerMonitorV2 DPI manifest. 24 = RT_MANIFEST.
 1 24 "app.manifest"

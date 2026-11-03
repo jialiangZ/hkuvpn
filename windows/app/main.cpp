@@ -190,35 +190,17 @@ static void FindLauncherAndAccount() {
 
 // ---------------------------------------------------------------- tray
 
-static HICON MakeDotIcon(COLORREF c) {
-    const int S = 32;
-    HDC dc = GetDC(NULL);
-    HDC mdc = CreateCompatibleDC(dc);
-    BITMAPINFO bi = {};
-    bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
-    bi.bmiHeader.biWidth = S;
-    bi.bmiHeader.biHeight = -S;
-    bi.bmiHeader.biPlanes = 1;
-    bi.bmiHeader.biBitCount = 32;
-    bi.bmiHeader.biCompression = BI_RGB;
-    void* bits = NULL;
-    HBITMAP bmp = CreateDIBSection(dc, &bi, DIB_RGB_COLORS, &bits, NULL, 0);
-    HBITMAP ob = (HBITMAP)SelectObject(mdc, bmp);
-    HBRUSH br = CreateSolidBrush(c);
-    HPEN np = CreatePen(PS_NULL, 0, 0);
-    HPEN op = (HPEN)SelectObject(mdc, np);
-    HBRUSH obr = (HBRUSH)SelectObject(mdc, br);
-    Ellipse(mdc, 2, 2, S - 2, S - 2);
-    SelectObject(mdc, op); SelectObject(mdc, obr);
-    DeleteObject(np); DeleteObject(br);
-    HBITMAP mask = CreateBitmap(S, S, 1, 1, NULL);
-    ICONINFO ii = { TRUE, 0, 0, mask, bmp };
-    HICON ico = CreateIconIndirect(&ii);
-    DeleteObject(bmp); DeleteObject(mask);
-    SelectObject(mdc, ob);
-    DeleteDC(mdc);
-    ReleaseDC(NULL, dc);
-    return ico;
+static HICON LoadTrayIcon(int resource_id) {
+    // Load at the taskbar's small-icon size so Windows picks the matching
+    // frame out of the multi-size ICO instead of downscaling one bitmap.
+    int cx = GetSystemMetrics(SM_CXSMICON);
+    int cy = GetSystemMetrics(SM_CYSMICON);
+    HICON icon = (HICON)LoadImageW(g_hInst, MAKEINTRESOURCEW(resource_id),
+                                   IMAGE_ICON, cx, cy, LR_DEFAULTCOLOR);
+    if (!icon)
+        icon = (HICON)LoadImageW(g_hInst, MAKEINTRESOURCEW(resource_id),
+                                 IMAGE_ICON, 0, 0, LR_DEFAULTSIZE | LR_DEFAULTCOLOR);
+    return icon;
 }
 static HICON StateIcon() {
     switch (g_state) {
@@ -247,12 +229,6 @@ static void ShowFromTray() {
 
 // ------------------------------------------------------------- ui update
 
-static void SetBtnEnabled(const char* id, bool on) {
-    Rml::Element* e = El(id);
-    if (!e) return;
-    if (on) e->SetClass("disabled", false);
-    else    e->SetClass("disabled", true);
-}
 static bool BtnEnabled(const char* id) {
     Rml::Element* e = El(id);
     return e && !e->IsClassSet("disabled");
@@ -775,10 +751,10 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
     P.stop     = JoinPath(P.base, L"stop.flag");
     FindLauncherAndAccount();
 
-    gIcoGray   = MakeDotIcon(RGB(150, 153, 158));
-    gIcoGreen  = MakeDotIcon(RGB(26, 127, 55));
-    gIcoOrange = MakeDotIcon(RGB(154, 103, 0));
-    gIcoRed    = MakeDotIcon(RGB(207, 34, 46));
+    gIcoGray   = LoadTrayIcon(10);
+    gIcoGreen  = LoadTrayIcon(11);
+    gIcoOrange = LoadTrayIcon(12);
+    gIcoRed    = LoadTrayIcon(13);
 
     if (!Backend::Initialize("HKU VPN", 480, 620, false)) return 1;
     g_hwnd = FindWindowW(L"HKU VPN", NULL);
