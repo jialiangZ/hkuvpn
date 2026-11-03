@@ -30,6 +30,16 @@ var comspec = ws.ExpandEnvironmentStrings("%comspec%");
 
 // -------------------------------------------------------------- logging
 
+// English-only, locale-independent timestamp: the log is decoded with the
+// system ANSI code page, so non-ASCII dates (e.g. Chinese toLocaleString
+// output) would render as mojibake there.
+function isoStamp() {
+    var d = new Date();
+    function p2(n) { return (n < 10 ? "0" : "") + n; }
+    return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()) +
+           " " + p2(d.getHours()) + ":" + p2(d.getMinutes()) + ":" + p2(d.getSeconds());
+}
+
 function log(msg) {
     var path = env("HKU_LOG_FILE");
     if (!path) {
@@ -38,7 +48,7 @@ function log(msg) {
     try {
         var fs = WScript.CreateObject("Scripting.FileSystemObject");
         var f = fs.OpenTextFile(path, 8, true);
-        f.WriteLine(new Date().toLocaleString() + " [vpnc] " + msg);
+        f.WriteLine(isoStamp() + " [vpnc] " + msg);
         f.Close();
     } catch (e) {
         // Logging must never break the connection.
@@ -293,7 +303,7 @@ function doConnect() {
     }
 
     var lines = [
-        "TIME=" + new Date().toLocaleString(),
+        "TIME=" + isoStamp(),
         "TUNIDX=" + tunidx,
         "IP4=" + ip4,
         "MASK=" + mask,

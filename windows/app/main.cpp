@@ -46,7 +46,7 @@ static HBRUSH gBrBg, gBrCard, gBrLogBg;
 // ---------------------------------------------------------------- ids
 
 enum {
-    IDC_PANEL_SESSION = 500, IDC_PANEL_MFA = 501, IDC_PANEL_LOG = 502,
+    IDC_PANEL_SESSION = 500, IDC_PANEL_CONN = 504, IDC_PANEL_MFA = 501, IDC_PANEL_LOG = 502,
     IDC_PANEL_CREDS = 503,
     ID_CAP_ACCOUNT = 100, ID_CAP_VPN, ID_CAP_DURATION, ID_CAP_PROXY, ID_CAP_ROUTES,
     ID_VAL_ACCOUNT = 120, ID_VAL_VPN, ID_VAL_DURATION, ID_VAL_PROXY, ID_VAL_ROUTES,
@@ -78,7 +78,7 @@ static std::wstring g_launcher, g_account = L"-";
 static std::wstring g_subOverride;   // transient header sub-line while connecting
 static double g_scale = 1.0;
 
-static HWND hMain, hPanelSession, hPanelCreds, hPanelLog;
+static HWND hMain, hPanelSession, hPanelConn, hPanelLog;
 static HWND hBtnConnect, hBtnDisconnect, hBtnClear;
 static HWND hEdAccount, hEdPin, hEdLog;
 static HWND hValVpn, hValDuration, hValRoutes;
@@ -246,6 +246,9 @@ static void FindLauncherAndAccount() {
 }
 
 // ---------------------------------------------------------------- theming
+
+static void DoConnect();
+static void DoDisconnect();
 
 static LRESULT CALLBACK PanelProc(HWND, UINT, WPARAM, LPARAM);
 
@@ -433,6 +436,41 @@ static void PaintHeader(HDC dc, const RECT& rc) {
 
 static LRESULT CALLBACK PanelProc(HWND h, UINT m, WPARAM w, LPARAM l) {
     switch (m) {
+        case WM_COMMAND: {
+            int id = LOWORD(w), code = HIWORD(w);
+            if (code == BN_CLICKED) {
+                if (id == ID_BTN_CONNECT) { DoConnect(); return 0; }
+                if (id == ID_BTN_DISCONNECT) { DoDisconnect(); return 0; }
+                if (id == ID_BTN_CLEAR) {
+                    SetWindowTextW(hEdLog, L"");
+                    g_logPos = -1;
+                    return 0;
+                }
+            }
+            break;
+        }
+        case WM_DRAWITEM: {
+            DRAWITEMSTRUCT* dis = (DRAWITEMSTRUCT*)l;
+            if (dis->CtlID == ID_BTN_CONNECT) {
+                DrawStyledButton(dis, &gBsConnect, L"Connect", gFButton);
+                return TRUE;
+            }
+            if (dis->CtlID == ID_BTN_DISCONNECT) {
+                DrawStyledButton(dis, &gBsDanger,
+                    g_state == APP_CONNECTING ? L"Cancel" : L"Disconnect",
+                    gFButton);
+                return TRUE;
+            }
+            if (dis->CtlID == ID_BTN_MFA) {
+                DrawStyledButton(dis, &gBsConnect, L"Submit", gFButton);
+                return TRUE;
+            }
+            if (dis->CtlID == ID_BTN_CLEAR) {
+                DrawStyledButton(dis, &gBsNeutral, L"Clear", gFSub);
+                return TRUE;
+            }
+            break;
+        }
         case WM_PAINT: {
             PAINTSTRUCT ps;
             HDC dc = BeginPaint(h, &ps);
@@ -488,18 +526,6 @@ static LRESULT CALLBACK PanelProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             if (sBr) DeleteObject(sBr);
             sBr = br; sCol = st ? st->bg : C_CARD;
             return (LRESULT)sBr;
-        }
-        case WM_DRAWITEM: {
-            DRAWITEMSTRUCT* dis = (DRAWITEMSTRUCT*)l;
-            switch (dis->CtlID) {
-                case ID_BTN_MFA:
-                    DrawStyledButton(dis, &gBsConnect, L"Submit", gFButton);
-                    return TRUE;
-                case ID_BTN_CLEAR:
-                    DrawStyledButton(dis, &gBsNeutral, L"Clear", gFSub);
-                    return TRUE;
-            }
-            break;
         }
     }
     return DefWindowProcW(h, m, w, l);
@@ -993,34 +1019,35 @@ static void Move(HWND h, int x, int y, int w, int ht) {
 }
 
 static void LayoutAll() {
-    int W = 760, H = 620;
+    int W = 760, H = 560;
     RECT rc; GetClientRect(hMain, &rc);
     W = rc.right; H = rc.bottom;
     (void)W; (void)H;
 
-    int cardW = 760 - 40;
+    int cardW = 760 - 40;   // 720
 
-    // Credentials card
-    Move(hPanelCreds, 20, 86, cardW, 96);
-    SendMessageW(GetDlgItem(hPanelCreds, ID_CRED_TITLE), WM_SETFONT,
+    // Connection card: account + PIN + buttons on one login-form row
+    Move(hPanelConn, 20, 84, cardW, 64);
+    SendMessageW(GetDlgItem(hPanelConn, ID_CRED_TITLE), WM_SETFONT,
                  (WPARAM)gFSemi9, TRUE);
-    Move(GetDlgItem(hPanelCreds, ID_CRED_TITLE), 18, 10, 200, 18);
-    SendMessageW(GetDlgItem(hPanelCreds, ID_CRED_NOTE), WM_SETFONT,
+    Move(GetDlgItem(hPanelConn, ID_CRED_NOTE), cardW - 392, 10, 374, 16);
+    SendMessageW(GetDlgItem(hPanelConn, ID_LBL_ACCOUNT), WM_SETFONT,
                  (WPARAM)gFSub, TRUE);
-    Move(GetDlgItem(hPanelCreds, ID_CRED_NOTE), cardW - 380, 12, 362, 16);
-    SendMessageW(GetDlgItem(hPanelCreds, ID_LBL_ACCOUNT), WM_SETFONT,
-                 (WPARAM)gFSub, TRUE);
-    Move(GetDlgItem(hPanelCreds, ID_LBL_ACCOUNT), 18, 44, 90, 18);
+    Move(GetDlgItem(hPanelConn, ID_LBL_ACCOUNT), 18, 24, 90, 18);
     SendMessageW(hEdAccount, WM_SETFONT, (WPARAM)gFBody, TRUE);
-    Move(hEdAccount, 112, 40, 240, 28);
-    SendMessageW(GetDlgItem(hPanelCreds, ID_LBL_PIN), WM_SETFONT,
+    Move(hEdAccount, 112, 20, 240, 26);
+    SendMessageW(GetDlgItem(hPanelConn, ID_LBL_PIN), WM_SETFONT,
                  (WPARAM)gFSub, TRUE);
-    Move(GetDlgItem(hPanelCreds, ID_LBL_PIN), 400, 44, 80, 18);
+    Move(GetDlgItem(hPanelConn, ID_LBL_PIN), 380, 24, 70, 18);
     SendMessageW(hEdPin, WM_SETFONT, (WPARAM)gFBody, TRUE);
-    Move(hEdPin, 490, 40, 120, 28);
+    Move(hEdPin, 452, 20, 120, 26);
+    SendMessageW(hBtnConnect, WM_SETFONT, (WPARAM)gFButton, TRUE);
+    Move(hBtnConnect, 588, 16, 62, 34);
+    SendMessageW(hBtnDisconnect, WM_SETFONT, (WPARAM)gFButton, TRUE);
+    Move(hBtnDisconnect, 656, 16, 46, 34);
 
     // Session card
-    Move(hPanelSession, 20, 194, cardW, 124);
+    Move(hPanelSession, 20, 160, cardW, 112);
     int capIds[] = { ID_CAP_VPN, ID_CAP_DURATION, ID_CAP_PROXY, ID_CAP_ROUTES };
     int valIds[] = { ID_VAL_VPN, ID_VAL_DURATION, ID_VAL_PROXY, ID_VAL_ROUTES };
     for (int i = 0; i < 4; i++) {
@@ -1028,24 +1055,18 @@ static void LayoutAll() {
         HWND val = GetDlgItem(hPanelSession, valIds[i]);
         SendMessageW(cap, WM_SETFONT, (WPARAM)gFSub, TRUE);
         SendMessageW(val, WM_SETFONT, (WPARAM)gFBody, TRUE);
-        Move(cap, 18, 14 + i * 24, 130, 18);
-        Move(val, 150, 14 + i * 24, cardW - 170, 18);
+        Move(cap, 18, 12 + i * 24, 130, 18);
+        Move(val, 150, 12 + i * 24, cardW - 170, 18);
     }
 
-    // Buttons
-    SendMessageW(hBtnConnect, WM_SETFONT, (WPARAM)gFButton, TRUE);
-    SendMessageW(hBtnDisconnect, WM_SETFONT, (WPARAM)gFButton, TRUE);
-    Move(hBtnConnect, 20, 334, 180, 42);
-    Move(hBtnDisconnect, 212, 334, 150, 42);
-
-    // Log panel extends to the bottom edge now that the footer row is gone.
-    Move(hPanelLog, 20, 388, cardW, 620 - 388);
+    // Log panel
+    Move(hPanelLog, 20, 286, cardW, 560 - 286);
     SendMessageW(GetDlgItem(hPanelLog, 0), WM_SETFONT, (WPARAM)gFSub, TRUE);
     Move(GetDlgItem(hPanelLog, 0), 18, 8, 300, 18);
     Move(hBtnClear, cardW - 94, 6, 76, 24);
     SendMessageW(hBtnClear, WM_SETFONT, (WPARAM)gFSub, TRUE);
     SendMessageW(hEdLog, WM_SETFONT, (WPARAM)gFMono, TRUE);
-    Move(hEdLog, 14, 36, cardW - 28, 620 - 388 - 50);
+    Move(hEdLog, 14, 34, cardW - 28, 560 - 286 - 44);
 
     InvalidateRect(hMain, NULL, TRUE);
 }
@@ -1079,40 +1100,6 @@ static LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         }
         case WM_ERASEBKGND:
             return 1;   // WM_PAINT fills the canvas itself
-        case WM_CTLCOLORSTATIC:
-            break;   // no themed statics remain directly on the main window
-        case WM_CTLCOLOREDIT:
-            if (GetDlgCtrlID((HWND)l) == IDC_ED_LOG) {
-                HDC dc = (HDC)w;
-                SetBkColor(dc, C_LOGBG);
-                SetTextColor(dc, RGB(36, 41, 47));
-                return (LRESULT)gBrLogBg;
-            }
-            break;
-        case WM_DRAWITEM: {
-            DRAWITEMSTRUCT* dis = (DRAWITEMSTRUCT*)l;
-            if (dis->CtlID == ID_BTN_CONNECT) {
-                DrawStyledButton(dis, &gBsConnect, L"Connect", gFButton);
-                return TRUE;
-            }
-            if (dis->CtlID == ID_BTN_DISCONNECT) {
-                DrawStyledButton(dis, &gBsDanger,
-                    g_state == APP_CONNECTING ? L"Cancel" : L"Disconnect",
-                    gFButton);
-                return TRUE;
-            }
-            break;
-        }
-        case WM_COMMAND: {
-            int id = LOWORD(w);
-            if (id == ID_BTN_CONNECT && HIWORD(w) == BN_CLICKED) DoConnect();
-            else if (id == ID_BTN_DISCONNECT && HIWORD(w) == BN_CLICKED) DoDisconnect();
-            else if (id == ID_BTN_CLEAR && HIWORD(w) == BN_CLICKED) {
-                SetWindowTextW(hEdLog, L"");
-                g_logPos = -1;
-            }
-            return 0;
-        }
         case WM_TIMER:
             if (w == 1) Tick();
             else if (w == 2) TailLog();
@@ -1237,22 +1224,22 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
              L"socks5://127.0.0.1:1080   http://127.0.0.1:1088");
     hValRoutes  = MkStatic(hPanelSession, ID_VAL_ROUTES, 0, L"-");
 
-    // Credentials panel (editable account + static Portal PIN)
-    static PanelStyle stCreds = { C_CARD, C_BORDER, 10 };
-    hPanelCreds = CreateWindowExW(0, L"HkuPanel", NULL, WS_CHILD | WS_VISIBLE,
-                                  0, 0, 10, 10, hMain, (HMENU)IDC_PANEL_CREDS, hInst, NULL);
-    SetWindowLongPtrW(hPanelCreds, GWLP_USERDATA, (LONG_PTR)&stCreds);
-    MkStatic(hPanelCreds, ID_CRED_TITLE, 0, L"Credentials");
-    MkStatic(hPanelCreds, ID_LBL_ACCOUNT, 0, L"HKU account");
-    MkStatic(hPanelCreds, ID_LBL_PIN, 0, L"Portal PIN");
-    MkStatic(hPanelCreds, ID_CRED_NOTE, SS_RIGHT,
+    // Connection panel (login-form style: account + PIN + both buttons)
+    static PanelStyle stConn = { C_CARD, C_BORDER, 10 };
+    hPanelConn = CreateWindowExW(0, L"HkuPanel", NULL, WS_CHILD | WS_VISIBLE,
+                                 0, 0, 10, 10, hMain, (HMENU)IDC_PANEL_CONN, hInst, NULL);
+    SetWindowLongPtrW(hPanelConn, GWLP_USERDATA, (LONG_PTR)&stConn);
+    MkStatic(hPanelConn, ID_CRED_TITLE, 0, L"Connection");
+    MkStatic(hPanelConn, ID_LBL_ACCOUNT, 0, L"HKU account");
+    MkStatic(hPanelConn, ID_LBL_PIN, 0, L"Portal PIN");
+    MkStatic(hPanelConn, ID_CRED_NOTE, SS_RIGHT,
              L"Stored locally in %USERPROFILE%\\.vpn  (hku.env / hku.pass).");
     hEdAccount = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
         WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
-        0, 0, 10, 10, hPanelCreds, (HMENU)IDC_ED_ACCOUNT, hInst, NULL);
+        0, 0, 10, 10, hPanelConn, (HMENU)IDC_ED_ACCOUNT, hInst, NULL);
     hEdPin = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
         WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_PASSWORD,
-        0, 0, 10, 10, hPanelCreds, (HMENU)IDC_ED_PIN, hInst, NULL);
+        0, 0, 10, 10, hPanelConn, (HMENU)IDC_ED_PIN, hInst, NULL);
     SendMessageW(hEdPin, EM_SETPASSWORDCHAR, 0x25CF, 0);   // ●
     // Prefill from the existing config, if any.
     {
@@ -1281,13 +1268,13 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
     mwc.lpszClassName = L"HkuMfaDlg";
     RegisterClassW(&mwc);
 
-    // Main buttons
+    // Buttons (children of the Connection card)
     hBtnConnect = CreateWindowExW(0, L"BUTTON", L"Connect",
         WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
-        0, 0, 10, 10, hMain, (HMENU)ID_BTN_CONNECT, hInst, NULL);
+        0, 0, 10, 10, hPanelConn, (HMENU)ID_BTN_CONNECT, hInst, NULL);
     hBtnDisconnect = CreateWindowExW(0, L"BUTTON", L"Disconnect",
         WS_CHILD | WS_VISIBLE | BS_OWNERDRAW | WS_DISABLED,
-        0, 0, 10, 10, hMain, (HMENU)ID_BTN_DISCONNECT, hInst, NULL);
+        0, 0, 10, 10, hPanelConn, (HMENU)ID_BTN_DISCONNECT, hInst, NULL);
     SetWindowSubclass(hBtnConnect, BtnSubProc, 1, 0);
     SetWindowSubclass(hBtnDisconnect, BtnSubProc, 2, 0);
     SetWindowSubclass(hBtnClear, BtnSubProc, 4, 0);
