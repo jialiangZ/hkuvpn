@@ -115,6 +115,7 @@ type app struct {
 
 	uiTheme   *ui.Theme
 	trayState string
+	statusLog string
 }
 
 // maxReconnectTries bounds the automatic reconnects after a session drops,
@@ -382,6 +383,28 @@ func (a *app) tick(now time.Time) {
 		a.copiedAt = time.Time{}
 	}
 	a.syncTray(alive, fresh)
+	a.writeStatus(alive, fresh)
+}
+
+// writeStatus records what the app is doing in %TEMP%\hkuvpn\app-status.txt,
+// so a script (or a person at the console) can see the state of the app
+// without its window. It is written when something changes.
+func (a *app) writeStatus(alive, fresh bool) {
+	state := "idle"
+	switch a.state {
+	case connecting:
+		state = "connecting"
+	case connected:
+		state = "connected"
+	}
+	status := fmt.Sprintf("updated=%s\nstate=%s\nworker=%t\nheartbeat=%t\ncancelling=%t\ndisconnecting=%t\nmfa=%t\naddress=%s\n",
+		time.Now().Format(time.RFC3339), state, alive, fresh,
+		a.cancelling, a.disconnecting, a.mfaPending, stateValue("IP4"))
+	if status == a.statusLog {
+		return
+	}
+	a.statusLog = status
+	_ = writeText(joinPath(p.base, "app-status.txt"), status)
 }
 
 func (a *app) processMarkers() {

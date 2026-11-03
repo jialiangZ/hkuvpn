@@ -157,6 +157,12 @@ Three long-session modes, by scenario (plus a tray app):
   shield (grey / green / amber / red) rendered from
   `windows\mygo-app\assets\tray-icon.svg`. Disconnect is UAC-free and exiting
   the app never kills a session.
+- **Regression script** (`windows\tests\session-flow.ps1`): drives the
+  worker and the app through the whole session lifecycle - a stop while
+  the MFA code is pending, a cancel, a connect and a disconnect - and
+  checks the invariants: the teardown marker, no force kill, no leftover
+  `gost`/`openconnect`, and the app back at "Disconnected". The steps
+  that need a person are the UAC prompt and the MFA code.
 - **Smart mode** (default): the session stays attached to its console;
   closing the window (or Ctrl+C) disconnects, like `hkuvpn -f` in the
   Docker edition. The natural fit for the desktop shortcut.

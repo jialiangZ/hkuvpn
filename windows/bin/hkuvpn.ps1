@@ -757,9 +757,12 @@ function Invoke-CleanupSession {
     Remove-HkuNrpt
     Remove-LearnedTunnelRoutes
     foreach ($f in @($Script:ResponseFile, $Script:StateFile, $Script:MarkerFile,
-                     $Script:StopFlagFile, $Script:PidFile)) {
+                     $Script:StopFlagFile)) {
         Remove-Item $f -Force -ErrorAction SilentlyContinue
     }
+    # The pid file is only removed when the caller wants it gone: the
+    # --stop escalation keeps it for the report, and a live worker must
+    # stay findable.
     if ($RemovePidFile) {
         Remove-Item $Script:PidFile -Force -ErrorAction SilentlyContinue
     }
@@ -1416,6 +1419,11 @@ function Invoke-TunnelWorker {
         # session was cut short), so give it a bounded moment to exit on
         # its own rather than waiting for it forever; the finally below
         # stops it either way.
+        # The session is over: stop the children before their pipes are
+        # drained, or a child that survives keeps the drain waiting for
+        # an end that never comes.
+        try { if (-not $oc.HasExited)  { Stop-Process -Id $oc.Id  -Force -ErrorAction SilentlyContinue } } catch {}
+        try { if (-not $gost.HasExited) { Stop-Process -Id $gost.Id -Force -ErrorAction SilentlyContinue } } catch {}
         if (-not $oc.HasExited) {
             $waitedMs = 0
             while (-not $oc.HasExited -and $waitedMs -lt 15000) {
@@ -1436,6 +1444,13 @@ function Invoke-TunnelWorker {
     finally {
         if (-not $gost.HasExited) { Stop-Process -Id $gost.Id -Force -ErrorAction SilentlyContinue }
         if (-not $oc.HasExited) { Stop-Process -Id $oc.Id -Force -ErrorAction SilentlyContinue }
+        # Give them a moment to go, so the proxy ports are free for the
+        # next session right away.
+        for ($i = 0; $i -lt 40; $i++) {
+            $still = @(Get-Process -Id @($oc.Id, $gost.Id) -ErrorAction SilentlyContinue)
+            if ($still.Count -eq 0) { break }
+            Start-Sleep -Milliseconds 250
+        }
         try {
             if ($logAll.Length -gt 0) { [IO.File]::AppendAllText($Script:LogFile, $logAll.ToString()) }
             if ($gostLog.Length -gt 0) { [IO.File]::AppendAllText($Script:GostLogFile, $gostLog.ToString()) }
@@ -1701,15 +1716,21 @@ switch ($command) {
                     }
                     if (-not $sawTeardown -and $i -ge 15) { break }
                 }
-                Remove-Item $Script:StopFlagFile -Force -ErrorAction SilentlyContinue
+                # The flag stays while the worker lives: it is the only
+                # way the worker learns that it should stop, and the
+                # worker's own start-up cleanup can erase an early one.
+                $needEscalation = $true
                 if (-not (Test-WorkerAlive)) {
+                    Remove-Item $Script:StopFlagFile -Force -ErrorAction SilentlyContinue
                     Write-Info 'HKU VPN stopped.'
-                    exit 0
+                    $needEscalation = $false
+                } else {
+                    Write-Err 'Worker did not stop in time; escalating.'
                 }
-                Write-Err 'Worker did not stop in time; escalating.'
             } else {
                 Write-Err 'Worker heartbeat is stale (main loop wedged); escalating immediately.'
             }
+            if ($needEscalation) {
             # Flight-recorder dump before the force-stop destroys evidence.
             try {
                 $wPid2 = Read-PidValue 'WORKER'
@@ -1726,10 +1747,12 @@ switch ($command) {
                     Write-Info 'Diagnostics captured: %TEMP%\hkuvpn\wedge-diagnostics.txt'
                 }
             } catch {}
+            }
         }
         if (-not (Test-WorkerAlive)) {
-            # Nothing to signal; only raise UAC if there is actually
-            # something elevated to kill (a worker-less leftover).
+            # The worker is gone. Its children may still be running and
+            # holding the proxy ports, so they have to go before this
+            # returns - a leftover gost makes every later connect fail.
             $children = @(Get-Process -Name openconnect -ErrorAction SilentlyContinue)
             foreach ($g in @(Get-Process -Name gost -ErrorAction SilentlyContinue)) {
                 $p = $null

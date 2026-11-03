@@ -52,6 +52,11 @@ shown in the View log sheet.
 The app's own state (preferences and the start time of the running
 session) lives in `%USERPROFILE%\.vpn\app-state.json`.
 
+While it runs, the app writes what it is doing to
+`%TEMP%\hkuvpn\app-status.txt` (state, worker, heartbeat, the pending
+code, the VPN address). It is what the regression script reads, and it
+answers "what does the app think it is doing?" without the window.
+
 ## Tray icons
 
 `assets/tray-{gray,green,amber,red}.png` (64px, embedded) encode the
