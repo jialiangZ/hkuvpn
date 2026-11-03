@@ -6,96 +6,46 @@
 <body>
   <div id="app">
 
-    <div id="menubar">
-      <div class="menu" id="menu-file">File</div>
-      <div class="menu" id="menu-view">View</div>
-      <div class="menu" id="menu-settings">Settings</div>
-      <div class="menu" id="menu-help">Help</div>
-    </div>
-
-    <div id="tabs">
-      <div class="tab active" id="tab-main">Main</div>
-      <div class="tab" id="tab-vpninfo">VPN Info</div>
-    </div>
-
-    <div id="page-main" class="page active">
-      <div id="lock-wrap">
-        <img id="lock-icon" src="assets/lock-red.tga"/>
+    <div id="header">
+      <img id="badge" src="assets/badge.tga"/>
+      <div id="titles">
+        <div id="app-title">HKU VPN</div>
+        <div id="app-sub">HKU Portal VPN &#183; vpn2fa.hku.hk</div>
       </div>
-
-      <div id="main-right">
-        <div id="server-row">
-          <div id="server-label">Server:</div>
-          <div id="server-combo">
-            <span id="server-value">vpn2fa.hku.hk</span>
-            <span id="combo-arrow"><img src="assets/arrow.tga"/></span>
-          </div>
-          <div id="btn-settings" class="icon-btn" title="Account settings">
-            <img src="assets/settings.tga"/>
-          </div>
-        </div>
-
-        <div id="actions">
-          <div id="btn-connect" class="btn primary">Connect</div>
-          <div id="btn-log" class="btn">
-            <img src="assets/log.tga"/>
-            <span>View log</span>
-          </div>
-        </div>
+      <div id="btn-settings" class="icon-btn" title="Account settings">
+        <img src="assets/settings.tga"/>
       </div>
     </div>
 
-    <div id="page-vpninfo" class="page">
-      <div class="info-row">
-        <div class="info-label">IPv4 address</div>
-        <div class="info-value" id="info-ip4">-</div>
-      </div>
-      <div class="info-row">
-        <div class="info-label">IPv6 address</div>
-        <div class="info-value" id="info-ip6">-</div>
-      </div>
-      <div class="info-row">
-        <div class="info-label">DNS</div>
-        <div class="info-value" id="info-dns">-</div>
-      </div>
-      <div class="info-row">
-        <div class="info-label">Cipher</div>
-        <div class="info-value" id="info-cipher">-</div>
-      </div>
-      <div class="info-row">
-        <div class="info-label">Duration</div>
-        <div class="info-value" id="info-duration">-</div>
-      </div>
-      <div class="info-row">
-        <div class="info-label">Routes</div>
-        <div class="info-value" id="info-routes">-</div>
-      </div>
-      <div class="info-row">
-        <div class="info-label">Worker</div>
-        <div class="info-value" id="info-status">-</div>
-      </div>
-      <div class="info-row">
-        <div class="info-label">Heartbeat</div>
-        <div class="info-value" id="info-hb">-</div>
-      </div>
-    </div>
-
-    <div id="file-menu">
-      <div class="file-item" id="file-hide">Hide to tray</div>
-      <div class="file-item" id="file-exit">Exit</div>
-    </div>
-
-    <div id="statusbar">
+    <div id="status-card">
       <span id="status-dot"></span>
       <span id="status-text">Disconnected</span>
-      <span id="status-meta"></span>
+      <span id="status-duration">--:--:--</span>
+      <div id="primary-value">Not connected</div>
+      <div class="detail-row" id="row-proxy">
+        <div class="detail-label">Proxy</div>
+        <div class="detail-value">socks5://127.0.0.1:1080 &#183; http://127.0.0.1:1088</div>
+      </div>
+      <div class="detail-row" id="row-routes">
+        <div class="detail-label">Routes</div>
+        <div class="detail-value" id="info-routes">-</div>
+      </div>
     </div>
+
+    <div id="btn-connect" class="primary">Connect</div>
+
+    <div id="btn-log" class="ghost">
+      <img src="assets/log.tga"/>
+      <span>View log</span>
+    </div>
+    <div id="footer-hint">Closing this window keeps the VPN running in the tray.</div>
+  </div>
 
   <!-- Account settings -->
   <div id="settings-overlay" class="overlay">
     <div id="settings-dialog" class="dialog">
-      <div class="dlg-title">Account settings</div>
-      <div class="dlg-sub">Used for the HKU Portal VPN sign-in.</div>
+      <div class="dlg-title">Account</div>
+      <div class="dlg-sub">Credentials for the HKU Portal VPN.</div>
       <div class="field">
         <div class="field-label">HKU account</div>
         <input id="account" type="text" placeholder="u1234567@connect.hku.hk"/>
@@ -111,7 +61,7 @@
     </div>
   </div>
 
-  <!-- Log viewer -->
+  <!-- Log -->
   <div id="log-overlay" class="overlay">
     <div id="log-dialog" class="dialog">
       <div class="dlg-title">Connection log</div>
@@ -123,32 +73,16 @@
     </div>
   </div>
 
-  <!-- MFA prompt -->
+  <!-- MFA -->
   <div id="mfa-overlay" class="overlay">
     <div id="mfa-dialog" class="dialog">
       <div class="dlg-title">Verification code</div>
       <div class="dlg-sub">Enter the 6-digit code from Microsoft Authenticator.</div>
       <div id="mfa-note"></div>
-      <div id="mfa-row">
-        <input id="mfa-code" type="text" maxlength="6" placeholder="000000"/>
-        <div id="btn-mfa" class="btn primary">Submit</div>
-      </div>
+      <input id="mfa-code" type="text" maxlength="6" placeholder="000000"/>
+      <div id="btn-mfa" class="btn primary">Submit</div>
       <div id="mfa-hint">Enter to submit &#183; Esc to cancel</div>
     </div>
-  </div>
-
-  <!-- About -->
-  <div id="about-overlay" class="overlay">
-    <div id="about-dialog" class="dialog">
-      <div class="dlg-title">HKU VPN</div>
-      <div class="dlg-sub">HKU Portal VPN frontend with Microsoft 2FA.</div>
-      <div class="about-line">Server &#183; vpn2fa.hku.hk</div>
-      <div class="about-line">Proxy &#183; socks5://127.0.0.1:1080</div>
-      <div class="dlg-buttons">
-        <div id="btn-about-close" class="btn primary">Close</div>
-      </div>
-    </div>
-  </div>
   </div>
 </body>
 </rml>

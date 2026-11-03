@@ -259,30 +259,58 @@ static bool BtnEnabled(const char* id) {
 }
 
 static void UpdateStatus() {
-    std::wstring text, meta;
-    const char* dot = "#8b9096";
-    if (g_disconnecting) { text = L"Disconnecting..."; dot = "#c47f17"; }
+    std::wstring text;
+    const char* dot = "#9aa1a9";
+    if (g_disconnecting) { text = L"Disconnecting"; dot = "#c47f17"; }
     else switch (g_state) {
         case APP_CONNECTED:
             if (WorkerAlive() && HeartbeatFresh()) { text = L"Connected"; dot = "#12873e"; }
-            else { text = L"Worker unresponsive"; dot = "#cf222e"; }
+            else { text = L"Worker unresponsive"; dot = "#d92d20"; }
             break;
-        case APP_CONNECTING: text = L"Connecting..."; dot = "#c47f17"; break;
+        case APP_CONNECTING: text = L"Connecting"; dot = "#c47f17"; break;
         default: text = L"Disconnected"; break;
     }
-    if (g_state == APP_CONNECTED) {
-        std::wstring ip = StateValue(L"IP4");
-        if (!ip.empty()) meta = ip;
-    }
-    if (!g_subOverride.empty()) meta = g_subOverride;
-
     SetText("status-text", text);
-    SetText("status-meta", meta);
     if (Rml::Element* d = El("status-dot")) d->SetProperty("background", dot);
-    if (Rml::Element* img = El("lock-icon")) {
-        img->SetAttribute("src",
-            g_state == APP_CONNECTED ? "assets/lock-green.tga" :
-            g_state == APP_CONNECTING ? "assets/lock-orange.tga" : "assets/lock-red.tga");
+
+    // Headline: tunnel address, or a short explanation while idle.
+    std::wstring value;
+    bool idle = false;
+    if (g_state == APP_CONNECTED) {
+        value = StateValue(L"IP4");
+        if (value.empty()) value = L"Connected";
+    } else if (g_state == APP_CONNECTING && !g_subOverride.empty()) {
+        value = g_subOverride;
+    } else if (g_state == APP_CONNECTING) {
+        value = L"Waiting for sign-in";
+        idle = true;
+    } else {
+        value = L"Not connected";
+        idle = true;
+    }
+    SetText("primary-value", value);
+    if (Rml::Element* v = El("primary-value")) v->SetClass("idle", idle);
+
+    std::wstring duration = L"--:--:--";
+    std::wstring routes = L"-";
+    if (g_state == APP_CONNECTED && g_connectedTick) {
+        ULONGLONG el = (GetTickCount64() - g_connectedTick) / 1000;
+        duration = Fmt(L"%02d:%02d:%02d",
+            (int)(el / 3600), (int)((el / 60) % 60), (int)(el % 60));
+        routes = Fmt(L"%d learned route%s \u00b7 heartbeat %s",
+            LearnedCount(), LearnedCount() == 1 ? L"" : L"s",
+            HeartbeatFresh() ? L"OK" : L"stale");
+    }
+    SetText("status-duration", duration);
+    SetText("info-routes", routes);
+
+    // Primary action reflects the state.
+    SetText("btn-connect", g_state == APP_CONNECTING ? L"Cancel" :
+                           g_state == APP_CONNECTED ? L"Disconnect" : L"Connect");
+    if (Rml::Element* b = El("btn-connect")) {
+        b->SetClass("danger", g_state == APP_CONNECTED);
+        b->SetClass("warning", g_state == APP_CONNECTING);
+        b->SetClass("disabled", g_disconnecting);
     }
     UpdateTray();
 }
@@ -290,28 +318,10 @@ static void UpdateStatus() {
 static void SetState(App_State s) {
     g_state = s;
     g_subOverride.clear();
-    SetBtnEnabled("btn-connect", true);
-    // Connect -> Cancel -> Disconnect on the same button.
-    SetText("btn-connect", s == APP_CONNECTING ? L"Cancel" :
-                           s == APP_CONNECTED ? L"Disconnect" : L"Connect");
-    if (Rml::Element* b = El("btn-connect")) {
-        b->SetClass("primary", s != APP_CONNECTED);
-        b->SetClass("danger", s == APP_CONNECTED);
-    }
     if (s == APP_CONNECTED) {
         g_connectedTick = g_connectedTick ? g_connectedTick : GetTickCount64();
-        std::wstring ip = StateValue(L"IP4");
-        SetText("info-ip4", ip.empty() ? L"-" : ip);
-    } else {
+    } else if (s == APP_IDLE) {
         g_connectedTick = 0;
-        SetText("info-ip4", L"-");
-        SetText("info-ip6", L"-");
-        SetText("info-dns", L"-");
-        SetText("info-cipher", L"-");
-        SetText("info-status", L"-");
-        SetText("info-duration", L"-");
-        SetText("info-routes", L"-");
-        SetText("info-hb", L"-");
     }
     UpdateStatus();
 }
@@ -338,7 +348,7 @@ static void OpenMfa(bool rejected) {
     SetOverlay("mfa-overlay", true);
     g_mfaVisible = true;
     SetText("mfa-note", rejected
-        ? L"The previous code was REJECTED - enter the one showing NOW." : L"");
+        ? L"Previous code rejected - enter the current one." : L"");
     if (auto* in = static_cast<Rml::ElementFormControlInput*>(El("mfa-code"))) {
         in->SetValue("");
         in->Focus();
@@ -425,6 +435,12 @@ static bool PersistCredentials() {
 }
 
 static void DoConnect() {
+    std::wstring account = GetInputValue("account");
+    if (account.empty()) {
+        SetOverlay("settings-overlay", true);
+        if (auto* in = static_cast<Rml::ElementFormControlInput*>(El("account"))) in->Focus();
+        return;
+    }
     if (!PersistCredentials()) return;
     if (WorkerAlive()) { SetState(APP_CONNECTED); return; }
     if (g_launcher.empty()) {
@@ -468,7 +484,6 @@ static void DoDisconnect() {
     g_disconnecting = true;
     g_disconnectStart = GetTickCount64();
     g_subOverride = L"Disconnecting - waiting for the worker to clean up...";
-    SetBtnEnabled("btn-connect", false);
     UpdateStatus();
     std::wstring args = L"-NoProfile -ExecutionPolicy Bypass -File \"" +
                         g_launcher + L"\" \"--stop\"";
@@ -523,20 +538,6 @@ public:
             else if (id == "btn-settings-save") {
                 if (PersistCredentials()) SetOverlay("settings-overlay", false);
             }
-            else if (id == "btn-about-close") SetOverlay("about-overlay", false);
-            else if (id == "tab-main" || id == "tab-vpninfo") {
-                const bool main = (id == "tab-main");
-                El("tab-main")->SetClass("active", main);
-                El("tab-vpninfo")->SetClass("active", !main);
-                El("page-main")->SetClass("active", main);
-                El("page-vpninfo")->SetClass("active", !main);
-            }
-            else if (id == "menu-file") SetOverlay("file-menu", true);
-            else if (id == "menu-view") SetOverlay("file-menu", false), SetOverlay("log-overlay", true);
-            else if (id == "menu-settings") SetOverlay("settings-overlay", true);
-            else if (id == "menu-help") SetOverlay("about-overlay", true);
-            else if (id == "file-hide") { SetOverlay("file-menu", false); ShowWindow(g_hwnd, SW_HIDE); }
-            else if (id == "file-exit") { g_quit = true; PostQuitMessage(0); }
         }
         else if (ev.GetType() == "keydown") {
             int key = ev.GetParameter<int>("key_identifier", 0);
@@ -578,16 +579,9 @@ static void Tick() {
 
     if (g_state == APP_CONNECTED) {
         if (WorkerAlive()) {
-            std::wstring ip = StateValue(L"IP4");
-            if (!ip.empty()) SetText("info-ip4", ip);
-            if (g_connectedTick) {
-                ULONGLONG el = (GetTickCount64() - g_connectedTick) / 1000;
-                SetText("info-duration", Fmt(L"%02d:%02d:%02d",
-                    (int)(el / 3600), (int)((el / 60) % 60), (int)(el % 60)));
+            if (!StateValue(L"IP4").empty() || g_connectedTick) {
+                // values are derived in UpdateStatus()
             }
-            SetText("info-routes", Fmt(L"%d learned route%s", LearnedCount(), LearnedCount() == 1 ? L"" : L"s"));
-            SetText("info-hb", HeartbeatFresh() ? L"OK" : L"STALE");
-            SetText("info-status", WorkerAlive() ? L"Worker running" : L"Worker exited");
         } else {
             SetState(APP_IDLE);
         }
@@ -746,7 +740,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
     gIcoOrange = MakeDotIcon(RGB(154, 103, 0));
     gIcoRed    = MakeDotIcon(RGB(207, 34, 46));
 
-    if (!Backend::Initialize("HKU VPN", 470, 232, false)) return 1;
+    if (!Backend::Initialize("HKU VPN", 420, 380, false)) return 1;
     g_hwnd = FindWindowW(L"HKU VPN", NULL);
     if (!g_hwnd) {
         // Window class name == window title in the stock backend.
@@ -765,7 +759,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
     Rml::SetRenderInterface(Backend::GetRenderInterface());
     Rml::Initialise();
 
-    g_ctx = Rml::CreateContext("main", Rml::Vector2i(470, 232));
+    g_ctx = Rml::CreateContext("main", Rml::Vector2i(420, 380));
     if (!g_ctx) return 1;
 
     // Fonts from the Windows font directory.
