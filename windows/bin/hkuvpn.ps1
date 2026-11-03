@@ -713,8 +713,10 @@ function Get-CompleteLines {
 
 function Remove-LearnedTunnelRoutes {
     # File-based so it also works from `--stop` in another process.
+    # Bounded: a hung route.exe here must not stall the whole teardown (it
+    # used to make --stop's fast path time out into a UAC escalation).
     foreach ($e in (Get-LearnedRoutes)) {
-        & route.exe delete $e.Base 2>$null | Out-Null
+        $null = Invoke-BoundedProcess 'route.exe' ("delete " + $e.Base) 5000
     }
 }
 
@@ -736,7 +738,10 @@ function Invoke-DisconnectScript {
         $env:INTERNAL_IP4_ADDRESS = Read-StateValue 'IP4'
         $env:HKU_STATE_FILE = $Script:StateFile
         $env:HKU_LOG_FILE = $Script:LogFile
-        & cscript.exe //nologo $Script:VpncScript 2>$null | Out-Null
+        # Bounded: the cscript replay (netsh calls inside) must not hang the
+        # teardown; a timed-out replay is harmless - force-stop follows.
+        $null = Invoke-BoundedProcess 'cscript.exe' `
+            ("//nologo \"" + $Script:VpncScript + "\"") 10000
     } catch {
     } finally {
         foreach ($k in $old.Keys) {
@@ -1381,6 +1386,7 @@ function Invoke-TunnelWorker {
             # the finally below - no second UAC prompt for stopping.
             if (Test-Path $Script:StopFlagFile) {
                 Write-Info 'Stop requested (--stop); cleaning up...'
+                Write-Marker 'HKUVPN_TEARDOWN'
                 break
             }
             Start-Sleep -Milliseconds 100
@@ -1649,13 +1655,27 @@ switch ($command) {
             }
             if (-not $hbStale) {
                 Set-Content -Path $Script:StopFlagFile -Value 'stop' -NoNewline
-                for ($i = 0; $i -lt 16 -and (Test-WorkerAlive); $i++) { Start-Sleep -Milliseconds 500 }
+                # Adaptive wait: the worker writes HKUVPN_TEARDOWN the moment
+                # it sees the flag (teardown in progress - route deletes are
+                # individually bounded but can legitimately take a while).
+                # Without the marker the worker never even saw the flag:
+                # treat it as deaf after 8s.
+                $sawTeardown = $false
+                for ($i = 0; $i -lt 48 -and (Test-WorkerAlive); $i++) {
+                    Start-Sleep -Milliseconds 500
+                    if (-not $sawTeardown -and (Test-Path $Script:MarkerFile)) {
+                        $m = ''
+                        try { $m = Get-Content $Script:MarkerFile -Raw -ErrorAction Stop } catch {}
+                        if ($m -match 'HKUVPN_TEARDOWN') { $sawTeardown = $true }
+                    }
+                    if (-not $sawTeardown -and $i -ge 15) { break }
+                }
                 Remove-Item $Script:StopFlagFile -Force -ErrorAction SilentlyContinue
                 if (-not (Test-WorkerAlive)) {
                     Write-Info 'HKU VPN stopped.'
                     exit 0
                 }
-                Write-Err 'Worker did not stop within 8s; escalating.'
+                Write-Err 'Worker did not stop in time; escalating.'
             } else {
                 Write-Err 'Worker heartbeat is stale (main loop wedged); escalating immediately.'
             }

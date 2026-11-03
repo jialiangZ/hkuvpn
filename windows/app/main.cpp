@@ -865,7 +865,7 @@ static void Tick() {
         if (!WorkerAlive()) {
             g_disconnecting = false;
             SetState(APP_IDLE);
-        } else if (GetTickCount64() - g_disconnectStart > 20000) {
+        } else if (GetTickCount64() - g_disconnectStart > 30000) {
             g_disconnecting = false;
             SetState(APP_CONNECTED);
             g_subOverride = L"Disconnect timed out - the worker is still running; retry.";
