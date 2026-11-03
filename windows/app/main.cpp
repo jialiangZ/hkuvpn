@@ -661,7 +661,7 @@ static LRESULT CALLBACK MfaDlgProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             // IsDialogMessage reports Enter as IDOK(1) when no default
             // button handled it, and Esc as IDCANCEL(2); accept both forms.
             bool submit = (id == ID_BTN_MFA && code == BN_CLICKED) ||
-                          (id == 1 && code == BN_CLICKED) || id == 1;
+                          (id == 1 && code == BN_CLICKED);
             bool cancel = (id == ID_BTN_DISCONNECT && code == BN_CLICKED) ||
                           id == 2;
             if (submit) {
@@ -813,6 +813,25 @@ static void Tick() {
         if (ReadAllTextW(P.markers, all) &&
             all.find(L"HKUVPN_EXITED") != std::wstring::npos) {
             SetState(APP_IDLE);
+        }
+    }
+
+    // Reconciliation: the line-cursor state machine is fragile against a
+    // markers file that was deleted/rewritten mid-connect (the cursor can
+    // end up past lines it never actually processed, leaving the UI stuck
+    // in CONNECTING while the session is up). Re-derive from the full file
+    // every tick while connecting: a live worker plus a CONNECTED marker
+    // means CONNECTED, whatever the cursor thinks.
+    if (g_state == APP_CONNECTING && WorkerAlive()) {
+        std::wstring all2;
+        if (ReadAllTextW(P.markers, all2) &&
+            all2.find(L"HKUVPN_CONNECTED") != std::wstring::npos) {
+            int nl = 1;
+            for (wchar_t c : all2) if (c == L'\n') nl++;
+            g_seen = nl;                      // resync the cursor
+            g_connectedTick = GetTickCount64();
+            CloseMfaDlg();
+            SetState(APP_CONNECTED);
         }
     }
 
