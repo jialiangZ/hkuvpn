@@ -656,23 +656,32 @@ static LRESULT CALLBACK MfaDlgProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             break;
         }
         case WM_COMMAND: {
-            if (LOWORD(w) == ID_BTN_MFA && HIWORD(w) == BN_CLICKED) {
-                wchar_t code[8] = {};
-                GetWindowTextW(g_hMfaEd, code, 8);
-                if (wcslen(code) != 6) {
+            int id = LOWORD(w);
+            int code = HIWORD(w);
+            // IsDialogMessage reports Enter as IDOK(1) when no default
+            // button handled it, and Esc as IDCANCEL(2); accept both forms.
+            bool submit = (id == ID_BTN_MFA && code == BN_CLICKED) ||
+                          (id == 1 && code == BN_CLICKED) || id == 1;
+            bool cancel = (id == ID_BTN_DISCONNECT && code == BN_CLICKED) ||
+                          id == 2;
+            if (submit) {
+                wchar_t mfa[8] = {};
+                GetWindowTextW(g_hMfaEd, mfa, 8);
+                if (wcslen(mfa) != 6) {
                     SetWindowTextW(g_hMfaNote, L"The code must be exactly 6 digits.");
                     ShowWindow(g_hMfaNote, SW_SHOW);
                     return 0;
                 }
-                if (WriteAllTextW(P.response, code)) {
+                if (WriteAllTextW(P.response, mfa)) {
                     g_subOverride = L"MFA code accepted - establishing tunnel (DTLS handshake + route learning can take ~30s)...";
+                    CloseMfaDlg();
                 } else {
                     SetWindowTextW(g_hMfaNote, L"Could not deliver the code.");
                     ShowWindow(g_hMfaNote, SW_SHOW);
                 }
                 return 0;
             }
-            if (LOWORD(w) == ID_BTN_DISCONNECT && HIWORD(w) == BN_CLICKED) {
+            if (cancel) {
                 // Cancel = abort the half-built session (harmless afterwards:
                 // guarded by state).
                 if (g_state != APP_CONNECTED) {
