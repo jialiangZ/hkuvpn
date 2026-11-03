@@ -79,9 +79,8 @@ static double g_scale = 1.0;
 
 static HWND hMain, hPanelSession, hPanelCreds, hPanelLog;
 static HWND hBtnConnect, hBtnDisconnect, hBtnClear;
-static HWND hEdAccount, hEdPin, hEdLog, hChkTray;
+static HWND hEdAccount, hEdPin, hEdLog;
 static HWND hValVpn, hValDuration, hValRoutes;
-static HWND hFooter;
 
 static HINSTANCE g_hInst = NULL;
 
@@ -686,8 +685,7 @@ static LRESULT CALLBACK MfaDlgProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             // button handled it, and Esc as IDCANCEL(2); accept both forms.
             bool submit = (id == ID_BTN_MFA && code == BN_CLICKED) ||
                           (id == 1 && code == BN_CLICKED);
-            bool cancel = (id == ID_BTN_DISCONNECT && code == BN_CLICKED) ||
-                          id == 2;
+            bool cancel = (id == 2);   // Esc only now - the button is gone
             if (submit) {
                 wchar_t mfa[8] = {};
                 GetWindowTextW(g_hMfaEd, mfa, 8);
@@ -750,7 +748,7 @@ static void OpenMfaDlg(bool rejected) {
         return;
     }
     RECT mr; GetWindowRect(hMain, &mr);
-    int dw = 380, dh = 200;
+    int dw = 380, dh = 130;
     int x = mr.left + ((mr.right - mr.left) - dw) / 2;
     int y = mr.top + ((mr.bottom - mr.top) - dh) / 2;
     g_hMfaDlg = CreateWindowExW(WS_EX_DLGMODALFRAME, L"HkuMfaDlg",
@@ -776,11 +774,6 @@ static void OpenMfaDlg(bool rejected) {
         234, 64, 110, 38, g_hMfaDlg, (HMENU)ID_BTN_MFA, g_hInst, NULL);
     SendMessageW(ok, WM_SETFONT, (WPARAM)gFButton, TRUE);
     SetWindowSubclass(ok, BtnSubProc, 5, 0);
-    HWND cancel = CreateWindowExW(0, L"BUTTON", L"Cancel",
-        WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
-        18, 114, 110, 32, g_hMfaDlg, (HMENU)ID_BTN_DISCONNECT, g_hInst, NULL);
-    SendMessageW(cancel, WM_SETFONT, (WPARAM)gFButton, TRUE);
-    SetWindowSubclass(cancel, BtnSubProc, 6, 0);
 
     EnableWindow(hMain, FALSE);
     ShowWindow(g_hMfaDlg, SW_SHOWNORMAL);
@@ -1036,20 +1029,14 @@ static void LayoutAll() {
     Move(hBtnConnect, 20, 362, 180, 42);
     Move(hBtnDisconnect, 212, 362, 150, 42);
 
-    // Log panel
-    Move(hPanelLog, 20, 416, cardW, 740 - 416 - 52);
+    // Log panel extends to the bottom edge now that the footer row is gone.
+    Move(hPanelLog, 20, 416, cardW, 740 - 416 - 16);
     SendMessageW(GetDlgItem(hPanelLog, 0), WM_SETFONT, (WPARAM)gFSub, TRUE);
     Move(GetDlgItem(hPanelLog, 0), 18, 10, 300, 20);
     Move(hBtnClear, cardW - 94, 8, 76, 26);
     SendMessageW(hBtnClear, WM_SETFONT, (WPARAM)gFSub, TRUE);
     SendMessageW(hEdLog, WM_SETFONT, (WPARAM)gFMono, TRUE);
-    Move(hEdLog, 14, 42, cardW - 28, 740 - 416 - 52 - 58);
-
-    // Footer
-    SendMessageW(hChkTray, WM_SETFONT, (WPARAM)gFSub, TRUE);
-    Move(hChkTray, 20, 740 - 36, 320, 20);
-    SendMessageW(hFooter, WM_SETFONT, (WPARAM)gFSub, TRUE);
-    Move(hFooter, 760 - 220, 740 - 36, 200, 20);
+    Move(hEdLog, 14, 42, cardW - 28, 740 - 416 - 16 - 58);
 
     InvalidateRect(hMain, NULL, TRUE);
 }
@@ -1078,16 +1065,8 @@ static LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
         }
         case WM_ERASEBKGND:
             return 1;   // WM_PAINT fills the canvas itself
-        case WM_CTLCOLORSTATIC: {
-            HDC dc = (HDC)w;
-            int id = GetDlgCtrlID((HWND)l);
-            SetBkMode(dc, TRANSPARENT);
-            if (id == IDC_CHK_TRAY || id == ID_FOOTER) {
-                SetTextColor(dc, C_MUTED);
-                return (LRESULT)gBrBg;
-            }
-            break;
-        }
+        case WM_CTLCOLORSTATIC:
+            break;   // no themed statics remain directly on the main window
         case WM_CTLCOLOREDIT:
             if (GetDlgCtrlID((HWND)l) == IDC_ED_LOG) {
                 HDC dc = (HDC)w;
@@ -1157,7 +1136,8 @@ static LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
             return 0;
         }
         case WM_CLOSE:
-            if (!g_realExit && SendMessageW(hChkTray, BM_GETCHECK, 0, 0) == BST_CHECKED) {
+            // Closing always minimizes to tray; real exit is the tray menu.
+            if (!g_realExit) {
                 ShowWindow(h, SW_HIDE);
                 return 0;
             }
@@ -1311,13 +1291,6 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
         WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL | ES_MULTILINE |
         ES_READONLY | ES_AUTOVSCROLL | ES_AUTOHSCROLL,
         0, 0, 10, 10, hPanelLog, (HMENU)IDC_ED_LOG, hInst, NULL);
-
-    // Footer
-    hChkTray = CreateWindowExW(0, L"BUTTON", L"Close button minimizes to tray",
-        WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-        0, 0, 10, 10, hMain, (HMENU)IDC_CHK_TRAY, hInst, NULL);
-    SendMessageW(hChkTray, BM_SETCHECK, BST_CHECKED, 0);
-    hFooter = MkStatic(hMain, ID_FOOTER, SS_RIGHT, L"hkuvpn desktop (native) 1.0");
 
     LayoutAll();
 
