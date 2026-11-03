@@ -470,8 +470,8 @@ if (-not $WorkerOnly -and -not $SkipLive) {
             # The clipboard first: the user copies the code there while
             # the MFA dialog waits for it (the code is only good for
             # about 30 seconds, so it cannot be asked for earlier).
-            Write-Note 'Copy the code from your Authenticator to the clipboard.'
-            $end = (Get-Date).AddSeconds(90)
+            Write-Note 'Copy the CURRENT code from your Authenticator to the clipboard (the script waits for it).'
+            $end = (Get-Date).AddSeconds(240)
             while ((Get-Date) -lt $end -and -not $MfaCode) {
                 try {
                     $clip = (Get-Clipboard -Raw -ErrorAction Stop).Trim()
