@@ -162,7 +162,9 @@ Three long-session modes, by scenario (plus a tray app):
   the MFA code is pending, a cancel, a connect and a disconnect - and
   checks the invariants: the teardown marker, no force kill, no leftover
   `gost`/`openconnect`, and the app back at "Disconnected". The steps
-  that need a person are the UAC prompt and the MFA code.
+  that need a person are the UAC prompt and the MFA code, so run it from
+  a PowerShell window (the code is typed in). `-SkipLive` leaves out the
+  check that needs a code.
 - **Smart mode** (default): the session stays attached to its console;
   closing the window (or Ctrl+C) disconnects, like `hkuvpn -f` in the
   Docker edition. The natural fit for the desktop shortcut.

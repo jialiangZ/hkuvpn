@@ -15,7 +15,8 @@
       4. a live session disconnects cleanly.
 
     The steps that need a human are the UAC prompt and the MFA code: the
-    script asks for them and waits.
+    script asks for them and waits. Run it from a PowerShell window, so
+    the code can be typed in.
 
     The app is driven with the keyboard (Tab reaches the primary button),
     so the script does not depend on the window's size or its layout.
@@ -31,11 +32,15 @@
 
 .PARAMETER MfaCode
     The 6-digit code to use in the connect check. Without it the script
-    takes the code from the clipboard, or asks for one.
+    asks for one, which needs a console to type in: run it from a
+    PowerShell window, not from a scheduled task.
 
 .PARAMETER SkipLive
     Leave out the check that needs a live session (the one that asks for
     an MFA code).
+
+.PARAMETER LiveOnly
+    Only run the check that needs a live session.
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File windows\tests\session-flow.ps1
@@ -46,6 +51,7 @@ param(
     [switch]$WorkerOnly,
     [switch]$AppOnly,
     [switch]$SkipLive,
+    [switch]$LiveOnly,
     [string]$MfaCode = ''
 )
 
@@ -360,7 +366,7 @@ if (Test-WorkerAlive) {
 
 # --- 1. the worker: a stop while it waits for the code ----------------------
 
-if (-not $AppOnly) {
+if (-not $AppOnly -and -not $LiveOnly) {
     Write-Step 'Worker: a stop while it waits for the MFA code'
     Clear-SessionFiles
     $wedgeBefore = Get-WedgeStamp
@@ -385,7 +391,7 @@ if (-not $AppOnly) {
 
 # --- 2. the app: closing the MFA dialog, then a cancel ----------------------
 
-if (-not $WorkerOnly) {
+if (-not $WorkerOnly -and -not $LiveOnly) {
     Write-Step 'App: closing the MFA dialog, then cancelling'
     Clear-SessionFiles
     Stop-App
@@ -463,20 +469,9 @@ if (-not $WorkerOnly -and -not $SkipLive) {
         Check $got 'the app gets the MFA request' (Get-MarkerLines | Select-Object -Last 1)
 
         if (-not $MfaCode) {
-            # The clipboard first: the user copies the code there while
-            # the MFA dialog waits for it (the code is only good for
-            # about 30 seconds, so it cannot be asked for earlier).
-            Write-Note 'Copy the code from your Authenticator to the clipboard.'
-            $end = (Get-Date).AddSeconds(90)
-            while ((Get-Date) -lt $end -and -not $MfaCode) {
-                try {
-                    $clip = (Get-Clipboard -Raw -ErrorAction Stop).Trim()
-                    if ($clip -match '^\d{6}$') { $MfaCode = $clip }
-                } catch {}
-                if (-not $MfaCode) { Start-Sleep -Seconds 2 }
-            }
-        }
-        if (-not $MfaCode) {
+            # The code is asked for here, with the MFA dialog waiting for
+            # it: it is only good for about 30 seconds, so it cannot be
+            # asked for earlier. This needs a console to type in.
             Write-Note 'Type the code from your Authenticator now (it is valid for about 30 seconds).'
             $MfaCode = Read-Host '   MFA code'
         }

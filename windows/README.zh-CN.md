@@ -99,7 +99,8 @@ hkuvpn --stop       # 停止（活跃 worker 自清理，免 UAC；死会话强�
 
 **回归脚本**（`windows\tests\session-flow.ps1`）：把 worker 和 App 完整跑一遍会话
 生命周期 —— 在等动态码时停止、取消、连接、断开 —— 并检查不变量：拆除标记、没有强杀、
-没有残留的 `gost`/`openconnect`、App 回到"未连接"。需要人参与的只有 UAC 弹窗和动态码。
+没有残留的 `gost`/`openconnect`、App 回到"未连接"。需要人参与的只有 UAC 弹窗和动态码，
+所以要在 PowerShell 窗口里跑（动态码要手输）；`-SkipLive` 可以跳过需要动态码的那一项。
 
 另外两个自愈机制：连接入口会自动回收上个崩溃会话遗留的 gost（否则它占着 1080/1088 会让之后每次连接都失败，标记 `HKUVPN_ORPHAN_GOST_REAPED` 留痕）；任何模式的异常退出都会把错误写进 markers（`HKUVPN_EXITED error=...`），窗口闪退也不会丢失诊断线索。
 
