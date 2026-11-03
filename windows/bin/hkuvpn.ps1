@@ -119,14 +119,21 @@ function Test-IsAdmin {
 }
 
 function Invoke-RelaunchElevated {
-    param([string[]]$ForwardArgs)
+    param([string[]]$ForwardArgs, [switch]$Hidden)
     $parts = @('-NoProfile', '-ExecutionPolicy', 'Bypass',
                '-File', ('"{0}"' -f $PSCommandPath))
     foreach ($a in $ForwardArgs) { $parts += ('"{0}"' -f $a) }
     $parts += '"--Elevated"'
     Write-Info 'Requesting administrator rights (UAC prompt)...'
-    Start-Process -FilePath 'powershell.exe' `
-        -ArgumentList ($parts -join ' ') -Verb RunAs | Out-Null
+    if ($Hidden) {
+        # Used by --stop escalation: no console window should flash on the
+        # user's screen; the UAC prompt itself is still shown.
+        Start-Process -FilePath 'powershell.exe' `
+            -ArgumentList ($parts -join ' ') -Verb RunAs -WindowStyle Hidden | Out-Null
+    } else {
+        Start-Process -FilePath 'powershell.exe' `
+            -ArgumentList ($parts -join ' ') -Verb RunAs | Out-Null
+    }
 }
 
 # --- small utilities --------------------------------------------------------
@@ -1687,7 +1694,7 @@ switch ($command) {
             }
         }
         if (-not (Test-IsAdmin)) {
-            Invoke-RelaunchElevated @('--stop')
+            Invoke-RelaunchElevated @('--stop') -Hidden
             exit 0
         }
         $ocPid = Read-PidValue 'OPENCONNECT'

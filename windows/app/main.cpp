@@ -69,6 +69,8 @@ static App_State g_state = APP_IDLE;
 static int  g_seen = 0;
 static bool g_retry = false;
 static bool g_realExit = false;
+static bool g_disconnecting = false;        // waiting for the worker to die
+static ULONGLONG g_disconnectStart = 0;
 static ULONGLONG g_connectedTick = 0;
 static long long g_logPos = -1;
 static std::wstring g_launcher, g_account = L"-";
@@ -357,6 +359,7 @@ static HICON MakeDotIcon(COLORREF c) {
 // ---------------------------------------------------------------- header paint
 
 static COLORREF HeaderColor() {
+    if (g_disconnecting) return C_ORANGE;
     switch (g_state) {
         case APP_CONNECTED:  return WorkerAlive() && HeartbeatFresh()
                                     ? C_GREEN : C_RED;
@@ -383,7 +386,8 @@ static void PaintHeader(HDC dc, const RECT& rc) {
 
     // Title + subtitle
     const wchar_t* title;
-    switch (g_state) {
+    if (g_disconnecting) title = L"Disconnecting...";
+    else switch (g_state) {
         case APP_CONNECTED:
             title = (WorkerAlive() && HeartbeatFresh())
                 ? L"Connected" : L"Worker unresponsive"; break;
@@ -609,10 +613,19 @@ static void DoDisconnect() {
         return;
     }
     if (g_state != APP_CONNECTED) return;
+
+    // Enter the "disconnecting" phase: fire --stop (hidden), then let Tick
+    // watch the worker and flip to IDLE only once it is really gone. No
+    // console flashes and the state never jumps ahead of reality.
+    g_disconnecting = true;
+    g_disconnectStart = GetTickCount64();
+    g_subOverride = L"Disconnecting - waiting for the worker to clean up...";
+    EnableWindow(hBtnConnect, FALSE);
+    EnableWindow(hBtnDisconnect, FALSE);
+
     std::wstring args = L"-NoProfile -ExecutionPolicy Bypass -File \"" +
                         g_launcher + L"\" \"--stop\"";
     ShellExecuteW(hMain, NULL, L"powershell.exe", args.c_str(), NULL, SW_HIDE);
-    SetState(APP_IDLE);
 }
 
 // ---------------------------------------------------------------- MFA popup
@@ -833,6 +846,21 @@ static void Tick() {
             CloseMfaDlg();
             SetState(APP_CONNECTED);
         }
+    }
+
+    // Disconnecting phase: flip to IDLE only when the worker is really
+    // gone; if it refuses to die within 20s, restore the connected UI.
+    if (g_disconnecting) {
+        if (!WorkerAlive()) {
+            g_disconnecting = false;
+            SetState(APP_IDLE);
+        } else if (GetTickCount64() - g_disconnectStart > 20000) {
+            g_disconnecting = false;
+            SetState(APP_CONNECTED);
+            g_subOverride = L"Disconnect timed out - the worker is still running; retry.";
+        }
+        InvalidateRect(hMain, NULL, FALSE);
+        return;
     }
 
     // repaint ONLY the header band (state colors); a full-window invalidate
