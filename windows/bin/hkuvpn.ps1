@@ -1095,6 +1095,12 @@ function Get-MfaCode {
         # A wedged main loop cannot see the flag; if the wait happens to be
         # this loop, honor the stop request here so --stop still works.
         if (Test-Path $Script:StopFlagFile) { return $null }
+        # Keep the heartbeat alive while waiting: --stop uses hb.log age to
+        # tell "healthy, waiting for MFA" from "main loop wedged".
+        try {
+            [IO.File]::WriteAllText($Script:HbFile,
+                ("{0} op=mfa-filewait`n" -f (Get-Date -Format s)))
+        } catch {}
         # Keep the log current while waiting, so "hkuvpn.ps1 --logs" shows what
         # the gateway is saying (the wait blocks the main loop otherwise).
         if ($LogBuffer -and $LogPath) {
