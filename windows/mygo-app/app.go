@@ -57,6 +57,7 @@ type app struct {
 	disconnectAt  time.Time
 	cancelling    bool
 	cancelAt      time.Time
+	connectAt     time.Time
 	mfaShown      bool
 	reconnectAt   time.Time
 	reconnectTry  int
@@ -72,9 +73,10 @@ type app struct {
 	hbOK          bool
 
 	// Dialogs.
-	mfaOpen bool
-	mfaCode string
-	mfaNote string
+	mfaOpen    bool
+	mfaPending bool
+	mfaCode    string
+	mfaNote    string
 
 	logOpen        bool
 	logLines       []logEntry
@@ -153,12 +155,14 @@ func (a *app) setState(s session) {
 		a.connectedAt = time.Time{}
 		a.subOverride = ""
 		a.mfaOpen = false
+		a.mfaPending = false
 		a.disconnecting = false
 		a.cancelling = false
 	case connecting:
 		a.connectedAt = time.Time{}
 		a.subOverride = ""
 	case connected:
+		a.mfaPending = false
 		if a.connectedAt.IsZero() {
 			a.connectedAt = time.Now()
 		}
@@ -221,6 +225,7 @@ func (a *app) connect() {
 	// The worker starts a fresh log for every session: read it from the top
 	// the next time the log window opens.
 	a.logLoaded = false
+	a.connectAt = time.Now()
 	a.setState(connecting)
 }
 
@@ -262,6 +267,7 @@ func (a *app) submitMFA() {
 		return
 	}
 	a.mfaOpen = false
+	a.mfaPending = false
 	a.mfaNote = ""
 	a.mfaCode = ""
 	a.subOverride = "MFA code accepted - establishing tunnel (this can take ~30s)..."
@@ -310,6 +316,26 @@ func (a *app) tick(now time.Time) {
 		a.mfaOpen = false
 		a.markedConnected(now)
 		a.setState(connected)
+	}
+	// A cancel in progress: keep asking the worker to stop (its start-up
+	// cleanup erases an early flag) and wait until it is really gone.
+	switch cancelOutcome(a.cancelling, alive, now.Sub(a.cancelAt)) {
+	case cancelIdle:
+		a.cancelling = false
+		a.setState(idle)
+	case cancelTimedOut:
+		a.cancelling = false
+		a.setState(connecting)
+		a.subOverride = "Cancel timed out - the worker is still running."
+	}
+	// The worker stopped before the tunnel came up. The marker is the
+	// normal way to hear it; the clock covers a worker that died without
+	// writing one (the grace period covers its slow start).
+	if a.state == connecting && !alive && !a.cancelling {
+		if markerContains("HKUVPN_EXITED") || now.Sub(a.connectAt) > 20*time.Second {
+			a.setState(idle)
+			a.say("The worker stopped before the tunnel came up - see the log.", true)
+		}
 	}
 	// A dropped session comes back on its own when the user asked for that.
 	if !a.reconnectAt.IsZero() && now.After(a.reconnectAt) {
@@ -387,6 +413,7 @@ func (a *app) applyMarker(line string) {
 		a.setState(connected)
 	case strings.Contains(line, "HKUVPN_MFA_RESPONSE_REQUIRED") && a.state == connecting:
 		a.mfaOpen = true
+		a.mfaPending = true
 		a.mfaCode = ""
 		if a.retry {
 			a.mfaNote = "Previous code rejected - enter the current one."
@@ -402,6 +429,29 @@ func (a *app) applyMarker(line string) {
 			a.setState(idle)
 		}
 	}
+}
+
+// What a cancel in progress leads to.
+const (
+	cancelNone = iota
+	cancelIdle
+	cancelTimedOut
+)
+
+// cancelOutcome says what the app does while a cancel is in progress:
+// idle once the worker is really gone, a timeout when it did not stop in
+// time. It is a plain function, so the state machine can be tested.
+func cancelOutcome(cancelling, alive bool, elapsed time.Duration) int {
+	if !cancelling {
+		return cancelNone
+	}
+	if !alive {
+		return cancelIdle
+	}
+	if elapsed > 30*time.Second {
+		return cancelTimedOut
+	}
+	return cancelNone
 }
 
 // markedConnected remembers when the session started, so the timer keeps

@@ -112,6 +112,16 @@ func detailRow(c *ui.Context, t *ui.Theme, label, value string) {
 func (a *app) primaryAction(c *ui.Context, t *ui.Theme) {
 	switch a.state {
 	case connecting:
+		if a.mfaPending {
+			// The worker waits for the code: offer it again after the
+			// dialog was closed.
+			ui.PrimaryButton(c, "Enter the code").FillWidth().Height(38).
+				OnClick(func() { a.mfaOpen = true })
+			ui.Button(c, "Cancel").FillWidth().Height(34).
+				TextColor(t.Danger).Border(1, t.Danger).
+				OnClick(a.cancel)
+			return
+		}
 		ui.Button(c, "Cancel").FillWidth().Height(38).
 			Background(t.Warning).TextColor(ui.Hex("#FFFFFF")).
 			OnClick(a.cancel)
@@ -144,11 +154,13 @@ func (a *app) mfaDialog(c *ui.Context, t *ui.Theme) {
 		ui.Row(c).Justify(ui.End).Gap(8).Children(func() {
 			ui.PrimaryButton(c, "Submit").OnClick(a.submitMFA)
 		})
-		ui.Text(c, "Enter to submit · Esc to cancel").FontSize(12).TextColor(t.TextMuted)
+		ui.Text(c, "Enter to submit · Esc closes").FontSize(12).TextColor(t.TextMuted)
 	})
-	// Escape or a click outside aborts a session that is still being built.
-	if dialog.Dismissed() && a.state != connected {
-		a.cancel()
+	// Escape or a click outside closes the dialog, it does not kill the
+	// session: the worker keeps waiting for the code and the main window
+	// offers to enter it again.
+	if dialog.Dismissed() && a.mfaPending && a.state == connecting {
+		a.mfaOpen = false
 	}
 }
 

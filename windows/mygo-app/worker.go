@@ -21,7 +21,16 @@ type paths struct {
 var p = loadPaths()
 
 func loadPaths() paths {
-	base := joinPath(os.Getenv("TEMP"), "hkuvpn")
+	// Windows keeps the session files in %TEMP%; the tests (and any other
+	// platform) use the temporary directory of the system.
+	tmp := os.Getenv("TEMP")
+	if tmp == "" {
+		tmp = os.Getenv("TMPDIR")
+	}
+	if tmp == "" {
+		tmp = os.TempDir()
+	}
+	base := joinPath(tmp, "hkuvpn")
 	return paths{
 		base:     base,
 		markers:  joinPath(base, "markers.log"),

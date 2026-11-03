@@ -348,3 +348,68 @@ func TestConfigDirFollowsTheEnvironment(t *testing.T) {
 		t.Errorf("learnedRoutesPath = %q", got)
 	}
 }
+
+// ------------------------------------------------------------- cancelling
+
+// A cancel waits for the worker to be really gone, and gives up with a
+// timeout when the worker does not stop in time.
+func TestCancelOutcome(t *testing.T) {
+	if got := cancelOutcome(false, true, time.Minute); got != cancelNone {
+		t.Errorf("without a cancel: %v", got)
+	}
+	if got := cancelOutcome(true, true, time.Second); got != cancelNone {
+		t.Errorf("while the worker lives: %v", got)
+	}
+	if got := cancelOutcome(true, false, time.Second); got != cancelIdle {
+		t.Errorf("when the worker is gone: %v", got)
+	}
+	if got := cancelOutcome(true, true, 31*time.Second); got != cancelTimedOut {
+		t.Errorf("after the timeout: %v", got)
+	}
+}
+
+// The worker asks for a code: the app waits for it, and a closed dialog
+// does not end the session.
+func TestMfaPendingSurvivesTheDialog(t *testing.T) {
+	isolatedConfig(t)
+	a := newApp()
+	a.state = connecting
+	a.applyMarker("2026-11-04 06:23:00 HKUVPN_MFA_RESPONSE_REQUIRED")
+	if !a.mfaPending {
+		t.Fatal("the app does not know a code is needed")
+	}
+	if !a.mfaOpen {
+		t.Fatal("the dialog did not open")
+	}
+	// The dialog is closed, the way a click outside it does.
+	a.mfaOpen = false
+	if !a.mfaPending {
+		t.Error("closing the dialog dropped the pending code")
+	}
+	if a.state != connecting {
+		t.Errorf("state = %v, want connecting", a.state)
+	}
+	// The code goes in.
+	a.mfaCode = "123456"
+	a.submitMFA()
+	if a.mfaPending || a.mfaOpen {
+		t.Error("the app still waits for a code it already got")
+	}
+}
+
+// The session start time is kept, so the uptime survives a restart.
+func TestSessionStartIsRemembered(t *testing.T) {
+	isolatedConfig(t)
+	a := newApp()
+	a.state = connecting
+	before := time.Now()
+	a.applyMarker("2026-11-04 06:23:00 HKUVPN_CONNECTED")
+	if a.prefs.SessionStart.Before(before.Add(-time.Minute)) {
+		t.Errorf("the session start was not remembered: %v", a.prefs.SessionStart)
+	}
+	// A new app over the same state file keeps the timer.
+	b := newApp()
+	if b.prefs.SessionStart.IsZero() {
+		t.Error("the session start did not survive")
+	}
+}

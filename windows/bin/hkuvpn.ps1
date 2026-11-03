@@ -1324,7 +1324,20 @@ function Invoke-TunnelWorker {
                 $script:lastOp = 'mfa-wait'
                 $code = Get-MfaCode -Interactive $InteractiveMfa -OpenConnectProc $oc `
                             -LogBuffer $logAll -LogPath $Script:LogFile
-                if (-not $code) { break }
+                if (-not $code) {
+                    # The wait was cut short - a stop was requested, or
+                    # openconnect died. It is still waiting for a prompt
+                    # nobody will answer, so stop it here instead of
+                    # waiting for it below (which never ends).
+                    Write-Info 'MFA wait aborted; stopping openconnect.'
+                    Write-Marker 'HKUVPN_TEARDOWN'
+                    try {
+                        if (-not $oc.HasExited) {
+                            Stop-Process -Id $oc.Id -Force -ErrorAction SilentlyContinue
+                        }
+                    } catch {}
+                    break
+                }
                 $oc.StandardInput.WriteLine($code)
                 $oc.StandardInput.Flush()
                 Write-Info 'MFA code sent; waiting for the tunnel...'
@@ -1399,7 +1412,17 @@ function Invoke-TunnelWorker {
             }
             Start-Sleep -Milliseconds 100
         }
-        if (-not $oc.HasExited) { Wait-Process -Id $oc.Id -ErrorAction SilentlyContinue }
+        # openconnect can still be running (it waits for a prompt when the
+        # session was cut short), so give it a bounded moment to exit on
+        # its own rather than waiting for it forever; the finally below
+        # stops it either way.
+        if (-not $oc.HasExited) {
+            $waitedMs = 0
+            while (-not $oc.HasExited -and $waitedMs -lt 15000) {
+                Start-Sleep -Milliseconds 500
+                $waitedMs += 500
+            }
+        }
         try { $oc.Refresh(); $exitCode = $oc.ExitCode } catch {}
         Read-PendingChars $ocOut $outBuf $logAll $EchoRaw
         Read-PendingChars $ocErr $errBuf $logAll $EchoRaw
