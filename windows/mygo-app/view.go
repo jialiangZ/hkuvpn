@@ -25,6 +25,13 @@ func (a *app) theme(c *ui.Context) *ui.Theme {
 func (a *app) view(c *ui.Context) {
 	t := a.theme(c)
 
+	// A message the app queued is shown once, over the window.
+	if a.pendingToast != "" {
+		text := a.pendingToast
+		a.pendingToast = ""
+		toast(c, text, a.pendingToastErr)
+	}
+
 	ui.Themed(c, t).Fill().Children(func() {
 		ui.Scroll(c).Fill().Children(func() {
 			ui.Column(c).Padding(24).Gap(16).Children(func() {
@@ -84,8 +91,6 @@ func (a *app) view(c *ui.Context) {
 					ui.Button(c, "Routes").Grow(1).OnClick(a.openRoutes)
 					ui.Button(c, "Settings").Grow(1).OnClick(a.openSettings)
 				})
-
-				ui.Text(c, a.hint).FontSize(12).TextColor(t.TextMuted)
 			})
 		})
 

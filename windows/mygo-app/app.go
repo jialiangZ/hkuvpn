@@ -33,8 +33,6 @@ const (
 	connected
 )
 
-const defaultHint = "Closing this window keeps the VPN running in the tray."
-
 var (
 	colorGray  = ui.Hex("#8A9199")
 	colorGreen = ui.Hex("#12873E")
@@ -87,11 +85,13 @@ type app struct {
 	copiedAt       time.Time
 	lastLogRefresh time.Time
 
-	// Hints and credential autosave.
-	hint       string
-	hintUntil  time.Time
+	// Credential autosave.
 	credDirty  bool
 	credEditAt time.Time
+
+	// A message waiting to be shown over the window.
+	pendingToast    string
+	pendingToastErr bool
 
 	// Settings and preferences.
 	settings     settings
@@ -123,7 +123,6 @@ func newApp() *app {
 	a := &app{
 		account: storedAccount(),
 		pin:     storedPIN(),
-		hint:    defaultHint,
 	}
 	a.prefs = loadAppState()
 	a.settings = loadSettings()
@@ -169,7 +168,7 @@ func (a *app) setState(s session) {
 func (a *app) connect() {
 	account := strings.TrimSpace(a.account)
 	if account == "" {
-		a.showHint("Enter your HKU account first.")
+		a.say("Enter your HKU account first.", true)
 		return
 	}
 	if err := persistCredentials(account, a.pin); err != nil {
@@ -186,7 +185,7 @@ func (a *app) connect() {
 		if script := findLauncher(); script != "" {
 			stopWorker(script)
 		}
-		a.showHint("Cleaning up a stale session - try again in a moment.")
+		a.say("Cleaning up a stale session - try again in a moment.", true)
 		return
 	}
 	script := findLauncher()
@@ -199,7 +198,7 @@ func (a *app) connect() {
 	code, err := startWorker(script)
 	if err != nil {
 		if code == 5 { // SE_ERR_ACCESSDENIED
-			a.showHint("Elevation was declined.")
+			a.say("Elevation was declined.", true)
 		} else {
 			go mygo.Dialog.Error("HKU VPN", fmt.Sprintf("Could not start the worker (ShellExecute=%d).", code))
 		}
@@ -273,9 +272,11 @@ func (a *app) credentialsEdited() {
 	a.credEditAt = time.Now()
 }
 
-func (a *app) showHint(text string) {
-	a.hint = text
-	a.hintUntil = time.Now().Add(2500 * time.Millisecond)
+// say queues a message for the window, which shows it as a toast over the
+// app.
+func (a *app) say(text string, isErr bool) {
+	a.pendingToast = text
+	a.pendingToastErr = isErr
 }
 
 // ------------------------------------------------------------------ tick
@@ -342,14 +343,10 @@ func (a *app) tick(now time.Time) {
 	if a.credDirty && now.Sub(a.credEditAt) > 700*time.Millisecond {
 		a.credDirty = false
 		if strings.TrimSpace(a.account) != "" {
-			if err := persistCredentials(a.account, a.pin); err == nil {
-				a.showHint("Account details saved.")
-			}
+			// The credentials are saved without a word: the fields show
+			// what was saved, and a toast after every edit would be noise.
+			_ = persistCredentials(a.account, a.pin)
 		}
-	}
-	if !a.hintUntil.IsZero() && now.After(a.hintUntil) {
-		a.hint = defaultHint
-		a.hintUntil = time.Time{}
 	}
 	if a.logOpen && now.Sub(a.lastLogRefresh) > 800*time.Millisecond {
 		a.lastLogRefresh = now
