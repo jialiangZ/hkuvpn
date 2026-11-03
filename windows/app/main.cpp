@@ -598,6 +598,17 @@ static void DoConnect() {
         g_seen = 0;
         g_retry = false;
         SetState(APP_CONNECTING);
+        // UAC's secure desktop deactivates (and sometimes minimizes) the
+        // caller. ShellExecuteW returns after consent, so take the
+        // foreground back right here; if Windows denies a plain
+        // SetForegroundWindow, the minimize/restore trick re-earns it.
+        if (IsIconic(hMain)) ShowWindow(hMain, SW_RESTORE);
+        SetForegroundWindow(hMain);
+        if (GetForegroundWindow() != hMain) {
+            ShowWindow(hMain, SW_MINIMIZE);
+            ShowWindow(hMain, SW_RESTORE);
+            SetForegroundWindow(hMain);
+        }
     } else if ((INT_PTR)hi == SE_ERR_ACCESSDENIED) {
         MessageBoxW(hMain, L"Elevation was declined.", L"HKU VPN", MB_ICONWARNING);
     } else {
