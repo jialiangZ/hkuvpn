@@ -273,6 +273,9 @@ void Backend::PresentFrame()
 	RMLUI_FrameMark;
 }
 
+// Implemented by the application (main.cpp).
+void HkuOnTrayMessage(HWND window_handle, UINT event_id);
+
 // Local event handler for window and input events.
 static LRESULT CALLBACK WindowProcedureHandler(HWND window_handle, UINT message, WPARAM w_param, LPARAM l_param)
 {
@@ -312,7 +315,9 @@ static LRESULT CALLBACK WindowProcedureHandler(HWND window_handle, UINT message,
 	break;
 	case WM_APP + 1:
 	{
-		// Tray icon callback: handled by the application message pump.
+		// Tray icon callback: hand it to the application (this window
+		// procedure otherwise consumes the message before the app pump).
+		HkuOnTrayMessage(window_handle, (UINT)LOWORD(l_param));
 		return 0;
 	}
 	break;

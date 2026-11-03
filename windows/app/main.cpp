@@ -119,6 +119,7 @@ static NOTIFYICONDATAW g_nid = {};
 static Rml::Context* g_ctx = nullptr;
 static Rml::ElementDocument* g_doc = nullptr;
 static bool g_mfaVisible = false;
+static bool g_quit = false;
 
 
 
@@ -535,7 +536,7 @@ public:
             else if (id == "menu-settings") SetOverlay("settings-overlay", true);
             else if (id == "menu-help") SetOverlay("about-overlay", true);
             else if (id == "file-hide") { SetOverlay("file-menu", false); ShowWindow(g_hwnd, SW_HIDE); }
-            else if (id == "file-exit") PostQuitMessage(0);
+            else if (id == "file-exit") { g_quit = true; PostQuitMessage(0); }
         }
         else if (ev.GetType() == "keydown") {
             int key = ev.GetParameter<int>("key_identifier", 0);
@@ -701,28 +702,23 @@ static void TailLog() {
 
 // ---------------------------------------------------------------- winmain
 
-static bool TrayProc(MSG& msg) {
-    if (msg.message == WM_APP + 1 && msg.hwnd == g_hwnd) {
-        UINT ev = LOWORD(msg.lParam);
-        if (ev == WM_LBUTTONUP || ev == NIN_SELECT || ev == NIN_KEYSELECT) {
-            ShowFromTray();
-            return true;
-        }
-        if (ev == WM_RBUTTONUP) {
-            POINT pt; GetCursorPos(&pt);
-            HMENU menu = CreatePopupMenu();
-            AppendMenuW(menu, MF_STRING, 1, L"Open HKU VPN");
-            AppendMenuW(menu, MF_STRING, 2, L"Exit");
-            SetForegroundWindow(g_hwnd);
-            int cmd = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_NONOTIFY,
-                                     pt.x, pt.y, 0, g_hwnd, NULL);
-            DestroyMenu(menu);
-            if (cmd == 1) ShowFromTray();
-            if (cmd == 2) PostQuitMessage(0);
-            return true;
-        }
+void HkuOnTrayMessage(HWND, UINT event_id) {
+    if (event_id == WM_LBUTTONUP || event_id == NIN_SELECT || event_id == NIN_KEYSELECT) {
+        ShowFromTray();
+        return;
     }
-    return false;
+    if (event_id == WM_RBUTTONUP) {
+        POINT pt; GetCursorPos(&pt);
+        HMENU menu = CreatePopupMenu();
+        AppendMenuW(menu, MF_STRING, 1, L"Open HKU VPN");
+        AppendMenuW(menu, MF_STRING, 2, L"Exit");
+        SetForegroundWindow(g_hwnd);
+        int cmd = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_NONOTIFY,
+                                 pt.x, pt.y, 0, g_hwnd, NULL);
+        DestroyMenu(menu);
+        if (cmd == 1) ShowFromTray();
+        if (cmd == 2) { g_quit = true; PostQuitMessage(0); }
+    }
 }
 
 int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
@@ -831,15 +827,8 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
 
     ULONGLONG lastTick = 0, lastLog = 0;
     bool running = true;
-    while (running) {
+    while (running && !g_quit) {
         running = Backend::ProcessEvents(g_ctx);
-
-        // Pump tray messages (the backend only forwards its own handlers).
-        MSG msg;
-        while (PeekMessage(&msg, NULL, WM_APP, WM_APP + 10, PM_REMOVE)) {
-            TrayProc(msg);
-        }
-        if (msg.message == WM_QUIT) running = false;
 
         ULONGLONG now = GetTickCount64();
         if (now - lastTick >= 400) { lastTick = now; Tick(); }
