@@ -275,9 +275,9 @@ static HBRUSH BrushFor(COLORREF c) {
 
 struct BtnStyle { COLORREF fill, border, hoverFill, text; };
 
-static const BtnStyle gBsConnect  = { RGB(10,108,255),  RGB(9,105,218),   RGB(56,139,253),  RGB(255,255,255) };
-static const BtnStyle gBsDanger   = { RGB(255,255,255), RGB(207,34,46),   RGB(255,240,240), RGB(207,34,46) };
-static const BtnStyle gBsNeutral  = { RGB(245,245,245), RGB(209,213,218), RGB(233,236,239), RGB(31,35,40) };
+static const BtnStyle gBsConnect  = { RGB(0,103,192),   RGB(0,103,192),   RGB(16,124,224),  RGB(255,255,255) };
+static const BtnStyle gBsDanger   = { RGB(255,255,255), RGB(196,43,43),   RGB(253,240,240), RGB(196,43,43) };
+static const BtnStyle gBsNeutral  = { RGB(255,255,255), RGB(209,213,218), RGB(243,245,247), RGB(31,35,40) };
 
 static LRESULT CALLBACK BtnSubProc(HWND h, UINT m, WPARAM w, LPARAM l,
                                    UINT_PTR id, DWORD_PTR ref) {
@@ -300,9 +300,9 @@ static void DrawStyledButton(DRAWITEMSTRUCT* dis, const BtnStyle* st,
     bool hover = GetPropW(dis->hwndItem, L"hov") != NULL;
     bool disabled = (dis->itemState & ODS_DISABLED) != 0;
     COLORREF fill = hover ? st->hoverFill : st->fill;
-    if (disabled) fill = RGB(235, 236, 238);
+    if (disabled) fill = RGB(247, 248, 249);
     SetDCBrushColor(dc, fill);
-    HPEN pen = CreatePen(PS_SOLID, 1, disabled ? RGB(70, 72, 77) : st->border);
+    HPEN pen = CreatePen(PS_SOLID, 1, disabled ? RGB(210, 214, 219) : st->border);
     HBRUSH br = (HBRUSH)GetStockObject(DC_BRUSH);
     HPEN oldPen = (HPEN)SelectObject(dc, pen);
     HBRUSH oldBr = (HBRUSH)SelectObject(dc, br);
@@ -373,21 +373,19 @@ static COLORREF HeaderColor() {
 }
 
 static void PaintHeader(HDC dc, const RECT& rc) {
-    // State dot
+    // Status pill: filled dot + status word, baseline aligned
     HBRUSH dot = CreateSolidBrush(HeaderColor());
-    int dotSz = (int)(16 * g_scale);
-    int dotX = (int)(20 * g_scale), dotY = (int)(30 * g_scale);
-    RECT dr = { dotX, dotY, dotX + dotSz, dotY + dotSz };
+    int dotSz = (int)(10 * g_scale);
+    int dotX = (int)(20 * g_scale), dotY = (int)(33 * g_scale);
     HBRUSH ob = (HBRUSH)SelectObject(dc, dot);
     HPEN np = CreatePen(PS_NULL, 0, 0);
     HPEN op = (HPEN)SelectObject(dc, np);
-    Ellipse(dc, dr.left, dr.top, dr.right, dr.bottom);
+    Ellipse(dc, dotX, dotY, dotX + dotSz, dotY + dotSz);
     SelectObject(dc, op); SelectObject(dc, ob);
     DeleteObject(dot); DeleteObject(np);
 
     SetBkMode(dc, TRANSPARENT);
 
-    // Title + subtitle
     const wchar_t* title;
     if (g_disconnecting) title = L"Disconnecting...";
     else switch (g_state) {
@@ -397,9 +395,10 @@ static void PaintHeader(HDC dc, const RECT& rc) {
         case APP_CONNECTING: title = L"Connecting..."; break;
         default:            title = L"Disconnected"; break;
     }
-    SetTextColor(dc, HeaderColor());
     HFONT of = (HFONT)SelectObject(dc, gFTitle);
-    TextOutW(dc, (int)(48 * g_scale), (int)(22 * g_scale), title, (int)wcslen(title));
+    SetTextColor(dc, C_TEXT);
+    TextOutW(dc, (int)(38 * g_scale), (int)(20 * g_scale), title, (int)wcslen(title));
+
     SelectObject(dc, gFSub);
     SetTextColor(dc, C_MUTED);
     const wchar_t* sub;
@@ -416,16 +415,16 @@ static void PaintHeader(HDC dc, const RECT& rc) {
             default:            sub = L"Tunnel is down"; break;
         }
     }
-    TextOutW(dc, (int)(50 * g_scale), (int)(54 * g_scale), sub, (int)wcslen(sub));
-    SelectObject(dc, of);
+    TextOutW(dc, (int)(38 * g_scale), (int)(48 * g_scale), sub, (int)wcslen(sub));
 
     // Server, right aligned
-    RECT right = { rc.right - (int)(210 * g_scale), (int)(24 * g_scale),
+    RECT right = { rc.right - (int)(210 * g_scale), (int)(22 * g_scale),
                    rc.right - (int)(20 * g_scale), rc.bottom };
-    SetTextColor(dc, C_ACCENT);
-    SelectObject(dc, gFSub);
+    SelectObject(dc, gFSemi9);
+    SetTextColor(dc, C_SEMI);
     RECT r1 = right; DrawTextW(dc, L"HKU Portal VPN", -1, &r1,
                                DT_RIGHT | DT_SINGLELINE | DT_NOCLIP);
+    SelectObject(dc, gFSub);
     SetTextColor(dc, C_MUTED);
     RECT r2 = { right.left, right.top + (int)(18 * g_scale), right.right, 0 };
     DrawTextW(dc, L"vpn2fa.hku.hk", -1, &r2, DT_RIGHT | DT_SINGLELINE | DT_NOCLIP);
@@ -987,11 +986,15 @@ static HWND MkStatic(HWND parent, int id, DWORD style, const wchar_t* txt) {
 
 static void ScaleFonts() {
     UINT dpi = GetDpiForWindow(hMain);
+    // Segoe UI Variable is the Windows 11 face; plain Segoe UI elsewhere.
+    static const wchar_t* kUiFont =
+        L"Segoe UI Variable Text";
     auto mk = [&](int pt, int weight) {
-        return CreateFontW(-MulDiv(pt, dpi, 72), 0, 0, 0, weight, FALSE,
-                           FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
-                           CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-                           DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+        HFONT f = CreateFontW(-MulDiv(pt, dpi, 72), 0, 0, 0, weight, FALSE,
+                              FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+                              CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                              DEFAULT_PITCH | FF_DONTCARE, kUiFont);
+        return f;
     };
     if (gFTitle) DeleteObject(gFTitle);
     if (gFSub)   DeleteObject(gFSub);
@@ -1001,11 +1004,11 @@ static void ScaleFonts() {
     if (gFMono) {
         DeleteObject(gFMono);
     }
-    gFTitle  = mk(20, FW_SEMIBOLD);
+    gFTitle  = mk(17, FW_SEMIBOLD);
     gFSub    = mk(9,  FW_NORMAL);
     gFBody   = mk(9,  FW_NORMAL);
     gFSemi9  = mk(9,  FW_SEMIBOLD);
-    gFButton = mk(11, FW_SEMIBOLD);
+    gFButton = mk(9, FW_SEMIBOLD);
     UINT mdpi = dpi;
     gFMono   = CreateFontW(-MulDiv(95, mdpi, 720), 0, 0, 0, FW_NORMAL, FALSE,
                            FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
@@ -1019,54 +1022,50 @@ static void Move(HWND h, int x, int y, int w, int ht) {
 }
 
 static void LayoutAll() {
-    int W = 760, H = 560;
     RECT rc; GetClientRect(hMain, &rc);
-    W = rc.right; H = rc.bottom;
-    (void)W; (void)H;
+    (void)rc;
+    int cardW = 760 - 48;   // 24px outer margins -> 712
 
-    int cardW = 760 - 40;   // 720
-
-    // Connection card: account + PIN + buttons on one login-form row
-    Move(hPanelConn, 20, 84, cardW, 64);
-    SendMessageW(GetDlgItem(hPanelConn, ID_CRED_TITLE), WM_SETFONT,
-                 (WPARAM)gFSemi9, TRUE);
-    Move(GetDlgItem(hPanelConn, ID_CRED_NOTE), cardW - 392, 10, 374, 16);
-    SendMessageW(GetDlgItem(hPanelConn, ID_LBL_ACCOUNT), WM_SETFONT,
-                 (WPARAM)gFSub, TRUE);
-    Move(GetDlgItem(hPanelConn, ID_LBL_ACCOUNT), 18, 24, 90, 18);
+    // --- Connection card: label-over-field login form + actions ---
+    Move(hPanelConn, 24, 84, cardW, 78);
+    SendMessageW(GetDlgItem(hPanelConn, ID_LBL_ACCOUNT), WM_SETFONT, (WPARAM)gFSub, TRUE);
+    SendMessageW(GetDlgItem(hPanelConn, ID_LBL_PIN), WM_SETFONT, (WPARAM)gFSub, TRUE);
+    Move(GetDlgItem(hPanelConn, ID_LBL_ACCOUNT), 16, 12, 300, 16);
+    Move(GetDlgItem(hPanelConn, ID_LBL_PIN), 332, 12, 200, 16);
     SendMessageW(hEdAccount, WM_SETFONT, (WPARAM)gFBody, TRUE);
-    Move(hEdAccount, 112, 20, 240, 26);
-    SendMessageW(GetDlgItem(hPanelConn, ID_LBL_PIN), WM_SETFONT,
-                 (WPARAM)gFSub, TRUE);
-    Move(GetDlgItem(hPanelConn, ID_LBL_PIN), 380, 24, 70, 18);
     SendMessageW(hEdPin, WM_SETFONT, (WPARAM)gFBody, TRUE);
-    Move(hEdPin, 452, 20, 120, 26);
+    Move(hEdAccount, 16, 32, 300, 30);
+    Move(hEdPin, 332, 32, 200, 30);
     SendMessageW(hBtnConnect, WM_SETFONT, (WPARAM)gFButton, TRUE);
-    Move(hBtnConnect, 588, 16, 62, 34);
     SendMessageW(hBtnDisconnect, WM_SETFONT, (WPARAM)gFButton, TRUE);
-    Move(hBtnDisconnect, 656, 16, 46, 34);
+    Move(hBtnConnect, 548, 30, 74, 32);
+    Move(hBtnDisconnect, 628, 30, 74, 32);
 
-    // Session card
-    Move(hPanelSession, 20, 160, cardW, 112);
+    // --- Session card: 2x2 stat grid ---
+    Move(hPanelSession, 24, 176, cardW, 86);
     int capIds[] = { ID_CAP_VPN, ID_CAP_DURATION, ID_CAP_PROXY, ID_CAP_ROUTES };
     int valIds[] = { ID_VAL_VPN, ID_VAL_DURATION, ID_VAL_PROXY, ID_VAL_ROUTES };
+    int colX[2] = { 16, 376 };
     for (int i = 0; i < 4; i++) {
+        int col = i % 2, row = i / 2;
         HWND cap = GetDlgItem(hPanelSession, capIds[i]);
         HWND val = GetDlgItem(hPanelSession, valIds[i]);
         SendMessageW(cap, WM_SETFONT, (WPARAM)gFSub, TRUE);
         SendMessageW(val, WM_SETFONT, (WPARAM)gFBody, TRUE);
-        Move(cap, 18, 12 + i * 24, 130, 18);
-        Move(val, 150, 12 + i * 24, cardW - 170, 18);
+        int x = colX[col], y = 14 + row * 32;
+        Move(cap, x, y, 340, 14);
+        Move(val, x, y + 15, 340, 17);
     }
 
-    // Log panel
-    Move(hPanelLog, 20, 286, cardW, 560 - 286);
-    SendMessageW(GetDlgItem(hPanelLog, 0), WM_SETFONT, (WPARAM)gFSub, TRUE);
-    Move(GetDlgItem(hPanelLog, 0), 18, 8, 300, 18);
-    Move(hBtnClear, cardW - 94, 6, 76, 24);
+    // --- Log card fills the rest ---
+    int logY = 276;
+    Move(hPanelLog, 24, logY, cardW, 556 - logY);
+    SendMessageW(GetDlgItem(hPanelLog, 0), WM_SETFONT, (WPARAM)gFSemi9, TRUE);
+    Move(GetDlgItem(hPanelLog, 0), 16, 10, 400, 18);
+    Move(hBtnClear, cardW - 88, 8, 72, 26);
     SendMessageW(hBtnClear, WM_SETFONT, (WPARAM)gFSub, TRUE);
     SendMessageW(hEdLog, WM_SETFONT, (WPARAM)gFMono, TRUE);
-    Move(hEdLog, 14, 34, cardW - 28, 560 - 286 - 44);
+    Move(hEdLog, 16, 38, cardW - 32, 556 - logY - 52);
 
     InvalidateRect(hMain, NULL, TRUE);
 }
@@ -1194,12 +1193,12 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
 
     hMain = CreateWindowExW(WS_EX_COMPOSITED, L"HkuMain", L"HKU VPN",
         WS_OVERLAPPEDWINDOW & ~(WS_MAXIMIZEBOX | WS_THICKFRAME),
-        CW_USEDEFAULT, CW_USEDEFAULT, 760, 620, NULL, NULL, hInst, NULL);
+        CW_USEDEFAULT, CW_USEDEFAULT, 760, 560, NULL, NULL, hInst, NULL);
     g_hInst = hInst;
     {
         UINT dpi = GetDpiForWindow(hMain);
         g_scale = dpi / 96.0;
-        RECT adj = { 0, 0, (int)(760 * g_scale), (int)(620 * g_scale) };
+        RECT adj = { 0, 0, (int)(760 * g_scale), (int)(560 * g_scale) };
         AdjustWindowRectEx(&adj,
             WS_OVERLAPPEDWINDOW & ~(WS_MAXIMIZEBOX | WS_THICKFRAME), FALSE, 0);
         SetWindowPos(hMain, NULL, CW_USEDEFAULT, CW_USEDEFAULT,
@@ -1229,17 +1228,18 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
     hPanelConn = CreateWindowExW(0, L"HkuPanel", NULL, WS_CHILD | WS_VISIBLE,
                                  0, 0, 10, 10, hMain, (HMENU)IDC_PANEL_CONN, hInst, NULL);
     SetWindowLongPtrW(hPanelConn, GWLP_USERDATA, (LONG_PTR)&stConn);
-    MkStatic(hPanelConn, ID_CRED_TITLE, 0, L"Connection");
     MkStatic(hPanelConn, ID_LBL_ACCOUNT, 0, L"HKU account");
     MkStatic(hPanelConn, ID_LBL_PIN, 0, L"Portal PIN");
-    MkStatic(hPanelConn, ID_CRED_NOTE, SS_RIGHT,
-             L"Stored locally in %USERPROFILE%\\.vpn  (hku.env / hku.pass).");
-    hEdAccount = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
-        WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
+    hEdAccount = CreateWindowExW(0, L"EDIT", L"",
+        WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL,
         0, 0, 10, 10, hPanelConn, (HMENU)IDC_ED_ACCOUNT, hInst, NULL);
-    hEdPin = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
-        WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_PASSWORD,
+    SendMessageW(hEdAccount, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN,
+                 MAKELPARAM(6, 6));
+    hEdPin = CreateWindowExW(0, L"EDIT", L"",
+        WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL | ES_PASSWORD,
         0, 0, 10, 10, hPanelConn, (HMENU)IDC_ED_PIN, hInst, NULL);
+    SendMessageW(hEdPin, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN,
+                 MAKELPARAM(6, 6));
     SendMessageW(hEdPin, EM_SETPASSWORDCHAR, 0x25CF, 0);   // ●
     // Prefill from the existing config, if any.
     {
@@ -1288,7 +1288,7 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int nCmd) {
     hBtnClear = CreateWindowExW(0, L"BUTTON", L"Clear",
         WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
         0, 0, 10, 10, hPanelLog, (HMENU)ID_BTN_CLEAR, hInst, NULL);
-    hEdLog = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
+    hEdLog = CreateWindowExW(0, L"EDIT", L"",
         WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL | ES_MULTILINE |
         ES_READONLY | ES_AUTOVSCROLL | ES_AUTOHSCROLL,
         0, 0, 10, 10, hPanelLog, (HMENU)IDC_ED_LOG, hInst, NULL);
