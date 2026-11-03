@@ -401,11 +401,11 @@ static void PaintHeader(HDC dc, const RECT& rc) {
         SetTextColor(dc, C_ACCENT);
     } else {
         switch (g_state) {
-            case ST_CONNECTED:
+            case APP_CONNECTED:
                 sub = (WorkerAlive() && HeartbeatFresh())
                     ? L"Tunnel is up - traffic via 127.0.0.1:1080/1088 goes through HKU"
                     : L"The worker loop stopped - use Disconnect to recover"; break;
-            case ST_CONNECTING: sub = L"Requesting elevation / bringing the tunnel up"; break;
+            case APP_CONNECTING: sub = L"Requesting elevation / bringing the tunnel up"; break;
             default:            sub = L"Tunnel is down"; break;
         }
     }
