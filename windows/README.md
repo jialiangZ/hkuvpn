@@ -145,8 +145,12 @@ Three long-session modes, by scenario (plus a tray app):
   tunnel address, duration, proxy, routes), labeled HKU account and portal
   PIN fields (saved automatically when edited), one primary Connect /
   Cancel / Disconnect button, a View log sheet (per-session log with
-  DBG/INF/WRN/ERR tags, a level filter, and Copy) and an MFA dialog, plus
-  close-to-tray. Built with Go alone (`GOOS=windows go build`, no cgo, no
+  DBG/INF/WRN/ERR tags, a level filter, a search field, Copy and Export),
+  a Diagnostics panel (what the worker needs, plus a test of the local
+  proxies and the address the traffic leaves with), a Routes panel (the
+  learned routes, added and removed by hand), a Settings panel (the
+  advanced options of `hku.env`, start with Windows, reconnect) and an MFA
+  dialog, plus close-to-tray. Built with Go alone (`GOOS=windows go build`, no cgo, no
   webview) - see `windows\mygo-app\build.sh`. The exe is built as a GUI
   app (`-H=windowsgui`), so it never opens a terminal window; its own
   diagnostics go to `%TEMP%\hkuvpn\app.log`. The tray icon is a 4-state

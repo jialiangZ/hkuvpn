@@ -59,6 +59,9 @@ type app struct {
 	disconnectAt  time.Time
 	cancelling    bool
 	cancelAt      time.Time
+	mfaShown      bool
+	reconnectAt   time.Time
+	reconnectTry  int
 
 	// Derived display values.
 	statusText    string
@@ -90,9 +93,31 @@ type app struct {
 	credDirty  bool
 	credEditAt time.Time
 
+	// Settings and preferences.
+	settings     settings
+	settingsForm settingsForm
+	prefs        appState
+
+	// Panels.
+	routesNote   panelNote
+	settingsNote panelNote
+	logNote      panelNote
+	routesOpen   bool
+	routeList    []learnedRoute
+	routeInput   string
+	diagOpen     bool
+	diagRunning  bool
+	diagResults  []checkResult
+	settingsOpen bool
+	logSearch    string
+
 	uiTheme   *ui.Theme
 	trayState string
 }
+
+// maxReconnectTries bounds the automatic reconnects after a session drops,
+// so a gateway that keeps refusing does not ask for UAC over and over.
+const maxReconnectTries = 3
 
 func newApp() *app {
 	a := &app{
@@ -100,14 +125,21 @@ func newApp() *app {
 		pin:     storedPIN(),
 		hint:    defaultHint,
 	}
+	a.prefs = loadAppState()
+	a.settings = loadSettings()
+	a.settingsForm = newSettingsForm(a.settings, a.prefs)
 	// The log follows its newest line until the user scrolls away.
 	a.logList.FollowEnd = true
 	// Default to hiding the keepalive noise but keeping info lines.
 	a.logFilter = 1
-	// Adopt a session that survived a frontend restart.
+	// Adopt a session that survived a frontend restart, with the start
+	// time the last run remembered, so the timer does not start at zero.
 	if workerAlive() && heartbeatFresh() {
 		a.state = connected
-		a.connectedAt = time.Now()
+		a.connectedAt = a.prefs.SessionStart
+		if a.connectedAt.IsZero() {
+			a.connectedAt = time.Now()
+		}
 	}
 	a.refreshStatus(time.Now(), workerAlive(), heartbeatFresh())
 	return a
@@ -184,6 +216,9 @@ func (a *app) connect() {
 		a.markersOffset = 0
 	}
 	a.retry = false
+	// A new session starts its timer over.
+	a.prefs.SessionStart = time.Time{}
+	_ = saveAppState(a.prefs)
 	// The worker starts a fresh log for every session: read it from the top
 	// the next time the log window opens.
 	a.logLoaded = false
@@ -255,7 +290,15 @@ func (a *app) tick(now time.Time) {
 		a.setState(idle)
 	}
 	if a.state == connected && !alive {
+		// The session died on its own. Remember when it was, and offer to
+		// bring it back when the user asked for that.
 		a.setState(idle)
+		a.prefs.SessionStart = time.Time{}
+		_ = saveAppState(a.prefs)
+		if a.prefs.AutoReconnect && a.reconnectTry < maxReconnectTries {
+			a.reconnectTry++
+			a.reconnectAt = now.Add(3 * time.Second)
+		}
 	}
 	// Reconciliation: a rewritten markers file can leave the cursor past
 	// the CONNECTED line, so trust the file while the worker is alive.
@@ -263,9 +306,16 @@ func (a *app) tick(now time.Time) {
 		if b, err := os.ReadFile(p.markers); err == nil {
 			a.markersOffset = lastCompleteLineEnd(b)
 		}
-		a.connectedAt = now
 		a.mfaOpen = false
+		a.markedConnected(now)
 		a.setState(connected)
+	}
+	// A dropped session comes back on its own when the user asked for that.
+	if !a.reconnectAt.IsZero() && now.After(a.reconnectAt) {
+		a.reconnectAt = time.Time{}
+		if !workerAlive() {
+			a.connect()
+		}
 	}
 	if a.disconnecting {
 		if !alive {
@@ -276,6 +326,15 @@ func (a *app) tick(now time.Time) {
 			a.setState(connected)
 			a.subOverride = "Disconnect timed out - the worker is still running; retry."
 		}
+	}
+
+	// A code is needed: bring the window forward, whoever hid it.
+	if a.mfaOpen && !a.mfaShown {
+		a.mfaShown = true
+		a.showWindow()
+	}
+	if !a.mfaOpen {
+		a.mfaShown = false
 	}
 
 	a.refreshStatus(now, alive, fresh)
@@ -318,29 +377,54 @@ func (a *app) processMarkers() {
 	}
 	a.markersOffset = next
 	for _, line := range lines {
-		switch {
-		case strings.Contains(line, "HKUVPN_CONNECTED"):
+		a.applyMarker(line)
+	}
+}
+
+// applyMarker reads one marker line and moves the session on.
+func (a *app) applyMarker(line string) {
+	switch {
+	case strings.Contains(line, "HKUVPN_CONNECTED"):
+		a.mfaOpen = false
+		a.markedConnected(time.Now())
+		a.setState(connected)
+	case strings.Contains(line, "HKUVPN_MFA_RESPONSE_REQUIRED") && a.state == connecting:
+		a.mfaOpen = true
+		a.mfaCode = ""
+		if a.retry {
+			a.mfaNote = "Previous code rejected - enter the current one."
+		} else {
+			a.mfaNote = ""
+		}
+		a.retry = false
+	case strings.Contains(line, "HKUVPN_MFA_RETRY"):
+		a.retry = true
+	case strings.Contains(line, "HKUVPN_EXITED"):
+		if a.state == connecting {
 			a.mfaOpen = false
-			a.connectedAt = time.Now()
-			a.setState(connected)
-		case strings.Contains(line, "HKUVPN_MFA_RESPONSE_REQUIRED") && a.state == connecting:
-			a.mfaOpen = true
-			a.mfaCode = ""
-			if a.retry {
-				a.mfaNote = "Previous code rejected - enter the current one."
-			} else {
-				a.mfaNote = ""
-			}
-			a.retry = false
-		case strings.Contains(line, "HKUVPN_MFA_RETRY"):
-			a.retry = true
-		case strings.Contains(line, "HKUVPN_EXITED"):
-			if a.state == connecting {
-				a.mfaOpen = false
-				a.setState(idle)
-			}
+			a.setState(idle)
 		}
 	}
+}
+
+// markedConnected remembers when the session started, so the timer keeps
+// running when the app is restarted.
+func (a *app) markedConnected(now time.Time) {
+	a.connectedAt = now
+	a.prefs.SessionStart = now
+	a.reconnectTry = 0
+	_ = saveAppState(a.prefs)
+}
+
+// showWindow brings the app window forward.
+func (a *app) showWindow() {
+	if win == nil {
+		return
+	}
+	if !win.IsVisible() {
+		win.Show()
+	}
+	win.Focus()
 }
 
 func markerContains(marker string) bool {
@@ -362,6 +446,15 @@ func (a *app) refreshStatus(now time.Time, alive, fresh bool) {
 		a.headline = "Not connected"
 		a.headlineMuted = true
 		a.routes = "-"
+		if !a.reconnectAt.IsZero() {
+			a.statusText = "Reconnecting"
+			a.statusColor = colorAmber
+			secs := int(time.Until(a.reconnectAt).Seconds()) + 1
+			if secs < 1 {
+				secs = 1
+			}
+			a.headline = fmt.Sprintf("Reconnecting in %d s", secs)
+		}
 	case connecting:
 		a.statusText = "Connecting"
 		a.statusColor = colorAmber
@@ -392,7 +485,7 @@ func (a *app) refreshStatus(now time.Time, alive, fresh bool) {
 			}
 			a.duration = fmt.Sprintf("%02d:%02d:%02d", el/3600, el/60%60, el%60)
 		}
-		routes := learnedRoutes()
+		routes := len(readLearnedRoutes())
 		plural := "s"
 		if routes == 1 {
 			plural = ""
@@ -413,16 +506,19 @@ func (a *app) refreshStatus(now time.Time, alive, fresh bool) {
 	}
 }
 
-// visibleLog applies the level filter chosen in the dialog.
+// visibleLog applies the level filter and the search text chosen in the
+// dialog.
 func (a *app) visibleLog() []logEntry {
-	if a.logFilter <= 0 {
-		return a.logLines
-	}
+	needle := strings.ToLower(strings.TrimSpace(a.logSearch))
 	out := make([]logEntry, 0, len(a.logLines))
 	for _, entry := range a.logLines {
-		if int(entry.level) >= a.logFilter {
-			out = append(out, entry)
+		if a.logFilter > 0 && int(entry.level) < a.logFilter {
+			continue
 		}
+		if needle != "" && !strings.Contains(strings.ToLower(entry.text), needle) {
+			continue
+		}
+		out = append(out, entry)
 	}
 	return out
 }
@@ -486,4 +582,137 @@ func (a *app) syncTray(alive, fresh bool) {
 		}
 		tray.SetToolTip(a.trayToolTip())
 	}
+}
+
+// panelNote is a message a panel shows under its buttons: a toast would
+// hide behind the modal it belongs to.
+type panelNote struct {
+	text  string
+	isErr bool
+}
+
+// ---------------------------------------------------------------- panels
+
+// openRoutes loads the learned routes and shows the panel.
+func (a *app) openRoutes() {
+	a.routeList = readLearnedRoutes()
+	a.routesOpen = true
+}
+
+// addRoute adds a prefix to the learned routes.
+func (a *app) addRoute() {
+	cidr := strings.TrimSpace(a.routeInput)
+	if cidr == "" {
+		return
+	}
+	if err := addLearnedRoute(cidr, "added by hand"); err != nil {
+		a.routesNote = panelNote{text: err.Error(), isErr: true}
+		return
+	}
+	a.routeInput = ""
+	a.routeList = readLearnedRoutes()
+	a.routesNote = panelNote{text: "Added - it is installed on the next connect."}
+}
+
+// removeRoute drops one learned route.
+func (a *app) removeRoute(base string) {
+	if err := deleteLearnedRoute(base); err != nil {
+		a.routesNote = panelNote{text: "Could not remove the route: " + err.Error(), isErr: true}
+		return
+	}
+	a.routeList = readLearnedRoutes()
+	a.routesNote = panelNote{text: "Removed - it goes away on the next connect."}
+}
+
+// clearRoutes drops every learned route.
+func (a *app) clearRoutes() {
+	if err := writeLearnedRoutes(nil); err != nil {
+		a.routesNote = panelNote{text: "Could not clear the routes: " + err.Error(), isErr: true}
+		return
+	}
+	a.routeList = readLearnedRoutes()
+	a.routesNote = panelNote{text: "All learned routes removed."}
+}
+
+// openDiagnostics shows the panel and runs the checks.
+func (a *app) openDiagnostics() {
+	a.diagOpen = true
+	a.runDiagnostics()
+}
+
+// runDiagnostics checks the setup and the local proxies. The checks talk to
+// the network, so they run off the main thread.
+func (a *app) runDiagnostics() {
+	a.diagRunning = true
+	s := a.settings
+	go func() {
+		results := append(runPreflight(s), runProxyTest(s)...)
+		if win == nil || win.IsDestroyed() {
+			return
+		}
+		win.Update(func() {
+			a.diagResults = results
+			a.diagRunning = false
+		})
+	}()
+}
+
+// openSettings shows the settings panel with the current values.
+func (a *app) openSettings() {
+	a.settingsForm = newSettingsForm(a.settings, a.prefs)
+	a.settingsOpen = true
+}
+
+// saveSettings writes the advanced options and the preferences. It says
+// whether the panel may close.
+func (a *app) saveSettings() bool {
+	s, prefs := a.settingsForm.apply()
+	if err := saveSettings(s); err != nil {
+		a.settingsNote = panelNote{text: "Could not save the settings: " + err.Error(), isErr: true}
+		return false
+	}
+	if prefs.AutoStart != a.prefs.AutoStart {
+		if err := setAutostart(prefs.AutoStart); err != nil {
+			a.settingsNote = panelNote{text: "Could not update the autostart entry: " + err.Error(), isErr: true}
+			return false
+		}
+	}
+	a.settings = s
+	a.prefs = prefs
+	_ = saveAppState(a.prefs)
+	a.settingsOpen = false
+	a.settingsNote = panelNote{}
+	return true
+}
+
+// exportLog writes the lines on screen to a file the user picks.
+func (a *app) exportLog() {
+	entries := a.visibleLog()
+	if len(entries) == 0 {
+		return
+	}
+	path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{
+		Title: "Export the connection log",
+	})
+	if err != nil || path == "" {
+		return
+	}
+	var b strings.Builder
+	for i, entry := range entries {
+		if i > 0 {
+			b.WriteString("\r\n")
+		}
+		b.WriteString(entry.text)
+	}
+	if err := os.WriteFile(path, []byte(b.String()), 0o600); err != nil {
+		a.logNote = panelNote{text: "Could not write the file: " + err.Error(), isErr: true}
+		return
+	}
+	a.logNote = panelNote{text: "Exported to " + path}
+}
+
+// jumpToLatest scrolls the log back to its newest line.
+func (a *app) jumpToLatest() {
+	a.logList.FollowEnd = true
+	a.logList.ScrollToEnd()
 }

@@ -46,6 +46,12 @@ func main() {
 
 		setupTray(a)
 		go a.poll()
+
+		// The user asked for the app to connect when it starts: do it now,
+		// unless a session is already running.
+		if a.prefs.ConnectOnStart && !workerAlive() {
+			a.connect()
+		}
 	})
 
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { quitting = true })

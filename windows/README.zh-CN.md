@@ -92,7 +92,7 @@ hkuvpn --stop       # 停止（活跃 worker 自清理，免 UAC；死会话强�
 
 三种长会话模式按场景选：
 
-- **桌面 App**（MyGo 原生 UI，`windows\mygo-app`）：`HKUVPN.exe`，用 MyGo 官方组件搭的紧凑窗口 —— 状态卡片（状态、隧道地址、时长、代理、路由）、带标签的 HKU 账号与 Portal PIN 输入框（编辑后自动保存）、单一主按钮 Connect / Cancel / Disconnect、View log 日志面板与 MFA 对话框，关闭窗口收进托盘。纯 Go 构建（`GOOS=windows go build`，无 cgo、无 WebView），见 `windows\mygo-app\build.sh`；exe 以 GUI 方式编译（`-H=windowsgui`），启动时不会弹出终端窗口，App 自身日志写入 `%TEMP%\hkuvpn\app.log`。托盘图标为四状态盾牌（灰/绿/琥珀/红），由 `windows\mygo-app\assets\tray-icon.svg` 生成。断开免 UAC，退出 App 不影响会话。
+- **桌面 App**（MyGo 原生 UI，`windows\mygo-app`）：`HKUVPN.exe`，用 MyGo 官方组件搭的紧凑窗口 —— 状态卡片（状态、隧道地址、时长、代理、路由）、带标签的 HKU 账号与 Portal PIN 输入框（编辑后自动保存）、单一主按钮 Connect / Cancel / Disconnect、View log 日志面板（级别标签 + 分级筛选 + 搜索 + 复制 + 导出）、Diagnostics 诊断面板（连接前的自检 + 本地代理连通性与出口地址）、Routes 路由面板（查看/增删自动学习到的路由）、Settings 设置面板（`hku.env` 里的高级选项、开机自启、断线自动重连）与 MFA 对话框，关闭窗口收进托盘。纯 Go 构建（`GOOS=windows go build`，无 cgo、无 WebView），见 `windows\mygo-app\build.sh`；exe 以 GUI 方式编译（`-H=windowsgui`），启动时不会弹出终端窗口，App 自身日志写入 `%TEMP%\hkuvpn\app.log`。托盘图标为四状态盾牌（灰/绿/琥珀/红），由 `windows\mygo-app\assets\tray-icon.svg` 生成。断开免 UAC，退出 App 不影响会话。
 - **智能模式**（默认）：整个会话挂在当前控制台，关窗/Ctrl+C 即断开，适合双击图标使用；
 - **`-t` 终端模式**：隧道跑在隐藏的提权 worker 里，MFA 直接在你的终端输入（投递空码或超时会自动停掉 worker）。连接后**关闭终端不影响 VPN**，适合日常从终端启动；
 - **`-d` 后台模式**：无交互启动，配合 `--mfa` 投递，适合脚本。

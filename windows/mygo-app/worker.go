@@ -78,10 +78,20 @@ func parentDir(path string) string {
 
 func homeDir() string { return os.Getenv("USERPROFILE") }
 
-func vpnDir() string { return joinPath(homeDir(), ".vpn") }
+// configDir is where the account, the PIN, the learned routes and the
+// app's own state live. The worker reads the same place, and both honour
+// HKU_CONFIG_DIR.
+func configDir() string {
+	if dir := os.Getenv("HKU_CONFIG_DIR"); dir != "" {
+		return dir
+	}
+	return joinPath(homeDir(), ".vpn")
+}
 
-func envFile() string  { return joinPath(vpnDir(), "hku.env") }
-func passFile() string { return joinPath(vpnDir(), "hku.pass") }
+func vpnDir() string { return configDir() }
+
+func envFile() string  { return joinPath(configDir(), "hku.env") }
+func passFile() string { return joinPath(configDir(), "hku.pass") }
 
 // ---------------------------------------------------------------- status
 
@@ -113,16 +123,6 @@ func stateValue(key string) string {
 		}
 	}
 	return ""
-}
-
-func learnedRoutes() int {
-	n := 0
-	for _, line := range readLines(p.state) {
-		if strings.HasPrefix(line, "ROUTE_") {
-			n++
-		}
-	}
-	return n
 }
 
 // ----------------------------------------------------------- credentials

@@ -31,6 +31,27 @@ shown in the View log sheet.
     go tool mygo dev    # live reload
     go test             # view tests without a window
 
+## What the app does
+
+- **Session**: Connect (UAC) -> MFA code dialog -> tunnel up, with the
+  VPN address, the uptime, the proxy endpoints and the learned routes on
+  the status card. Cancel while connecting watches the worker until it is
+  really gone; Disconnect needs no UAC. Closing the window hides it to the
+  tray, and exiting the app never kills the session.
+- **Diagnostics**: the checks the worker needs (account, PIN, tools, ports,
+  certificate pin) and a test of the local SOCKS5 and HTTP proxies,
+  including the address the traffic leaves with.
+- **Routes**: the learned routes (what goes through the tunnel), with
+  adding and removing them.
+- **Settings**: the advanced options the worker reads from `hku.env`
+  (endpoint, ports, DTLS, auto-routes, DNS rules, proxy domains) and the
+  app's own preferences (start with Windows, reconnect, connect at start).
+- **Log**: the session log with severity tags, a level filter, a search
+  field, copy and export.
+
+The app's own state (preferences and the start time of the running
+session) lives in `%USERPROFILE%\.vpn\app-state.json`.
+
 ## Tray icons
 
 `assets/tray-{gray,green,amber,red}.png` (64px, embedded) encode the
