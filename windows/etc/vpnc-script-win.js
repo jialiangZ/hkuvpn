@@ -113,6 +113,21 @@ function ipIsV4(s) {
     return /^\d{1,3}(\.\d{1,3}){3}$/.test(s);
 }
 
+function ipToInt(s) {
+    var p = s.split(".");
+    return ((((+p[0]) * 256 + (+p[1])) * 256 + (+p[2])) * 256 + (+p[3])) >>> 0;
+}
+
+function ipCovered(ip, net, len) {
+    // Is the IPv4 address inside the given network/masklen? The gateway's
+    // DNS servers must only be registered on the tunnel adapter when a
+    // split route actually reaches them - a resolver on an unrouted subnet
+    // makes the Windows DNS client wait on it for every name, which is how
+    // a whole machine turns unusably slow.
+    var m = (0xFFFFFFFF << (32 - len)) >>> 0;
+    return ((ipToInt(ip) & m) >>> 0) === ((ipToInt(net) & m) >>> 0);
+}
+
 // -------------------------------------------------------------- state file
 
 function stateWrite(lines) {
@@ -201,31 +216,9 @@ function doConnect() {
             " mtu=" + myTrim(env("INTERNAL_IP4_MTU")) + " store=active");
     }
 
-    // DNS servers are registered on the tunnel adapter ONLY. Actual use of
-    // these resolvers for *.hku.hk is arranged by hkuvpn.ps1 through an
-    // NRPT rule, so general name resolution stays with the physical NICs.
-    var dnsV4 = [];
-    run("netsh interface ipv4 delete dnsservers " + tunidx + " all");
-    var dnsRaw = myTrim(env("INTERNAL_IP4_DNS"));
-    if (dnsRaw) {
-        var dnsAll = dnsRaw.split(/[\s,]+/);
-        for (var d = 0; d < dnsAll.length; d++) {
-            var srv = myTrim(dnsAll[d]);
-            if (!srv) {
-                continue;
-            }
-            if (ipIsV4(srv)) {
-                run("netsh interface ipv4 add dnsservers " + tunidx + " " +
-                    srv + " validate=no");
-                dnsV4.push(srv);
-            } else {
-                log("skipping non-IPv4 DNS server: " + srv);
-            }
-        }
-    }
-
     // Split routes pushed by the server.
     var routes = []; // "net/masklen" strings, persisted for cleanup
+    var covers = []; // { net, len } pairs, for the DNS reachability check
     var incCount = parseInt(myTrim(env("CISCO_SPLIT_INC")) || "0", 10);
     if (isNaN(incCount) || incCount < 0) {
         incCount = 0;
@@ -253,6 +246,7 @@ function doConnect() {
         run("route add " + net + " mask " + nmask + " " + ip4 +
             " metric 1 if " + tunidx);
         routes.push(net + "/" + len);
+        covers.push({ net: net, len: len });
     }
 
     // Extra routes requested by the user (HKU_EXTRA_ROUTES=147.8.0.0/16,...).
@@ -278,6 +272,47 @@ function doConnect() {
             run("route add " + base + " mask " + cidrToMask(bits) + " " +
                 ip4 + " metric 1 if " + tunidx);
             routes.push(base + "/" + bits);
+            covers.push({ net: base, len: bits });
+        }
+    }
+
+    // DNS servers are registered on the tunnel adapter ONLY, and only when
+    // a split or extra route actually reaches them. HKU pushes no split
+    // routes at all, so its resolvers (147.8.x.x) are unreachable through
+    // the tunnel - registering them would make the Windows DNS client wait
+    // on them for every name and slow the whole machine down. General name
+    // resolution stays with the physical NICs; campus-only names go through
+    // the NRPT rule that hkuvpn.ps1 adds, which has the same reachability
+    // check.
+    var dnsV4 = [];
+    run("netsh interface ipv4 delete dnsservers " + tunidx + " all");
+    var dnsRaw = myTrim(env("INTERNAL_IP4_DNS"));
+    if (dnsRaw) {
+        var dnsAll = dnsRaw.split(/[\s,]+/);
+        for (var d = 0; d < dnsAll.length; d++) {
+            var srv = myTrim(dnsAll[d]);
+            if (!srv) {
+                continue;
+            }
+            if (!ipIsV4(srv)) {
+                log("skipping non-IPv4 DNS server: " + srv);
+                continue;
+            }
+            var reachable = false;
+            for (var c = 0; c < covers.length; c++) {
+                if (ipCovered(srv, covers[c].net, covers[c].len)) {
+                    reachable = true;
+                    break;
+                }
+            }
+            if (!reachable) {
+                log("skipping DNS server " + srv +
+                    " (not covered by any pushed route)");
+                continue;
+            }
+            run("netsh interface ipv4 add dnsservers " + tunidx + " " +
+                srv + " validate=no");
+            dnsV4.push(srv);
         }
     }
 

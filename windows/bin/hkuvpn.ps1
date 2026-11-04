@@ -1106,10 +1106,15 @@ function Read-PendingChars {
     if (-not $Pending.Task.IsCompleted) { return }
     try { $n = $Pending.Task.Result } catch { $Pending.Eof = $true; return }
     if ($n -le 0) { $Pending.Eof = $true; return }
-    # Re-arm the next read before anything else, so the pipe keeps draining.
-    $Pending.Task = $Pending.Reader.ReadAsync($Pending.Buf, 0, $Pending.Buf.Length)
+    # Copy the bytes out BEFORE the next read is armed. The next read
+    # writes into the same buffer, and the StreamReader often has data
+    # ready, so that read completes at once - arming it first means the
+    # copy below picks up the NEW bytes under the OLD count. A measured
+    # loss of a quarter of the output, which is how the "Password:" and
+    # "Response:" prompts go missing and the session hangs.
     $chunk = New-Object System.Text.StringBuilder
     [void]$chunk.Append($Pending.Buf, 0, $n)
+    $Pending.Task = $Pending.Reader.ReadAsync($Pending.Buf, 0, $Pending.Buf.Length)
     $text = $chunk.ToString()
     [void]$Buffer.Append($text)
     [void]$Log.Append($text)
