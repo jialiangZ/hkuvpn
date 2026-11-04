@@ -786,7 +786,7 @@ func (a *app) closeDiagnostics() {
 func (a *app) openSettings() {
 	a.settingsForm = newSettingsForm(a.settings, a.prefs)
 	a.settingsOpen = true
-	a.openPanel(&a.settingsWin, "Settings", a.settingsPanel, 480, 560)
+	a.openPanel(&a.settingsWin, "Settings", a.settingsPanel, 480, 660)
 }
 
 // closeSettings closes the settings window.

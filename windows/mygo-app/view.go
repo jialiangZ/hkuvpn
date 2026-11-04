@@ -379,69 +379,74 @@ func (a *app) settingsPanel(c *ui.Context) {
 		ui.Column(c).Grow(1).Padding(t.Space(4)).Gap(t.Space(2)).Children(func() {
 			ui.Text(c, "The advanced options are written to hku.env and "+
 				"apply to the next connect.").FontSize(12).TextColor(t.TextMuted)
+
+			// A form: the labels sit beside the controls, so the panel
+			// is half as tall and every label weighs the same.
 			ui.Scroll(c).Grow(1).Children(func() {
-				ui.Column(c).Width(440).Gap(t.Space(2)).Children(func() {
-					ui.Field(c, "VPN endpoint", func() {
-						ui.TextInput(c, &a.settingsForm.Endpoint).
-							Placeholder("vpn2fa.hku.hk")
-					})
-					ui.Row(c).Gap(t.Space(2)).Children(func() {
+				ui.Column(c).Width(424).Gap(t.Space(3)).Children(func() {
+					ui.Form(c, func() {
+						ui.Field(c, "VPN endpoint", func() {
+							ui.TextInput(c, &a.settingsForm.Endpoint).
+								Placeholder("vpn2fa.hku.hk")
+						})
 						ui.Field(c, "SOCKS port", func() {
 							ui.NumberInput(c, &a.settingsForm.SocksPort, 1, 65535, 1)
-						}).Grow(1)
+						})
 						ui.Field(c, "HTTP port", func() {
 							ui.NumberInput(c, &a.settingsForm.HttpPort, 1, 65535, 1)
-						}).Grow(1)
-					})
-					ui.Field(c, "DTLS", func() {
-						ui.Switch(c, &a.settingsForm.DTLS)
-					})
-					ui.Field(c, "Auto-learn routes", func() {
-						ui.Switch(c, &a.settingsForm.AutoRoutes)
-					})
-					ui.Row(c).Gap(t.Space(2)).Children(func() {
-						ui.Field(c, "Prefix", func() {
+						})
+						ui.Field(c, "DTLS", func() {
+							ui.Switch(c, &a.settingsForm.DTLS)
+						})
+						ui.Field(c, "Learn routes", func() {
+							ui.Switch(c, &a.settingsForm.AutoRoutes)
+						})
+						ui.Field(c, "Route prefix", func() {
 							ui.NumberInput(c, &a.settingsForm.RoutePrefix, 8, 32, 1)
-						}).Grow(1)
+						})
 						ui.Field(c, "Max routes", func() {
 							ui.NumberInput(c, &a.settingsForm.RouteMax, 1, 10000, 1)
-						}).Grow(1)
-					})
-					ui.Field(c, "TTL days", func() {
-						ui.NumberInput(c, &a.settingsForm.RouteTTL, 1, 365, 1)
-					})
-					ui.Field(c, "Proxy domains", func() {
-						ui.TextInput(c, &a.settingsForm.ProxyDomains).
-							Placeholder("library.hku.hk, api.hku.hk")
-					})
-					ui.Field(c, "Extra routes", func() {
-						ui.TextInput(c, &a.settingsForm.ExtraRoutes).
-							Placeholder("10.0.0.0/8")
-					})
-					ui.Field(c, "Campus DNS rules", func() {
-						ui.Switch(c, &a.settingsForm.NRPT)
-					})
-					ui.Field(c, "DNS domains", func() {
-						ui.TextInput(c, &a.settingsForm.NRPTDomains).
-							Placeholder("hku.hk")
+						})
+						ui.Field(c, "TTL days", func() {
+							ui.NumberInput(c, &a.settingsForm.RouteTTL, 1, 365, 1)
+						})
+						ui.Field(c, "Proxy domains", func() {
+							ui.TextInput(c, &a.settingsForm.ProxyDomains).
+								Placeholder("library.hku.hk, api.hku.hk")
+						})
+						ui.Field(c, "Extra routes", func() {
+							ui.TextInput(c, &a.settingsForm.ExtraRoutes).
+								Placeholder("10.0.0.0/8")
+						})
+						ui.Field(c, "Campus DNS", func() {
+							ui.Switch(c, &a.settingsForm.NRPT)
+						})
+						ui.Field(c, "DNS domains", func() {
+							ui.TextInput(c, &a.settingsForm.NRPTDomains).
+								Placeholder("hku.hk")
+						})
 					})
 
-					ui.Text(c, "This app").FontSize(13).Bold()
-					ui.Field(c, "Start with Windows", func() {
-						ui.Switch(c, &a.settingsForm.AutoStart)
-					})
-					ui.Field(c, "Reconnect if the session drops", func() {
-						ui.Switch(c, &a.settingsForm.AutoReconnect)
-					})
-					ui.Field(c, "Connect when the app starts", func() {
-						ui.Switch(c, &a.settingsForm.ConnectOnStart)
+					// The app's own preferences, in a group of their own.
+					ui.Text(c, "This app").FontSize(12).Bold().TextColor(t.TextMuted).
+						Margin(t.Space(2), 0, 0, 0)
+					ui.Form(c, func() {
+						ui.Field(c, "Start with Windows", func() {
+							ui.Switch(c, &a.settingsForm.AutoStart)
+						})
+						ui.Field(c, "Reconnect if dropped", func() {
+							ui.Switch(c, &a.settingsForm.AutoReconnect)
+						})
+						ui.Field(c, "Connect at start", func() {
+							ui.Switch(c, &a.settingsForm.ConnectOnStart)
+						})
 					})
 				})
 			})
 			noteLine(c, t, a.settingsNote)
 			ui.Row(c).Justify(ui.End).Gap(t.Space(2)).Children(func() {
-				ui.Button(c, "Cancel").OnClick(a.closeSettings)
-				ui.PrimaryButton(c, "Save").OnClick(func() {
+				ui.Button(c, "Cancel").Height(32).OnClick(a.closeSettings)
+				ui.PrimaryButton(c, "Save").Height(32).OnClick(func() {
 					if a.saveSettings() {
 						a.closeSettings()
 					}
