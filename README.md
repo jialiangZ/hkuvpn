@@ -105,7 +105,7 @@ HTTP response headers confirm that the proxy request works; access to individual
 | Automatic routing with Surge | [Example](examples/clients/surge.conf) · [Setup](docs/guide.en.md#surge) |
 | SSH / remote desktop | [Connect to a campus computer](docs/guide.en.md#ssh-and-remote-desktop) |
 | Windows / WSL | [PowerShell wrapper](examples/shells/hkuvpn.ps1) · [SSH example](examples/clients/ssh_config.wsl.example) · [Setup](docs/guide.en.md#windows--wsl) |
-| Windows native, no WSL | [Native port](windows/README.md) · [Validation checklist](windows/VALIDATION.md) |
+| Windows native, no WSL | [Native port](windows/README.md) · [Desktop app](windows/mygo-app/README.md) · [Validation checklist](windows/VALIDATION.md) |
 
 The proxies listen on localhost and forward TCP traffic; `socks5h` also resolves DNS through the proxy. With a rules client, **the VPN servers themselves must use a direct connection or an existing proxy**, to avoid routing back into hkuvpn. The examples include these rules.
 
@@ -162,6 +162,8 @@ hkuvpn/
 │   ├── bin/get-tools.ps1      # Fetches and verifies gost + OpenConnect
 │   ├── etc/vpnc-script-win.js # Split-tunnel-only routing script
 │   ├── examples/              # hku.env template for this edition
+│   ├── mygo-app/              # Desktop app (HKUVPN.exe): MyGo native UI
+│   ├── tests/                 # session-flow.ps1: the session lifecycle regression
 │   ├── README.md              # Edition guide (English / 简体中文)
 │   └── VALIDATION.md          # Field validation checklist (English / 简体中文)
 ├── examples/                  # Shared integration examples

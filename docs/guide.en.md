@@ -630,6 +630,8 @@ The repository holds two independent editions plus the material they share.
 |---|---|
 | `docker/` | Docker edition: `Dockerfile`, launcher `bin/hkuvpn`, in-container routing script `etc/vpnc-script`, MFA entrypoint `hku-connect.exp`, `examples/hku.env.example`, and the OpenConnect release key used by the build-time signature check |
 | `windows/` | Native Windows edition: launcher `bin/hkuvpn.ps1`, tool fetcher `bin/get-tools.ps1`, split-only routing script `etc/vpnc-script-win.js`, `examples/hku.env.example`, and an edition README |
+| `windows/mygo-app/` | The desktop app (`HKUVPN.exe`), a MyGo native UI that drives the same worker: source, the tray and panel icons, and `build.sh` |
+| `windows/tests/` | `session-flow.ps1`, the regression run for the session lifecycle |
 | `examples/clients/` | Integration examples for rules clients and SSH (Clash Verge Rev / Mihomo, Surge, `ssh_config`) |
 | `examples/shells/` | Short `hkuvpn` command wrappers for Zsh, Bash, Fish, and PowerShell |
 | `docs/` | This guide and the diagrams |

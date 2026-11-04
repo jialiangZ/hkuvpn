@@ -43,7 +43,7 @@ schedule. It is rolled when the day changes or the file passes a
 megabyte, and a week of generations is kept.
 
 The VPN session log is a separate file, `%TEMP%\hkuvpn\openconnect.log`,
-shown in the View log sheet. The worker writes a new one for every
+shown in the Connection log window. The worker writes a new one for every
 connection attempt, so two runs are never mixed, and rolls it past two
 megabytes with three generations kept.
 
@@ -87,7 +87,7 @@ answers "what does the app think it is doing?" without the window.
 
 `assets/tray-{gray,green,amber,red}.png` (64px, embedded) encode the
 connection state; MyGo scales them for the taskbar. They are rendered
-from `assets/tray-icon.svg` (simplified variant: `tray-icon-small.svg`)
-with `python3 make-tray-icons.py` - rerun it after editing the SVG.
+from `assets/tray-icon.svg` with `python3 make-tray-icons.py` - rerun it
+after editing the SVG.
 
 The app window itself is intentionally icon-less.

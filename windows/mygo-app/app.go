@@ -110,13 +110,10 @@ type app struct {
 	routesNote   panelNote
 	settingsNote panelNote
 	logNote      panelNote
-	routesOpen   bool
 	routeList    []learnedRoute
 	routeInput   string
-	diagOpen     bool
 	diagRunning  bool
 	diagResults  []checkResult
-	settingsOpen bool
 	logSearch    string
 
 	uiTheme   *ui.Theme
@@ -758,40 +755,38 @@ func (a *app) closeLog() {
 // openRoutes loads the learned routes and shows them in their own window.
 func (a *app) openRoutes() {
 	a.routeList = readLearnedRoutes()
-	a.routesOpen = true
 	a.openPanel(&a.routesWin, "Routes", a.routesPanel, 480, 420)
 }
 
 // closeRoutes closes the routes window.
 func (a *app) closeRoutes() {
-	a.routesOpen = false
 	a.closePanel(&a.routesWin)
 }
 
 // openDiagnostics shows the diagnostics in their own window and runs the
 // checks.
 func (a *app) openDiagnostics() {
-	a.diagOpen = true
 	a.openPanel(&a.diagWin, "Diagnostics", a.diagnosticsPanel, 480, 460)
 	a.runDiagnostics()
 }
 
 // closeDiagnostics closes the diagnostics window.
 func (a *app) closeDiagnostics() {
-	a.diagOpen = false
 	a.closePanel(&a.diagWin)
 }
 
 // openSettings shows the settings in their own window.
 func (a *app) openSettings() {
 	a.settingsForm = newSettingsForm(a.settings, a.prefs)
-	a.settingsOpen = true
+	// The switch for "Start with Windows" shows what the registry says,
+	// not what the app remembers: the entry can be removed behind the
+	// app's back, and a stale switch would put it back on the next save.
+	a.settingsForm.AutoStart = autostartEnabled()
 	a.openPanel(&a.settingsWin, "Settings", a.settingsPanel, 480, 660)
 }
 
 // closeSettings closes the settings window.
 func (a *app) closeSettings() {
-	a.settingsOpen = false
 	a.closePanel(&a.settingsWin)
 }
 
@@ -875,7 +870,6 @@ func (a *app) saveSettings() bool {
 	a.settings = s
 	a.prefs = prefs
 	_ = saveAppState(a.prefs)
-	a.settingsOpen = false
 	a.settingsNote = panelNote{}
 	return true
 }

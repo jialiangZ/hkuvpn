@@ -1,4 +1,8 @@
 /build/
 /.mygo/
 mygo_windows_*.syso
+
+# "go build ./..." in this directory drops a binary named after the module
+# ("hkuvpn") here. build.sh writes publish/HKUVPN.exe instead; this rule
+# keeps the stray binary out of the repository.
 /hkuvpn

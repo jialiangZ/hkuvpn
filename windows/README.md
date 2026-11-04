@@ -84,7 +84,8 @@ irrelevant — that block belongs to the licensed resource anyway).
 - Windows 10 1803+ / Windows 11, 64-bit (`curl.exe` ships with the OS)
 - PowerShell 5.1 (built in)
 - Administrator rights — hkuvpn.ps1 self-elevates with a UAC prompt for
-  connect/stop (the wintun adapter and route changes need it)
+  connect (the wintun adapter and route changes need it). Stopping a live
+  session needs no UAC: the elevated worker tears itself down.
 - An HKU account with VPN enabled, your **static Portal PIN**, and a
   **Microsoft Authenticator code** (same as the Docker edition)
 
@@ -135,8 +136,10 @@ hkuvpn --stop       # stop (live worker cleans up itself, no UAC; force-stopping
                     # a dead session elevates)
 ```
 
-Each connection starts a fresh `openconnect.log`; the previous session's
-log is kept beside it as `openconnect.log.1`, so logs never mix runs.
+Each connection starts a fresh `openconnect.log`; the previous sessions'
+logs are kept beside it as `openconnect.log.1`, `.2` and `.3`, so logs never
+mix runs and the runs before last can still be read. A log that passes two
+megabytes is rolled during the session, three generations kept.
 
 Three long-session modes, by scenario (plus a tray app):
 
@@ -144,7 +147,7 @@ Three long-session modes, by scenario (plus a tray app):
   compact window built from MyGo's official widgets - a status card (state,
   tunnel address, duration, proxy, routes), labeled HKU account and portal
   PIN fields (saved automatically when edited), one primary Connect /
-  Cancel / Disconnect button, a View log sheet (per-session log with
+  Cancel / Disconnect button, a Connection log window (per-session log with
   DBG/INF/WRN/ERR tags, a level filter, a search field, Copy and Export),
   a Diagnostics panel (what the worker needs, plus a test of the local
   proxies and the address the traffic leaves with), a Routes panel (the
@@ -209,7 +212,7 @@ HTTP `127.0.0.1:1088`, and point Clash Verge / Surge at them with the same
 | Isolation | container sandbox, cap-dropped | processes run as your elevated user |
 | PIN file security | chmod 600 in WSL | file under `%USERPROFILE%\.vpn`; protect with NTFS ACLs if needed |
 | Prerequisite | Docker runtime (WSL) | nothing but the tools above; no WSL |
-| UAC | not needed on the Windows side | one UAC prompt per connect/stop |
+| UAC | not needed on the Windows side | one UAC prompt per connect; disconnecting a live session needs none |
 
 ## Troubleshooting
 
@@ -235,7 +238,13 @@ HTTP `127.0.0.1:1088`, and point Clash Verge / Surge at them with the same
 
 - The Portal PIN is read from `%USERPROFILE%\.vpn\hku.pass` and delivered
   to OpenConnect over its stdin pipe; it never appears on a command line.
-- Runtime state (log, markers, pid list) lives under `%TEMP%\hkuvpn`.
+- Runtime state (markers, pid list, heartbeat, the session log) lives under
+  `%TEMP%\hkuvpn`; the session log is rolled past two megabytes with three
+  generations kept.
+- The app's own diagnostics live in `%LOCALAPPDATA%\HKUVPN\app.log`, rolled
+  daily with a week kept. That is a durable place: the log is meant to be
+  read after a failure, and Windows clears the temporary directory on its
+  own schedule.
 - The MFA code file exists only for the seconds between `--mfa` and its
   consumption by the worker, then it is deleted.
 - Unlike the container edition there is no sandbox around OpenConnect; you

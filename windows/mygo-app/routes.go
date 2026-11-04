@@ -109,18 +109,6 @@ func addLearnedRoute(cidr, host string) error {
 	return writeLearnedRoutes(out)
 }
 
-// installedRoutes are the routes the server pushed, as the tunnel script
-// wrote them into the state file.
-func installedRoutes() []string {
-	var out []string
-	for _, line := range readLines(p.state) {
-		if strings.HasPrefix(line, "ROUTE=") {
-			out = append(out, strings.TrimPrefix(line, "ROUTE="))
-		}
-	}
-	return out
-}
-
 // routeAge says how long ago a route was learned, in words.
 func routeAge(t time.Time) string {
 	d := time.Since(t)

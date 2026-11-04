@@ -3,9 +3,10 @@
 > 用途：这是实现方对**当前可用版本**的完整拆解。设计师可以据此重做视觉，不必先读代码。
 > 交付目标：一套现代、简洁、易读的浅色界面；保持本文列出的信息与操作不变。
 >
-> 实现已迁移到 **MyGo（Go 原生 UI）**：界面由官方组件（Field / TextInput /
-> PrimaryButton / Modal / Scroll / Tray）搭建，主题沿用官方浅色主题并把强调色
-> 换成 HKU 深绿。因此阴影、渐变、模糊、SVG 图标现在都可以落地。
+> 实现是 **MyGo（Go 原生 UI）**：界面由官方组件（Form / Field / TextInput /
+> Button / PrimaryButton / Modal / List / SearchField / Segmented / Toast / Tray）
+> 搭建，主题沿用官方主题，只把强调色换成 HKU 深绿。阴影、渐变、模糊、SVG 图标
+> 都可以落地。
 
 ---
 
@@ -23,11 +24,13 @@
 
 | 项目 | 当前值 | 说明 |
 |---|---|---|
-| 窗口尺寸 | 480 × 620（逻辑像素） | 固定尺寸，不可缩放；可整体调整，但需保证下列内容不滚动 |
-| 标题栏 | 标准 Windows 标题栏 | 仅显示文字 “HKU VPN”，**无任何图标**（应用图标已按需求删除，请不要再设计 App 图标） |
-| 背景 | 浅灰 `#F4F5F7` | 内容以白色卡片承载 |
-| 安全边距 | 左右 28，顶部 26 | 卡片之间 16–18 |
-| 圆角 | 卡片 14，按钮 9–10，输入框 8 | |
+| 主窗口尺寸 | 452 × 376（逻辑像素，**客户区**） | 固定尺寸，不可缩放、不可最大化；`UseContentSize` 表示这是客户区，标题栏另算 |
+| 面板窗口尺寸 | 日志 640×460 · 诊断 480×460 · 路由 480×420 · 设置 480×660 | 同样是固定尺寸的客户区 |
+| 标题栏 | 标准 Windows 标题栏 | 仅显示文字 “HKU VPN”，**无任何图标**（应用图标是一张全透明 PNG，让标题栏和任务栏按钮留白） |
+| 背景 / 卡片 | 官方主题的 Surface / 背景色 | 状态卡是一张有圆角和 1px 边框的浅色卡片 |
+| 圆角 | 状态卡 10 · 按钮官方值 · 输入框官方值 | 卡片圆角是自定义的，其余沿用官方主题 |
+| 间距 | 官方主题的 `t.Space(n)`（n = 2/3/4） | 全部间距走主题 token，官方控件与自定义排版不会走样 |
+| 强调色 | `#0B6B45`（hover `#0A5C3C`，pressed `#084B31`） | 只改主题的 Accent，其余颜色一个不动 |
 
 设计稿请按 **100% 缩放**出图（逻辑像素 = CSS px）；小尺寸托盘图标另见第 7 节。
 
@@ -35,153 +38,159 @@
 
 ## 3. 主界面解剖（自上而下）
 
+主窗口只有一张卡片、一个表单、一个按钮和一排图标，没有页头。
+
 ```
-┌──────────────────────────────────────────────┐
-│  HKU VPN                                     │  ← ① 页头
-│  HKU Portal VPN · vpn2fa.hku.hk              │
-│                                              │
-│  ┌────────────────────────────────────────┐  │
-│  │ ● Disconnected              --:--:--   │  │  ← ② 状态卡
-│  │ Not connected                          │  │
-│  │ Proxy   socks5://127.0.0.1:1080 · …    │  │
-│  │ Routes  -                              │  │
-│  └────────────────────────────────────────┘  │
-│                                              │
-│  ┌ Account ───────────────────────────────┐  │  ← ③ 账号卡
-│  │ HKU account                            │  │
-│  │ [ u3015850@connect.hku.hk            ] │  │
-│  │ Portal PIN                             │  │
-│  │ [ ••••••••••••••                     ] │  │
-│  └────────────────────────────────────────┘  │
-│                                              │
-│  ┌──────────────── Connect ───────────────┐  │  ← ④ 主操作
-│  └────────────────────────────────────────┘  │
-│                                              │
-│  [ 📄 View log ]                             │  ← ⑤ 次要操作
-│  Closing this window keeps the VPN …         │  ← ⑥ 提示行
-└──────────────────────────────────────────────┘
+┌────────────────────────────────────────────┐
+│  ┌──────────────────────────────────────┐  │
+│  │ ● Connected                00:12:34  │  │  ← ① 状态卡
+│  │ VPN address  10.64.199.140           │  │
+│  │ Proxy        socks5://…·http://…      │  │
+│  │ Routes       3 learned routes · …    │  │
+│  └──────────────────────────────────────┘  │
+│                                            │
+│  HKU account   [ u3015850@connect.hku.hk ] │  ← ② 凭证表单
+│  Portal PIN    [ ••••••••••••••         ] │  │
+│                                            │
+│  ┌────────────────── Connect ───────────┐ │  ← ③ 主操作
+│  └──────────────────────────────────────┘ │
+│                                            │
+│                        [📄][✚][⇄][⚙]       │  ← ④ 面板入口（一排图标）
+└────────────────────────────────────────────┘
 ```
 
 | # | 区块 | 作用 |
 |---|---|---|
-| ① | 页头 | 产品名 + 服务器副标题。无 logo（不要加图标） |
-| ② | 状态卡 | 一眼看清“现在是什么状态、隧道地址、已连接多久、代理与路由” |
-| ③ | 账号卡 | 常驻的 HKU 账号与 Portal PIN 输入，编辑后自动保存 |
-| ④ | 主操作 | 唯一的强按钮，随状态变形：Connect / Cancel / Disconnect |
-| ⑤ | 次要操作 | 打开连接日志 |
-| ⑥ | 提示行 | 一行说明；保存成功或校验失败时临时替换 |
+| ① | 状态卡 | 一眼看清"现在是什么状态、隧道地址、代理、路由" |
+| ② | 凭证表单 | 常驻的 HKU 账号与 Portal PIN 输入，编辑后自动保存 |
+| ③ | 主操作 | 唯一的强按钮，随状态变形：Connect / Cancel / Disconnect |
+| ④ | 面板入口 | 四个图标按钮（日志 / 诊断 / 路由 / 设置），各自开自己的窗口 |
+
+> **没有页头、没有副标题、没有单独的账号卡、没有底部提示行。** 早期版本有
+> "HKU Portal VPN · vpn2fa.hku.hk" 的页头和 "Account" 卡片标题，现已合并进状态卡与表单。
 
 ---
 
 ## 4. 组件详表
 
-### ① 页头
+### ① 状态卡（浅色卡片，圆角 10，1px 边框）
 
 | 元素 | 内容 | 样式现状 |
 |---|---|---|
-| 产品名 | `HKU VPN` | 20 / Semibold / `#0F172A` |
-| 副标题 | `HKU Portal VPN · vpn2fa.hku.hk` | 13 / Regular / `#6B7280` |
+| 状态点 | 10 × 10 圆点（圆角 5） | 颜色 = 状态色，见第 5 节 |
+| 状态文字 | `Disconnected` / `Reconnecting` / `Connecting` / `Connected` / `Disconnecting` / `Cancelling` / `Worker unresponsive` | 默认字号，Bold |
+| 副状态 | 连接中时的 `Waiting for sign-in` 等短句 | 与状态文字同行，次级文字色 |
+| 计时 | `--:--:--` 或 `00:12:34` | 右对齐，等宽字体，次级文字色 |
+| 明细行 ×3 | `VPN address` · `Proxy` · `Routes` | 标签固定宽 92（次级色），值占满剩余宽度 |
 
-> 原设计有 46×46 的品牌徽标，已按需求移除；如需新版可提方案，但**应用图标与窗口图标保持空白**。
+**明细行的取值**
 
-### ② 状态卡（白色卡片）
-
-| 元素 | 内容 | 说明 |
+| 行 | 未连接 | 已连接 |
 |---|---|---|
-| 状态点 | 9–11 px 圆点 | 颜色 = 状态色，见第 5 节 |
-| 状态文字 | `Disconnected` / `Connecting` / `Connected` / `Disconnecting` / `Worker unresponsive` | 15 / Semibold |
-| 计时 | `--:--:--` 或 `00:12:34` | 右对齐，等宽字体（Consolas）14 / `#8A9199` |
-| 主值 | 未连接 `Not connected` / 连接中 `Waiting for sign-in` / 已连接 `VPN address` + 隧道 IP（如 `10.64.199.140`） | 未连接 17 / Regular 灰；已连接 IP 26 / Semibold 深色，前面带 13 / 灰的 `VPN address` 标签 |
-| 明细 1 | `Proxy` + `socks5://127.0.0.1:1080 · http://127.0.0.1:1088` | 标签 13 灰，值 13 深灰 |
-| 明细 2 | `Routes` + `3 learned routes · heartbeat OK` | 同上；异常时显示 `heartbeat stale` |
+| `VPN address` | `—` | 隧道地址（适配器 IP，不是公网 IP） |
+| `Proxy` | `socks5://127.0.0.1:1080 · http://127.0.0.1:1088` | 同左（端口随设置面板变化） |
+| `Routes` | `—` | `3 learned routes · heartbeat OK`（心跳过期时 `heartbeat stale`） |
 
-### ③ 账号卡（白色卡片）
+### ② 凭证表单（`ui.Form`，标签在控件左边）
 
 | 元素 | 内容 |
 |---|---|
-| 卡片标题 | `Account`（15 / Semibold） |
 | 字段 1 标签 | `HKU account` |
 | 字段 1 占位 | `u1234567@connect.hku.hk` |
 | 字段 2 标签 | `Portal PIN` |
-| 字段 2 占位 | `Portal password` |
-| 输入框 | 高 38，圆角 8，1px 边框；聚焦时边框变品牌色；PIN 以圆点掩码显示 |
+| 字段 2 占位 | `Portal password`（以圆点掩码显示） |
+| 输入框 | 官方 `TextInput`；聚焦时边框变品牌色 |
 
-> 行为：**编辑后自动保存**（无保存按钮）。保存成功底部提示行短暂显示 `Account details saved.`
+> 行为：**编辑后自动保存**（无保存按钮，停止输入约 0.7 秒后写盘）。
+> 保存**不弹任何提示** —— 输入框本身就是"已保存"的证据，失败时才用 toast 报错。
 
-### ④ 主操作按钮
+### ③ 主操作按钮（通栏，高 38）
 
 | 状态 | 文案 | 视觉 |
 |---|---|---|
-| 未连接 | `Connect` | 实心品牌绿 `#0B6B45`，白字 17 / Semibold，高 52 |
-| 连接中 | `Cancel` | 实心琥珀 `#B45309` |
-| 已连接 | `Disconnect` | 白底 + 红色描边/红字 `#B42318` |
+| 未连接 | `Connect` | 实心品牌绿 `#0B6B45`，白字 |
+| 连接中 | `Cancel` | 实心琥珀（主题 Warning），白字 |
+| 已连接 | `Disconnect` | 浅底 + 红色描边/红字（主题 Danger） |
 | 断开中 | 保持 `Disconnect` 且禁用 | 灰色不可点 |
+| 取消中 | `Cancel`（文案不变） | 状态卡改显示 `Cancelling` |
 
-### ⑤ 次要操作
+### ④ 面板入口（一排图标按钮，靠右）
 
-`View log`：白底描边小按钮，高 40，左侧一个日志线条图标。
-
-### ⑥ 提示行
-
-12 / `#9AA1A9`，单行，内容随场景切换：
-
-- 默认：`Closing this window keeps the VPN running in the tray.`
-- 保存成功：`Account details saved.`
-- 账号为空点连接：`Enter your HKU account first.`
+- 4 个图标按钮，40 × 36，内边距 4×6，图标 19 号字重取主题文字色
+- 图标是 **Lucide 风格的线性 SVG**（`assets/ui/*.svg`），画在 24×24 的画布里、
+  墨迹占 20×20，四枚同一规格
+- 只有图标，没有文字；**悬停提示**说出它是什么（`View log` / `Diagnostics` /
+  `Routes` / `Settings`），并有无障碍标签
+- 这是全 App **仅有的图标**（托盘除外，见第 7 节）
 
 ---
 
 ## 5. 运行状态矩阵（务必各出一张稿）
 
-| 状态 | 状态点/托盘色 | 状态文字 | 主值 | 主按钮 |
+| 状态 | 状态点/托盘色 | 状态文字 | 副状态 | 主按钮 |
 |---|---|---|---|---|
-| 未连接 | 灰 `#8A9199` | Disconnected | Not connected | Connect（绿） |
-| 等待输入动态码 | 琥珀 `#C47F17` | Connecting | Waiting for sign-in | Cancel（琥珀） |
-| 已提权、正在建隧道 | 琥珀 | Connecting | `MFA code accepted - establishing tunnel…` | Cancel（琥珀） |
-| 已连接 | 绿 `#12873E` | Connected | 隧道 IP（大号） | Disconnect（红描边） |
-| 断开中 | 琥珀 | Disconnecting | 原 IP 保留 | Disconnect 禁用 |
-| 工作进程失联 | 红 `#D92D20` | Worker unresponsive | `Connected` 或最后 IP | Disconnect（红描边） |
+| 未连接 | 灰 `#8A9199` | Disconnected | — | Connect（绿） |
+| 等待自动重连 | 灰 → 琥珀 | Reconnecting | `in 8 s` | Connect（绿） |
+| 等待输入动态码 | 琥珀 `#C47F17` | Connecting | `Waiting for sign-in` | Cancel（琥珀） |
+| 已提权、正在建隧道 | 琥珀 | Connecting | `MFA code accepted - establishing tunnel (this can take ~30s)...` | Cancel（琥珀） |
+| 已连接 | 绿 `#12873E` | Connected | — | Disconnect（红描边） |
+| 断开中 | 琥珀 | Disconnecting | — | Disconnect 禁用 |
+| 取消中 | 琥珀 | Cancelling | — | Cancel（琥珀） |
+| 工作进程失联 | 红 `#D92D20` | Worker unresponsive | — | Disconnect（红描边） |
 
-> 副状态提示（如 `Disconnect timed out - the worker is still running; retry.`）会替换提示行文案。
+> 异常时会有一句更长的说明替换副状态，例如
+> `Cancel timed out - the worker is still running.` /
+> `Disconnect timed out - the worker is still running; retry.`
 
 ---
 
-## 6. 弹窗（两种）
+## 6. 窗口与弹窗
 
-### 6.1 连接日志 `Connection log`
+### 6.1 主窗口
 
-- 尺寸约 440 × 400，白卡，圆角 14，背后遮罩 `rgba(15,23,42,0.2)`
-- 标题 `Connection log`（19 / Semibold）
-- 日志区：等宽 13，纵向滚动，长行自动换行；每行带级别标签 `DBG` / `INF` / `WRN` / `ERR`，
-  错误红、警告琥珀、调试灰，行间 1px 分隔线
-- 筛选：`All` / `Info+` / `Warnings` / `Errors` 分段控件
-- 底部右对齐按钮：`Copy`、`Clear`（次要）、`Close`（主色）；`Copy` 复制当前筛选后可见的行
-- 交互：点击遮罩可关闭；打开时下层界面不可点
+- 452 × 376 客户区，固定；系统标题栏，最大化按钮灰掉
+- 内容用 `ui.Scroll` 包一层但**滚动条隐藏**（滚轮与键盘仍可滚动），保证任何一屏都不出现滚动条
 
-### 6.2 动态码 `Verification code`
+### 6.2 四个面板窗口
 
-- 尺寸约 400 × 250
-- 标题 `Verification code`（19 / Semibold）
-- 说明 `Enter the 6-digit code from Microsoft Authenticator.`（13 灰）
-- **错误行**（可空，红色 13）：`Previous code rejected - enter the current one.` / `The code must be exactly 6 digits.` / `Could not deliver the code.`
-- 输入框：6 位、字号 20、等宽、居中、宽 220 高 44
-- 按钮：`Submit`（主色，122 × 44）
-- 提示：`Enter to submit · Esc to cancel`（12 灰）
+四个面板**不是模态**，各自是一个独立的固定尺寸窗口，标题分别是
+`Connection log` / `Diagnostics` / `Routes` / `Settings`。
+
+| 面板 | 尺寸 | 结构 |
+|---|---|---|
+| Connection log | 640 × 460 | 顶部说明行 → `Level` 分段控件（`All` / `Info+` / `Warnings` / `Errors`）+ 搜索框 + `Latest` 按钮 → 日志列表（等宽 12，每行左侧 34 宽的级别标签 `DBG`/`INF`/`WRN`/`ERR`，行间 1px 分隔线，长行在 544 宽处折行）→ 右对齐按钮 `Copy` / `Export...` / `Clear` / `Close` → 状态说明行 |
+| Diagnostics | 480 × 460 | 顶部说明行 → 检查结果列表（每行一个标记 `OK` / `!` / `X` + 名称 + 一行说明）→ 右对齐 `Run checks` / `Close` |
+| Routes | 480 × 420 | 顶部说明行 → 路由列表（一行一条：`CIDR` + `host · 时间`，右侧一个安静的 `Remove` 文字按钮）→ 底部的添加输入框 + `Add` → 右对齐 `Clear all` / `Close` → 状态说明行 |
+| Settings | 480 × 660 | 顶部说明行 → 可滚动的表单区（`ui.Form`，标签在左）：`VPN endpoint` / `SOCKS port` / `HTTP port` / `DTLS` / `Learn routes` / `Route prefix` / `Max routes` / `TTL days` / `Proxy domains` / `Extra routes` / `Campus DNS` / `DNS domains`；下面一组小标题 `This app`：`Start with Windows` / `Reconnect if dropped` / `Connect at start` → 右对齐 `Cancel` / `Save` → 状态说明行 |
+
+- 所有列表都用官方的虚拟化列表组件，**滚动条隐藏**
+- 面板里的消息走面板底部的说明行，不用 toast（toast 会被模态挡住）
+
+### 6.3 动态码 `Verification code`（唯一的模态）
+
+- 宽度 320 的白色卡片，居中，背后有官方模态遮罩
+- 标题 `Verification code`（18 / Bold）
+- 说明 `Enter the 6-digit code from Microsoft Authenticator.`（次级色）
+- **错误行**（可空，红色）：`Previous code rejected - enter the current one.` / `The code must be exactly 6 digits.` / `Could not deliver the code.`
+- 输入框：字号 22、等宽、居中、自动聚焦
+- 一行小字 `The code is good for about 30 seconds.`（次级色，12）
+- 提示 `Enter to submit · Esc gives up`（次级色，12）
+- 按钮：`Submit`（主色），右下角
+
+> **这是一个关口，不是提示**：关掉弹窗（Esc 或点外面）＝放弃这次连接，
+> 没有"待会儿再输"。输入框里的 6 位码是唯一的出路。
 
 ---
 
 ## 7. 托盘图标（必须交付，且只有这里有图标）
 
-- 形态建议：**盾牌 + 书本**的极简标记（VPN 安全 + 学术），也可另提方案
-- **颜色即状态**：灰 / 绿 / 琥珀 / 红（与第 5 节一致）
-- 尺寸：16、20、24、32、40、48、64 px 各一帧，打包成多尺寸 ICO
-- 关键要求：
-  - 16 px 下仍可辨认轮廓；细线在 16–24 px 会被丢弃，请提供**简化版**
-  - 浅色与深色任务栏都要有足够对比（现方案用状态色填充 + 白色书本 + 白色描边）
+- 形态：**盾牌**（HKU 盾徽的简化几何），极简线性描边
+- **颜色即状态**：灰 / 绿 / 琥珀 / 红（与第 5 节一致），由同一个 SVG 渲染出四张 PNG
+- 尺寸：PNG 为 64 × 64，由 MyGo 按 DPI 缩放到任务栏
 - 悬停提示：`HKU VPN: disconnected` / `connecting` / `connected` / `worker unresponsive`
 - 右键菜单：`Open HKU VPN`、`Exit`
 - 左键单击：恢复主窗口
-- **不要**设计 exe / 标题栏 / 界面内图标（已明确移除）
+- **不要**设计 exe / 标题栏 / 界面内图标（界面里的四个面板图标已经是定稿）
 
 ---
 
@@ -190,32 +199,79 @@
 **主界面**
 ```
 HKU VPN
-HKU Portal VPN · vpn2fa.hku.hk
-Disconnected / Connecting / Connected / Disconnecting / Worker unresponsive
-Not connected
+Disconnected / Reconnecting / Connecting / Connected / Disconnecting / Cancelling / Worker unresponsive
 Waiting for sign-in
-MFA code accepted - establishing tunnel (DTLS handshake + route learning can take ~30s)...
+MFA code accepted - establishing tunnel (this can take ~30s)...
+in 8 s
+VPN address
 Proxy
 socks5://127.0.0.1:1080 · http://127.0.0.1:1088
 Routes
-%d learned routes · heartbeat OK / stale
-Account
+3 learned routes · heartbeat OK / stale
 HKU account
 u1234567@connect.hku.hk
 Portal PIN
 Portal password
 Connect / Cancel / Disconnect
-View log
-Closing this window keeps the VPN running in the tray.
-Account details saved.
-Enter your HKU account first.
 ```
 
-**日志弹窗**
+**面板入口的提示**
+```
+View log
+Diagnostics
+Routes
+Settings
+```
+
+**Connection log 窗口**
 ```
 Connection log
+This session
+Level
+All / Info+ / Warnings / Errors
+Search the log
+Latest
+Copy / Copied
+Export...
 Clear
 Close
+No log lines yet
+No lines at this level
+```
+
+**Diagnostics 窗口**
+```
+Diagnostics
+Run checks
+Close
+No checks yet
+running...
+Launcher / Tunnel script / Account / Portal PIN / OpenConnect / gost / curl.exe / Proxy ports / Certificate pin / Learned routes
+SOCKS5 port / HTTP port / SOCKS5 request / HTTP request / Egress address
+```
+
+**Routes 窗口**
+```
+Routes
+Learned routes go through the tunnel, so the resources that need the campus exit are reachable.
+1.2.3.0/24
+no host recorded
+just now / 5 min ago / 3 h ago / 2 d ago
+Remove
+Add
+Clear all
+Close
+No learned routes yet
+```
+
+**Settings 窗口**
+```
+Settings
+The advanced options are written to hku.env and apply to the next connect.
+VPN endpoint / SOCKS port / HTTP port / DTLS / Learn routes / Route prefix / Max routes / TTL days / Proxy domains / Extra routes / Campus DNS / DNS domains
+This app
+Start with Windows / Reconnect if dropped / Connect at start
+Cancel / Save
 ```
 
 **动态码弹窗**
@@ -225,8 +281,9 @@ Enter the 6-digit code from Microsoft Authenticator.
 Previous code rejected - enter the current one.
 The code must be exactly 6 digits.
 Could not deliver the code.
+The code is good for about 30 seconds.
+Enter to submit · Esc gives up
 Submit
-Enter to submit · Esc to cancel
 ```
 
 **托盘 / 系统**
@@ -240,14 +297,15 @@ Exit
 
 ## 9. 交互流程
 
-1. 编辑账号 / PIN → 失焦即自动保存（底部提示）
-2. 点 `Connect` → 系统 UAC 提权（此时界面进入连接中，按钮变 `Cancel`）
+1. 编辑账号 / PIN → 停止输入约 0.7 秒后自动写盘（无提示）
+2. 点 `Connect`（或 `Ctrl+Enter`）→ 系统 UAC 提权（界面进入连接中，按钮变 `Cancel`）
 3. 工作进程要求动态码 → 弹出 `Verification code`
 4. 输入 6 位码 → `Submit`（或回车）→ 弹窗关闭，进入建隧道阶段（约 20–30 秒）
 5. 成功 → 状态变绿、显示 IP 与计时，按钮变 `Disconnect`
 6. 点 `Disconnect` → 无需 UAC，等待后台清理，完成后回到未连接
-7. 连接中点 `Cancel` 或动态码弹窗按 Esc → 中止本次连接
-8. 关闭窗口 → **最小化到托盘**，VPN 继续运行；托盘左键恢复，右键 `Exit` 才真正退出
+7. 连接中点 `Cancel`、或在无弹窗时按 `Esc` → 中止本次连接
+8. 动态码弹窗里按 `Esc` → 放弃这次连接（弹窗即关口）
+9. 关闭窗口 → **最小化到托盘**，VPN 继续运行；托盘左键恢复，右键 `Exit` 才真正退出
 
 ---
 
@@ -255,35 +313,35 @@ Exit
 
 | 类别 | 现用值 |
 |---|---|
-| 背景 / 卡片 / 边框 | `#F4F5F7` / `#FFFFFF` / `#E6E8EC` |
-| 主文字 / 次文字 / 弱文字 | `#0F172A` / `#6B7280` / `#9AA1A9` |
-| 品牌绿（主按钮） | `#0B6B45`（hover `#0A5C3C`） |
-| 危险红 | `#B42318` / 描边 `#F0B4AE` |
-| 连接中琥珀 | `#B45309` / 状态点 `#C47F17` |
-| 已连接绿（状态点） | `#12873E` |
-| 未连接灰 | `#8A9199` |
-| 字体 | 界面 Segoe UI；数字/日志 Consolas |
-| 字号 | 20 / 19 / 17 / 15 / 14 / 13 / 12 / 11 |
+| 状态点 / 文字 | `#8A9199`（未连接）· `#12873E`（已连接）· `#C47F17`（进行中）· `#D92D20`（失联） |
+| 品牌绿（主按钮） | `#0B6B45`（hover `#0A5C3C`，pressed `#084B31`） |
+| 危险红 | 主题 Danger / Warning / TextMuted，其余文字色全部取自官方主题 |
+| 字体 | 界面 Segoe UI；数字/日志用系统等宽字体 |
+| 字号 | 取自官方主题；日志 12 等宽、级别标签 11 等宽 Bold、MFA 输入 22 等宽 |
+
+> 除强调色与四个状态色外，**所有颜色、字号、圆角、间距都来自官方主题**。
+> 换主题时只要给出上表的映射即可，不必重画控件。
 
 ---
 
 ## 11. 技术边界（影响可落地性，请设计师留意）
 
 - 渲染引擎：**MyGo 原生 UI**（Go 编写，Windows 上用 Direct3D 11 绘制，无 WebView、无 cgo）
-- 组件：全部来自 MyGo 官方组件库（字段、输入框、按钮、弹窗、滚动区、托盘），
-  样式数值来自官方主题 token；自定义仅限换强调色与少量容器排版
+- 组件：全部来自 MyGo 官方组件库（表单、输入框、按钮、列表、搜索、分段、模态、托盘），
+  自定义仅限换强调色与少量容器排版
 - 可落地：纯色、圆角、边框、**阴影、渐变、模糊、透明度**、过渡动画、SVG 图标
 - 字体：系统界面字体（Windows 为 Segoe UI），等宽用系统等宽字体
-- 窗口可调整大小（有最小尺寸），内容超出时整页滚动；主要稿子请按 480×600 逻辑像素出图
-- 托盘图标必须是 **PNG（建议 32×32 或 64×64）**，由 MyGo 按 DPI 缩放；不需要 exe/标题栏图标
+- 窗口**不可调整大小**，没有滚动条；出框的内容用官方虚拟化列表或隐藏滚动条的滚动区
+- 托盘图标必须是 **PNG**，由 MyGo 按 DPI 缩放；不需要 exe/标题栏图标
 
 ## 12. 请设计师交付
 
-1. **6 张主界面状态稿**：未连接 / 等待动态码 / 建隧道中 / 已连接 / 断开中 / 工作进程失联
-2. **2 张弹窗稿**：连接日志、动态码（含错误行状态）
-3. **托盘图标一套**：4 种状态 × 7 个尺寸，附 16px 放大预览（确认可辨认）
-4. **设计 token 表**：颜色、字号、间距、圆角、按钮尺寸
-5. **标注稿**：间距与尺寸标注（逻辑像素）
-6. 可选的交互说明：hover / 禁用 / 聚焦态
+1. **8 张主界面状态稿**：未连接 / 等待重连 / 等待动态码 / 建隧道中 / 已连接 / 断开中 / 取消中 / 工作进程失联
+2. **4 张面板窗口稿**：连接日志、诊断、路由、设置
+3. **1 张弹窗稿**：动态码（含错误行状态）
+4. **托盘图标一套**：4 种状态，附 16px 放大预览（确认可辨认）
+5. **设计 token 表**：颜色、字号、间距、圆角、按钮尺寸
+6. **标注稿**：间距与尺寸标注（逻辑像素）
+7. 可选的交互说明：hover / 禁用 / 聚焦态
 
 > 交付格式建议：Figma（含组件与变体）。实现方会按 1:1 还原。

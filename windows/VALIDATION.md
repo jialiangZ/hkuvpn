@@ -286,6 +286,8 @@ task. The only files the port creates are:
 | `%USERPROFILE%\.vpn\hku.env`, `hku.pass` | Your credentials | Keep (0600-style ACLs) |
 | `%USERPROFILE%\.vpn\pin-hk.cache` | Cached certificate pin | Safe to delete |
 | `%USERPROFILE%\.vpn\learned-routes.txt` | Learned routes | Safe to delete |
+| `%USERPROFILE%\.vpn\app-state.json` | The desktop app's preferences | Safe to delete (the app starts fresh) |
+| `%LOCALAPPDATA%\HKUVPN\app.log` | The desktop app's own diagnostics | Safe to delete (keep it when reporting a failure) |
 
 ---
 
@@ -304,6 +306,34 @@ powershell -ExecutionPolicy Bypass -File .\hkuvpn.ps1 --status
 
 `-d` never prompts; the code must be delivered separately. The worker waits
 30 seconds for it and then exits (`HKUVPN_EXITED` in the marker log).
+
+---
+
+## Step 10 — The desktop app (optional)
+
+The app (`windows\mygo-app`) drives the same worker, so everything above
+applies to it. What is worth checking on its own:
+
+```powershell
+# build and run it
+cd $HOME\hkuvpn\windows\mygo-app
+powershell -ExecutionPolicy Bypass -File .\build.sh   # needs Go on Windows
+.\publish\HKUVPN.exe
+```
+
+| Check | How |
+|---|---|
+| The window opens and the state reads `Disconnected` | Look at the status card |
+| The credentials are read back | The account and PIN fields are filled in |
+| Connect asks for the code | A `Verification code` dialog opens; closing it gives the attempt up |
+| The panels open | The four icons under the window open the log, the diagnostics, the routes and the settings |
+| The tray follows the session | The icon turns green while connected |
+| Closing the window keeps the tunnel | The tray icon stays; `--status` still says the tunnel is up |
+| Disconnect needs no UAC | Click `Disconnect`: no prompt appears |
+
+After the run, the app writes what it is doing to `%TEMP%\hkuvpn\app-status.txt`
+(state, worker, heartbeat, the pending code, the VPN address). It is what the
+regression script reads.
 
 ---
 

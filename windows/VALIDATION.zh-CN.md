@@ -267,6 +267,8 @@ Get-Process openconnect,gost -ErrorAction SilentlyContinue   # 无输出
 | `%USERPROFILE%\.vpn\hku.env`、`hku.pass` | 你的凭据 | 保留（配好 NTFS ACL） |
 | `%USERPROFILE%\.vpn\pin-hk.cache` | 证书指纹缓存 | 可删 |
 | `%USERPROFILE%\.vpn\learned-routes.txt` | 学到的路由 | 可删 |
+| `%USERPROFILE%\.vpn\app-state.json` | 桌面 App 的偏好设置 | 可删（App 会重新开始） |
+| `%LOCALAPPDATA%\HKUVPN\app.log` | 桌面 App 自身的诊断日志 | 可删（报障时留着） |
 
 ---
 
@@ -285,6 +287,33 @@ powershell -ExecutionPolicy Bypass -File .\hkuvpn.ps1 --status
 
 `-d` 模式不会提示输入验证码，必须另行送入。工作进程最多等待 30 秒，超时后退出
 （标记日志里是 `HKUVPN_EXITED`）。
+
+---
+
+## 第 10 步 —— 桌面 App（可选）
+
+App（`windows\mygo-app`）驱动的是同一个工作进程，所以上面的每一步都适用。
+只有这些是它自己特有的，值得单独看一眼：
+
+```powershell
+# 构建并运行
+cd $HOME\hkuvpn\windows\mygo-app
+powershell -ExecutionPolicy Bypass -File .\build.sh   # 需要 Windows 上有 Go
+.\publish\HKUVPN.exe
+```
+
+| 检查项 | 怎么看 |
+|---|---|
+| 窗口打开，状态是 `Disconnected` | 看状态卡 |
+| 凭据被读回来了 | 账号与 PIN 输入框里有内容 |
+| 连接会要动态码 | 弹出 `Verification code` 对话框；关掉它＝放弃这次连接 |
+| 面板能打开 | 窗口下方四个图标分别打开日志、诊断、路由、设置 |
+| 托盘跟随会话 | 连接后图标变绿 |
+| 关闭窗口不中断隧道 | 托盘图标还在，`--status` 仍说隧道是通的 |
+| 断开不需要 UAC | 点 `Disconnect`：不弹提权 |
+
+跑完之后，App 会把当前状态写到 `%TEMP%\hkuvpn\app-status.txt`（状态、worker、
+心跳、待输入的码、VPN 地址）—— 回归脚本读的就是它。
 
 ---
 

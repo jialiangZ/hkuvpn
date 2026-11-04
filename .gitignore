@@ -6,15 +6,6 @@
 # Downloaded Windows binaries (gost, the OpenConnect installer)
 windows/tools/
 
-# Desktop app build outputs (source is tracked; the exe is built per machine)
-windows/app/bin/
-windows/app/obj/
-windows/app/publish/
-windows/app/app.res
-
-# RmlUi third-party sources + prebuilt static libs (fetched/built by build.sh)
-windows/app/rml/
-
 # OS / editor
 .DS_Store
 *.swp

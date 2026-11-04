@@ -5,9 +5,9 @@ Needs: python3 with cairosvg (pip install cairosvg).
 
     python3 make-tray-icons.py
 
-Sources: assets/tray-icon.svg (used here) and assets/tray-icon-small.svg
-(the simplified variant for tiny taskbar slots, rendered on demand).
-The SVGs carry a STATE_COLOR placeholder that this script substitutes.
+Sources: assets/tray-icon.svg, which carries a STATE_COLOR placeholder
+that this script substitutes. The app embeds the four rendered PNGs;
+MyGo scales them for the taskbar.
 """
 import cairosvg
 from pathlib import Path

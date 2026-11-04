@@ -104,7 +104,7 @@ curl -x socks5h://127.0.0.1:1080 -I https://www.hku.hk/
 | Surge 自动分流 | [配置示例](examples/clients/surge.conf) · [接入步骤](docs/guide.zh-CN.md#surge) |
 | SSH / 远程桌面 | [连接学校电脑](docs/guide.zh-CN.md#ssh-与远程桌面) |
 | Windows / WSL | [PowerShell 封装](examples/shells/hkuvpn.ps1) · [SSH 示例](examples/clients/ssh_config.wsl.example) · [接入步骤](docs/guide.zh-CN.md#windows--wsl) |
-| Windows 原生（免 WSL） | [原生移植](windows/README.zh-CN.md) · [验收清单](windows/VALIDATION.zh-CN.md) |
+| Windows 原生（免 WSL） | [原生移植](windows/README.zh-CN.md) · [桌面 App](windows/mygo-app/README.md) · [验收清单](windows/VALIDATION.zh-CN.md) |
 
 代理默认只供本机使用，提供 TCP 转发；`socks5h` 会把 DNS 查询也交给代理。使用分流客户端时，**VPN 服务器自身必须走直连或已有代理**，避免绕回 hkuvpn；示例已包含相应规则。
 
@@ -161,6 +161,8 @@ hkuvpn/
 │   ├── bin/get-tools.ps1      # 下载并校验 gost + OpenConnect
 │   ├── etc/vpnc-script-win.js # 仅分流、不改默认路由的路由脚本
 │   ├── examples/              # 本版本的 hku.env 模板
+│   ├── mygo-app/              # 桌面 App（HKUVPN.exe）：MyGo 原生 UI
+│   ├── tests/                 # session-flow.ps1：会话生命周期的回归脚本
 │   ├── README.md              # 本版本说明（英文 / 简体中文）
 │   └── VALIDATION.md          # 实机验收清单（英文 / 简体中文）
 ├── examples/                  # 两个版本共用的接入示例

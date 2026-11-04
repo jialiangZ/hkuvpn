@@ -462,6 +462,18 @@ func TestDeleteAutostartValueThatIsNotThere(t *testing.T) {
 	}
 }
 
+// The autostart switch follows the registry, not the app's memory: a
+// value that is not there is reported as not there.
+func TestAutostartValuePresent(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("the registry is Windows'")
+	}
+	name := "HKUVPN_TEST_VALUE_THAT_IS_NOT_THERE"
+	if autostartValuePresent(runKey, name) {
+		t.Error("a value that is not there was reported as present")
+	}
+}
+
 // The app's log is rolled: a new file when the day changes or the file
 // grows past its bound, and a week of generations are kept.
 func TestRotateAppLog(t *testing.T) {

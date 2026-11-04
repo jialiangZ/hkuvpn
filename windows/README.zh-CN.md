@@ -43,8 +43,9 @@ Windows 没有按进程分流的能力，原生版用**自动学习路由**（`H
 
 - Windows 10 1803+ / Windows 11，64 位（系统自带 `curl.exe`）
 - PowerShell 5.1（系统自带）
-- 管理员权限 —— 连接/停止时 hkuvpn.ps1 会自动弹 UAC 提权（创建 wintun
-  网卡和修改路由需要）
+- 管理员权限 —— 连接时 hkuvpn.ps1 会自动弹 UAC 提权（创建 wintun
+  网卡和修改路由需要）。停止一个活跃会话**不需要** UAC：提权中的 worker
+  会自己清理干净。
 - 开通了 VPN 的 HKU 账号、**静态 Portal PIN**、**Microsoft Authenticator
   动态码**（与 Docker 版相同）
 
@@ -119,7 +120,7 @@ hkuvpn --stop       # 停止（活跃 worker 自清理，免 UAC；死会话强�
 | 隔离性 | 容器沙箱、剥离 capabilities | 以提权用户身份直接运行 |
 | PIN 文件安全 | WSL 内 chmod 600 | 位于 `%USERPROFILE%\.vpn`；需要时用 NTFS ACL 加固 |
 | 前置条件 | Docker 运行时（WSL） | 只要装好上述工具；不需要 WSL |
-| UAC | Windows 侧不需要 | 每次连接/停止弹一次 UAC |
+| UAC | Windows 侧不需要 | 每次连接弹一次 UAC；断开活跃会话不需要 |
 
 ## 故障排查
 

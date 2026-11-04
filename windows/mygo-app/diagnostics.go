@@ -300,8 +300,15 @@ const (
 // autostartEnabled says whether the app is registered to start with
 // Windows.
 func autostartEnabled() bool {
-	out, err := exec.Command("reg.exe", "query", runKey, "/v", runValue).CombinedOutput()
-	return err == nil && strings.Contains(string(out), runValue)
+	return autostartValuePresent(runKey, runValue)
+}
+
+// autostartValuePresent says whether a value is in the Run key. reg.exe
+// writes in the console's code page, so its output is decoded before it
+// is read.
+func autostartValuePresent(key, name string) bool {
+	out, err := exec.Command("reg.exe", "query", key, "/v", name).CombinedOutput()
+	return err == nil && strings.Contains(acpDecode(out), name)
 }
 
 // setAutostart registers or removes the app in the Run key, so it starts

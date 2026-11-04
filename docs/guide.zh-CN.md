@@ -453,6 +453,8 @@ hkuvpn 的便携核心包括启动器、Shell 包装函数、路由示例和容�
 |---|---|
 | `docker/` | Docker 版：`Dockerfile`、启动器 `bin/hkuvpn`、容器内路由脚本 `etc/vpnc-script`、MFA 入口 `hku-connect.exp`、`examples/hku.env.example`，以及构建期校验签名所用的 OpenConnect 发布公钥 |
 | `windows/` | Windows 原生版：启动器 `bin/hkuvpn.ps1`、工具下载脚本 `bin/get-tools.ps1`、仅分流不改默认路由的 `etc/vpnc-script-win.js`、`examples/hku.env.example`，以及本版本说明 |
+| `windows/mygo-app/` | 桌面 App（`HKUVPN.exe`）：MyGo 原生 UI，驱动同一个 worker —— 源码、托盘与面板图标、`build.sh` |
+| `windows/tests/` | `session-flow.ps1`，会话生命周期的回归脚本 |
 | `examples/clients/` | 规则客户端与 SSH 的接入示例（Clash Verge Rev / Mihomo、Surge、`ssh_config`） |
 | `examples/shells/` | Zsh、Bash、Fish、PowerShell 的简短 `hkuvpn` 命令封装 |
 | `docs/` | 本指南与配图 |
