@@ -36,9 +36,16 @@ console for the inspector output.
 ## Logs
 
 The app has no console, so its own diagnostics go to
-`%TEMP%\hkuvpn\app.log` (startup errors also pop a message box). The
-VPN session log is a separate file, `%TEMP%\hkuvpn\openconnect.log`,
-shown in the View log sheet.
+`%LOCALAPPDATA%\HKUVPN\app.log` (startup errors also pop a message
+box). That is a durable place, not `%TEMP%`: the log is meant to be read
+after a failure, and Windows clears the temporary directory on its own
+schedule. It is rolled when the day changes or the file passes a
+megabyte, and a week of generations is kept.
+
+The VPN session log is a separate file, `%TEMP%\hkuvpn\openconnect.log`,
+shown in the View log sheet. The worker writes a new one for every
+connection attempt, so two runs are never mixed, and rolls it past two
+megabytes with three generations kept.
 
 ## Develop
 

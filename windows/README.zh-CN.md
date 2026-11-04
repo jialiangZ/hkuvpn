@@ -92,7 +92,7 @@ hkuvpn --stop       # 停止（活跃 worker 自清理，免 UAC；死会话强�
 
 三种长会话模式按场景选：
 
-- **桌面 App**（MyGo 原生 UI，`windows\mygo-app`）：`HKUVPN.exe`，用 MyGo 官方组件搭的紧凑窗口 —— 状态卡片（状态、隧道地址、时长、代理、路由）、带标签的 HKU 账号与 Portal PIN 输入框（编辑后自动保存）、单一主按钮 Connect / Cancel / Disconnect、View log 日志面板（级别标签 + 分级筛选 + 搜索 + 复制 + 导出）、Diagnostics 诊断面板（连接前的自检 + 本地代理连通性与出口地址）、Routes 路由面板（查看/增删自动学习到的路由）、Settings 设置面板（`hku.env` 里的高级选项、开机自启、断线自动重连）与 MFA 对话框（**必经关口**：输入 6 位码才继续，关掉弹窗＝取消这次连接，没有"待会儿再输"），关闭窗口收进托盘；几个面板入口是窗口下方的一排图标（悬停有提示），每个面板都开在自己的窗口里（日志才有地方显示）。所有窗口大小固定：不能缩放，最大化按钮是灰掉的。纯 Go 构建（`GOOS=windows go build`，无 cgo、无 WebView），见 `windows\mygo-app\build.sh`；exe 以 GUI 方式编译（`-H=windowsgui`），启动时不会弹出终端窗口，App 自身日志写入 `%TEMP%\hkuvpn\app.log`。托盘图标为四状态盾牌（灰/绿/琥珀/红），由 `windows\mygo-app\assets\tray-icon.svg` 生成。断开免 UAC，退出 App 不影响会话。
+- **桌面 App**（MyGo 原生 UI，`windows\mygo-app`）：`HKUVPN.exe`，用 MyGo 官方组件搭的紧凑窗口 —— 状态卡片（状态、隧道地址、时长、代理、路由）、带标签的 HKU 账号与 Portal PIN 输入框（编辑后自动保存）、单一主按钮 Connect / Cancel / Disconnect、View log 日志面板（级别标签 + 分级筛选 + 搜索 + 复制 + 导出）、Diagnostics 诊断面板（连接前的自检 + 本地代理连通性与出口地址）、Routes 路由面板（查看/增删自动学习到的路由）、Settings 设置面板（`hku.env` 里的高级选项、开机自启、断线自动重连）与 MFA 对话框（**必经关口**：输入 6 位码才继续，关掉弹窗＝取消这次连接，没有"待会儿再输"），关闭窗口收进托盘；几个面板入口是窗口下方的一排图标（悬停有提示），每个面板都开在自己的窗口里（日志才有地方显示）。所有窗口大小固定：不能缩放，最大化按钮是灰掉的。纯 Go 构建（`GOOS=windows go build`，无 cgo、无 WebView），见 `windows\mygo-app\build.sh`；exe 以 GUI 方式编译（`-H=windowsgui`），启动时不会弹出终端窗口，App 自身日志写入 `%LOCALAPPDATA%\HKUVPN\app.log`（不是 `%TEMP%`：这份日志是留着事后查的，临时目录会被系统随时清掉），按天或超过 1 MB 滚动，保留 7 天。托盘图标为四状态盾牌（灰/绿/琥珀/红），由 `windows\mygo-app\assets\tray-icon.svg` 生成。断开免 UAC，退出 App 不影响会话。
 - **智能模式**（默认）：整个会话挂在当前控制台，关窗/Ctrl+C 即断开，适合双击图标使用；
 - **`-t` 终端模式**：隧道跑在隐藏的提权 worker 里，MFA 直接在你的终端输入（投递空码或超时会自动停掉 worker）。连接后**关闭终端不影响 VPN**，适合日常从终端启动；
 - **`-d` 后台模式**：无交互启动，配合 `--mfa` 投递，适合脚本。
@@ -143,7 +143,9 @@ hkuvpn --stop       # 停止（活跃 worker 自清理，免 UAC；死会话强�
 
 - Portal PIN 从 `%USERPROFILE%\.vpn\hku.pass` 读取，经 stdin 管道投递给
   OpenConnect，绝不出现在命令行。
-- 运行状态（日志、标记、PID 列表）位于 `%TEMP%\hkuvpn`。
+- 运行状态（日志、标记、PID 列表）位于 `%TEMP%\hkuvpn`；**日志保留策略**：每次连接一份
+  （`openconnect.log`，旧的滚动为 `.1 .2 .3`，超过 2 MB 也滚），`gost.log` 同样 2 MB × 3 代，
+  App 自身日志在 `%LOCALAPPDATA%\HKUVPN\app.log`，按天滚动保留 7 天。
 - MFA 动态码文件只在 `--mfa` 投递到 worker 消费之间的几秒内存在，随后
   立即删除。
 - 与容器版不同，OpenConnect 外面没有沙箱；信任模型等同于信任官方二进

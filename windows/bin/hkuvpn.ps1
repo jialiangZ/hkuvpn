@@ -60,6 +60,11 @@ $Script:HbFile       = Join-Path $Script:TempBase 'hb.log'
 # across sessions as "base/prefix|lastseen-epoch|host" lines.
 $Script:LearnedFile  = Join-Path $Script:ConfigDir 'learned-routes.txt'
 
+# Log hygiene: a log file never grows past $Script:MaxLogBytes, and a few
+# generations are kept so the runs before last can still be read.
+$Script:MaxLogBytes   = 2MB
+$Script:LogGenerations = 3
+
 $Script:VpnHost      = 'vpn2fa.hku.hk'
 $Script:ControlHosts = @('vpn2fa.hku.hk', 'vpn2fa-a.hku.hk', 'vpn2fa-b.hku.hk')
 $Script:EmptySha256Pin = '47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='
@@ -768,6 +773,34 @@ function Invoke-CleanupSession {
     }
 }
 
+function Invoke-RotateLog {
+    # Rolls a log file: the current one becomes .1, .1 becomes .2 and so
+    # on, and the oldest generation goes away. The usual log hygiene -
+    # a log never grows without a bound, and a few generations are kept
+    # so that the runs before last can still be read.
+    param([string]$Path, [int]$Keep = $Script:LogGenerations)
+    # A generation too many, from an older scheme, goes away.
+    Remove-Item "$Path.($Keep + 1)" -Force -ErrorAction SilentlyContinue
+    for ($i = $Keep; $i -ge 2; $i--) {
+        Remove-Item "$Path.$i" -Force -ErrorAction SilentlyContinue
+        if (Test-Path "$Path.$($i - 1)") {
+            Move-Item -Force -LiteralPath "$Path.$($i - 1)" -Destination "$Path.$i" -ErrorAction SilentlyContinue
+        }
+    }
+    if (Test-Path $Path) {
+        Move-Item -Force -LiteralPath $Path -Destination "$Path.1" -ErrorAction SilentlyContinue
+    }
+}
+
+function Test-LogTooBig {
+    # Says whether a log file has grown past its bound.
+    param([string]$Path, [long]$Max = $Script:MaxLogBytes)
+    if (-not (Test-Path $Path)) { return $false }
+    $f = Get-Item $Path -ErrorAction SilentlyContinue
+    if (-not $f) { return $false }
+    return ($f.Length -gt $Max)
+}
+
 function Stop-TreeProcess {
     param([int]$Id)
     if ($Id -le 0) { return }
@@ -1168,14 +1201,10 @@ function Invoke-TunnelWorker {
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     Remove-Item $Script:MarkerFile, $Script:StateFile, $Script:ResponseFile,
         $Script:StopFlagFile, $Script:HbFile -Force -ErrorAction SilentlyContinue
-    # One log per session: keep the previous session's log as .1 so the
-    # viewer never mixes old and new runs. Diagnostics survive one session.
-    try {
-        if (Test-Path $Script:LogFile) {
-            Move-Item -Force -LiteralPath $Script:LogFile `
-                -Destination ($Script:LogFile + '.1')
-        }
-    } catch {}
+    # One log per session: the previous session's log becomes .1 so the
+    # viewer never mixes old and new runs, and the runs before that are
+    # kept as .2 and .3.
+    try { Invoke-RotateLog $Script:LogFile } catch {}
     # Note: $Script:PidFile is NOT removed here. The --Worker bootstrap wrote
     # it to claim the session; Test-WorkerAlive relies on it, and it is
     # overwritten with the real child pids below.
@@ -1398,6 +1427,12 @@ function Invoke-TunnelWorker {
                         [IO.File]::AppendAllText($Script:GostLogFile, $gostLog.ToString())
                         $null = $gostLog.Clear()
                     }
+                } catch {}
+                # A long session must not fill the disk: roll the files
+                # that grew past their bound.
+                try {
+                    if (Test-LogTooBig $Script:LogFile) { Invoke-RotateLog $Script:LogFile }
+                    if (Test-LogTooBig $Script:GostLogFile) { Invoke-RotateLog $Script:GostLogFile }
                 } catch {}
                 try {
                     [IO.File]::AppendAllText($Script:HbFile,

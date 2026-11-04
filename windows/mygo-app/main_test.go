@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -458,5 +459,56 @@ func TestDeleteAutostartValueThatIsNotThere(t *testing.T) {
 	name := "HKUVPN_TEST_VALUE_THAT_IS_NOT_THERE"
 	if err := deleteAutostartValue(runKey, name); err != nil {
 		t.Errorf("deleting a value that is not there failed: %v", err)
+	}
+}
+
+// The app's log is rolled: a new file when the day changes or the file
+// grows past its bound, and a week of generations are kept.
+func TestRotateAppLog(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "app.log")
+	write := func(name, text string) {
+		if err := os.WriteFile(name, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A file from yesterday is rolled.
+	old := time.Now().AddDate(0, 0, -1)
+	write(path, "yesterday\n")
+	if err := os.Chtimes(path, old, old); err != nil {
+		t.Fatal(err)
+	}
+	rotateAppLog(path)
+	if _, err := os.Stat(path + ".1"); err != nil {
+		t.Fatalf("the log was not rolled: %v", err)
+	}
+	if _, err := os.Stat(path); err == nil {
+		t.Error("the current log is still there")
+	}
+
+	// A file from today stays, until it grows past its bound.
+	write(path, "today\n")
+	rotateAppLog(path)
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("today's log was rolled: %v", err)
+	}
+	big := make([]byte, appLogMaxBytes+1)
+	write(path, string(big))
+	rotateAppLog(path)
+	if _, err := os.Stat(path); err == nil {
+		t.Error("the big log was not rolled")
+	}
+
+	// The generations are shifted and the oldest one goes away.
+	for i := 1; i <= appLogGenerations+1; i++ {
+		write(path+"."+strconv.Itoa(i), "old\n")
+	}
+	write(path, string(big))
+	rotateAppLog(path)
+	if _, err := os.Stat(path + "." + strconv.Itoa(appLogGenerations)); err != nil {
+		t.Errorf("the oldest generation is missing: %v", err)
+	}
+	if _, err := os.Stat(path + "." + strconv.Itoa(appLogGenerations+1)); err == nil {
+		t.Error("a generation too many was kept")
 	}
 }
