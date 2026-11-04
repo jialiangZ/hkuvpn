@@ -1,0 +1,91 @@
+name: release
+
+# A tag (v1.2.0) builds the Windows app and attaches the bundle to the
+# GitHub release, so nobody has to install Go to try it.
+#
+# The bundle is the app plus the worker it drives. The two dependencies
+# that cannot travel with it - OpenConnect (it installs the Wintun driver,
+# so it needs an administrator) and gost - are fetched by bin/get-tools.ps1
+# in the bundle, with their SHA-256 hashes pinned.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows app
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: windows/mygo-app/go.mod
+
+      - name: Vet and test
+        working-directory: windows/mygo-app
+        run: |
+          go vet ./...
+          go test ./...
+
+      - name: Build the app
+        working-directory: windows/mygo-app
+        run: >-
+          go build -trimpath
+          -ldflags "-s -w -H=windowsgui -X github.com/egoist/mygo.production=1"
+          -o HKUVPN.exe .
+
+      - name: Pack the bundle
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          New-Item -ItemType Directory -Path bundle -Force | Out-Null
+          New-Item -ItemType Directory -Path bundle/bin -Force | Out-Null
+          New-Item -ItemType Directory -Path bundle/etc -Force | Out-Null
+          New-Item -ItemType Directory -Path bundle/examples -Force | Out-Null
+          Copy-Item windows/mygo-app/HKUVPN.exe bundle/
+          Copy-Item windows/bin/hkuvpn.ps1 bundle/bin/
+          Copy-Item windows/bin/get-tools.ps1 bundle/bin/
+          Copy-Item windows/etc/vpnc-script-win.js bundle/etc/
+          Copy-Item windows/examples/hku.env.example bundle/examples/
+          Copy-Item windows/mygo-app/START-HERE.md bundle/
+          Copy-Item windows/mygo-app/START-HERE.zh-CN.md bundle/
+          $zip = "HKUVPN-windows-$tag.zip"
+          Compress-Archive -Path bundle/* -DestinationPath $zip
+          # The hash next to the archive, so a student can check it.
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  $zip" | Out-File "$zip.sha256" -Encoding ascii
+          Write-Host "packed $zip"
+          Write-Host $hash
+
+      - name: Attach the bundle to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $assets = @("HKUVPN-windows-$tag.zip", "HKUVPN-windows-$tag.zip.sha256")
+          $notes = @'
+          ### The Windows app
+
+          `HKUVPN-windows-<version>.zip` holds the desktop app and the
+          worker it drives. Unpack it anywhere, run `bin\get-tools.ps1`
+          once as administrator (it installs OpenConnect and downloads
+          gost, both SHA-256 verified), then start `HKUVPN.exe`.
+
+          `START-HERE.md` and `START-HERE.zh-CN.md` in the archive have
+          the full steps, in English and in Chinese.
+
+          The Docker edition is unchanged - see the README.
+          '@
+          if (gh release view $tag) {
+            # The release is already there (it was made by hand, or by an
+            # earlier run): upload the build without touching its notes.
+            gh release upload $tag @assets --clobber
+          } else {
+            $notes | Out-File notes.md -Encoding utf8
+            gh release create $tag --title "hkuvpn $tag" --notes-file notes.md @assets
+          }

@@ -1,0 +1,44 @@
+name: ci
+
+# The Go part of the app is the only thing that can be checked without an
+# HKU account: the session lifecycle regression (windows/tests/session-flow.ps1)
+# needs a real account, a Portal PIN and the live gateway, so it stays a
+# manual script. See windows/README.md.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: windows/mygo-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: windows/mygo-app/go.mod
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build
+        run: >-
+          go build -trimpath
+          -ldflags "-s -w -H=windowsgui -X github.com/egoist/mygo.production=1"
+          -o HKUVPN.exe .
