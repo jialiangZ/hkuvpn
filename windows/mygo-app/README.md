@@ -7,13 +7,22 @@ frontends: `windows/bin/hkuvpn.ps1 --Worker` / `--stop`, with the
 protocol files under `%TEMP%\hkuvpn` (markers.log, hb.log, pids.txt,
 vpnc-state.txt, response.txt, stop.flag).
 
-## The window
+## The windows
 
-One size, no resizing: the app has little to show, and a window that
-cannot grow has no empty space in it (`DisableResize` and
-`DisableMaximize` in the window options). The layout is built from the
-theme's own spacing (`t.Space(n)`), so it stays in step with the
-official widgets.
+One size each, no resizing: the app has little to show, and a window
+that cannot grow has no empty space in it (`DisableResize` and
+`DisableMaximize` in the window options).
+
+Windows 11 keeps drawing a greyed maximize button even when the window
+cannot maximize, so the caption is the app's own: `TitleBarStyle:
+mygo.TitleBarHidden` with `HideWindowButtons` takes the system's
+buttons away, and the view draws a title bar of its own (`DragWindow`
+makes it move the window).
+
+The four panels - the log, the diagnostics, the routes and the settings -
+open in windows of their own: the main window is small, and a log needs
+more room than that. The layout is built from the theme's own spacing
+(`t.Space(n)`), so it stays in step with the official widgets.
 
 ## Build
 

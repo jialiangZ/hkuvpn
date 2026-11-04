@@ -100,7 +100,13 @@ type app struct {
 	settingsForm settingsForm
 	prefs        appState
 
-	// Panels.
+	// The panels, each in a window of its own: the main window is small
+	// and fixed, and a log needs more room than that.
+	logWin      *mygo.Window
+	routesWin   *mygo.Window
+	diagWin     *mygo.Window
+	settingsWin *mygo.Window
+
 	routesNote   panelNote
 	settingsNote panelNote
 	logNote      panelNote
@@ -701,10 +707,105 @@ type panelNote struct {
 
 // ---------------------------------------------------------------- panels
 
-// openRoutes loads the learned routes and shows the panel.
+// openPanel shows one of the panels in a window of its own, or brings it
+// to the front when it is already open. The main window is small and
+// fixed, and a log needs more room than that.
+func (a *app) openPanel(target **mygo.Window, title string, view func(*ui.Context), w, h int) {
+	if *target != nil && !(*target).IsDestroyed() {
+		(*target).Show()
+		(*target).Focus()
+		return
+	}
+	*target = mygo.NewWindow(mygo.WindowOptions{
+		Title:             title,
+		Width:             w,
+		Height:            h,
+		UseContentSize:    true,
+		TitleBarStyle:     mygo.TitleBarHidden,
+		HideWindowButtons: true,
+		DisableResize:     true,
+		DisableMaximize:   true,
+		Content:           ui.View(view),
+	})
+}
+
+// closePanel closes a panel window and forgets it.
+func (a *app) closePanel(target **mygo.Window) {
+	if *target != nil && !(*target).IsDestroyed() {
+		(*target).Close()
+	}
+	*target = nil
+}
+
+// openLog shows the session log in its own window.
+func (a *app) openLog() {
+	a.logOpen = true
+	// Load the session's log once. Reopening the window, including after
+	// Clear, must not reload lines the user has already dismissed.
+	if !a.logLoaded {
+		a.logLoaded = true
+		a.logLines = nil
+		a.logOffset = 0
+		a.readWholeLog()
+	}
+	a.openPanel(&a.logWin, "Connection log", a.logPanel, 640, 460)
+}
+
+// closeLog closes the log window.
+func (a *app) closeLog() {
+	a.logOpen = false
+	a.closePanel(&a.logWin)
+}
+
+// openRoutes loads the learned routes and shows them in their own window.
 func (a *app) openRoutes() {
 	a.routeList = readLearnedRoutes()
 	a.routesOpen = true
+	a.openPanel(&a.routesWin, "Routes", a.routesPanel, 480, 420)
+}
+
+// closeRoutes closes the routes window.
+func (a *app) closeRoutes() {
+	a.routesOpen = false
+	a.closePanel(&a.routesWin)
+}
+
+// openDiagnostics shows the diagnostics in their own window and runs the
+// checks.
+func (a *app) openDiagnostics() {
+	a.diagOpen = true
+	a.openPanel(&a.diagWin, "Diagnostics", a.diagnosticsPanel, 480, 460)
+	a.runDiagnostics()
+}
+
+// closeDiagnostics closes the diagnostics window.
+func (a *app) closeDiagnostics() {
+	a.diagOpen = false
+	a.closePanel(&a.diagWin)
+}
+
+// openSettings shows the settings in their own window.
+func (a *app) openSettings() {
+	a.settingsForm = newSettingsForm(a.settings, a.prefs)
+	a.settingsOpen = true
+	a.openPanel(&a.settingsWin, "Settings", a.settingsPanel, 480, 560)
+}
+
+// closeSettings closes the settings window.
+func (a *app) closeSettings() {
+	a.settingsOpen = false
+	a.closePanel(&a.settingsWin)
+}
+
+// refreshPanels redraws the panel windows, so the log follows the session
+// while its window is open.
+func (a *app) refreshPanels() {
+	for _, panel := range []*mygo.Window{a.logWin, a.routesWin, a.diagWin, a.settingsWin} {
+		if panel == nil || panel.IsDestroyed() {
+			continue
+		}
+		panel.Update(func() {})
+	}
 }
 
 // addRoute adds a prefix to the learned routes.
@@ -742,12 +843,6 @@ func (a *app) clearRoutes() {
 	a.routesNote = panelNote{text: "All learned routes removed."}
 }
 
-// openDiagnostics shows the panel and runs the checks.
-func (a *app) openDiagnostics() {
-	a.diagOpen = true
-	a.runDiagnostics()
-}
-
 // runDiagnostics checks the setup and the local proxies. The checks talk to
 // the network, so they run off the main thread.
 func (a *app) runDiagnostics() {
@@ -763,12 +858,6 @@ func (a *app) runDiagnostics() {
 			a.diagRunning = false
 		})
 	}()
-}
-
-// openSettings shows the settings panel with the current values.
-func (a *app) openSettings() {
-	a.settingsForm = newSettingsForm(a.settings, a.prefs)
-	a.settingsOpen = true
 }
 
 // saveSettings writes the advanced options and the preferences. It says

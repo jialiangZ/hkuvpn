@@ -28,12 +28,18 @@ func main() {
 			Title: "HKU VPN",
 			// The window has one size: the app has little to show, and
 			// a window that cannot grow has no empty space in it. The
-			// size is the page area, the title bar is added on top.
+			// size is the page area, the title bar is drawn in it.
 			Width:          452,
-			Height:         344,
+			Height:         376,
 			UseContentSize: true,
-			// No resizing, and no maximize button: the window is the
-			// size it needs.
+			// The caption is the view's own: Windows 11 keeps drawing
+			// a greyed maximize button even when the window cannot
+			// maximize, so the system's buttons go and the view draws
+			// the ones it wants.
+			TitleBarStyle:     mygo.TitleBarHidden,
+			HideWindowButtons: true,
+			// No resizing, and no maximizing: the window is the size
+			// it needs.
 			DisableResize:   true,
 			DisableMaximize: true,
 			Content:         ui.View(a.view),
@@ -101,6 +107,8 @@ func setupTray(a *app) {
 func (a *app) poll() {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	for range ticker.C {
-		win.Update(func() { a.tick(time.Now()) })
+		now := time.Now()
+		win.Update(func() { a.tick(now) })
+		a.refreshPanels()
 	}
 }

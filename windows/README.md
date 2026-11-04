@@ -152,7 +152,8 @@ Three long-session modes, by scenario (plus a tray app):
   advanced options of `hku.env`, start with Windows, reconnect) and an MFA
   dialog, plus close-to-tray. The MFA dialog is a gate: the code leads
   on, and closing it (Escape or a click outside) gives the attempt up -
-  there is no "enter the code later". The panels are a row of icons under the
+  there is no "enter the code later". The four panels open in windows
+  of their own, so a log has the room it needs. The panels are a row of icons under the
   window, each with a tip. The window has one size: it cannot be
   resized and has no maximize button. Built with Go alone (`GOOS=windows go build`, no cgo, no
   webview) - see `windows\mygo-app\build.sh`. The exe is built as a GUI

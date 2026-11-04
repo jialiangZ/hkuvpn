@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -51,7 +52,8 @@ func (a *app) view(c *ui.Context) {
 	}
 
 	ui.Themed(c, t).Fill().Children(func() {
-		ui.Scroll(c).Fill().Children(func() {
+		a.titleBar(c, t, "HKU VPN", win)
+		ui.Scroll(c).Grow(1).Children(func() {
 			ui.Column(c).Padding(t.Space(4)).Gap(t.Space(3)).Children(func() {
 
 				// The state of the session, in one card: what it is, how
@@ -108,10 +110,6 @@ func (a *app) view(c *ui.Context) {
 		})
 
 		a.mfaDialog(c, t)
-		a.logDialog(c, t)
-		a.routesDialog(c, t)
-		a.diagnosticsDialog(c, t)
-		a.settingsDialog(c, t)
 	})
 }
 
@@ -197,20 +195,21 @@ func (a *app) mfaDialog(c *ui.Context, t *ui.Theme) {
 	}
 }
 
-func (a *app) logDialog(c *ui.Context, t *ui.Theme) {
-	ui.Modal(c, &a.logOpen, func() {
-		entries := a.visibleLog()
-		// A fixed width keeps the dialog from resizing with the log content.
-		ui.Column(c).Width(380).Gap(10).Children(func() {
-			ui.Row(c).AlignItems(ui.Baseline).Gap(8).Children(func() {
+func (a *app) logPanel(c *ui.Context) {
+	t := a.theme(c)
+	entries := a.visibleLog()
+	ui.Themed(c, t).Fill().Children(func() {
+		a.titleBar(c, t, "Connection log", a.logWin)
+		ui.Column(c).Grow(1).Padding(t.Space(4)).Gap(t.Space(2)).Children(func() {
+			ui.Row(c).AlignItems(ui.Baseline).Gap(t.Space(2)).Children(func() {
 				ui.Text(c, "Connection log").FontSize(18).Bold()
 				ui.Text(c, "this session").FontSize(12).TextColor(t.TextMuted)
 			})
-			ui.Row(c).AlignItems(ui.Center).Gap(10).Children(func() {
+			ui.Row(c).AlignItems(ui.Center).Gap(t.Space(2)).Children(func() {
 				ui.Text(c, "Level").FontSize(12).TextColor(t.TextMuted)
 				ui.Segmented(c, &a.logFilter, "All", "Info+", "Warnings", "Errors")
 			})
-			ui.Row(c).Gap(8).Children(func() {
+			ui.Row(c).Gap(t.Space(2)).Children(func() {
 				ui.SearchField(c, &a.logSearch).Placeholder("Search the log").Grow(1)
 				ui.Button(c, "Latest").Tooltip("Scroll back to the newest line").
 					OnClick(a.jumpToLatest)
@@ -220,23 +219,23 @@ func (a *app) logDialog(c *ui.Context, t *ui.Theme) {
 			ui.List(c, &a.logList, len(entries), func(i int) {
 				entry := entries[i]
 				color := logLevelColor(entry.level, t)
-				ui.Row(c).RowWidth(372).Padding(5, 8).
+				ui.Row(c).RowWidth(600).Padding(5, 8).
 					BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
 					ui.Text(c, logLevelTag(entry.level)).Width(34).
 						Font("monospace").FontSize(11).Bold().TextColor(color)
 					// A fixed width wraps long lines here instead of
 					// widening the row and scrolling sideways.
-					ui.Text(c, entry.text).Width(316).
+					ui.Text(c, entry.text).Width(544).
 						Font("monospace").FontSize(12).TextColor(color).Selectable()
 				})
-			}).RowWidth(372).Height(250).Children(func() {
+			}).RowWidth(600).Grow(1).Children(func() {
 				if len(a.logLines) == 0 {
 					ui.Text(c, "No log lines yet").TextColor(t.TextMuted).Padding(12)
 				} else if len(entries) == 0 {
 					ui.Text(c, "No lines at this level").TextColor(t.TextMuted).Padding(12)
 				}
 			})
-			ui.Row(c).Justify(ui.End).Gap(8).Children(func() {
+			ui.Row(c).Justify(ui.End).Gap(t.Space(2)).Children(func() {
 				copyLabel := "Copy"
 				if !a.copiedAt.IsZero() {
 					copyLabel = "Copied"
@@ -250,7 +249,7 @@ func (a *app) logDialog(c *ui.Context, t *ui.Theme) {
 				ui.Button(c, "Clear").
 					Tooltip("Hide the lines shown so far; the session log file is kept").
 					OnClick(a.clearLog)
-				ui.PrimaryButton(c, "Close").OnClick(func() { a.logOpen = false })
+				ui.PrimaryButton(c, "Close").OnClick(a.closeLog)
 			})
 			noteLine(c, t, a.logNote)
 		})
@@ -285,9 +284,11 @@ func logLevelColor(level logLevel, t *ui.Theme) ui.Color {
 
 // ------------------------------------------------------------------ routes
 
-func (a *app) routesDialog(c *ui.Context, t *ui.Theme) {
-	ui.Modal(c, &a.routesOpen, func() {
-		ui.Column(c).Width(376).Gap(10).Children(func() {
+func (a *app) routesPanel(c *ui.Context) {
+	t := a.theme(c)
+	ui.Themed(c, t).Fill().Children(func() {
+		a.titleBar(c, t, "Routes", a.routesWin)
+		ui.Column(c).Grow(1).Padding(t.Space(4)).Gap(t.Space(2)).Children(func() {
 			ui.Text(c, "Routes").FontSize(18).Bold()
 			ui.Text(c, "Learned routes go through the tunnel, so the resources that "+
 				"need the campus exit are reachable. They are installed when the "+
@@ -298,7 +299,7 @@ func (a *app) routesDialog(c *ui.Context, t *ui.Theme) {
 				if host == "" {
 					host = "no host recorded"
 				}
-				ui.Row(c).RowWidth(368).Gap(8).Padding(4, 6).
+				ui.Row(c).RowWidth(440).Gap(t.Space(2)).Padding(4, 6).
 					BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
 					ui.Column(c).Grow(1).Children(func() {
 						ui.Text(c, r.Cidr()).Font("monospace").FontSize(12)
@@ -307,19 +308,19 @@ func (a *app) routesDialog(c *ui.Context, t *ui.Theme) {
 					})
 					ui.Button(c, "Remove").OnClick(func() { a.removeRoute(r.Base) })
 				})
-			}).RowWidth(368).Height(220).Children(func() {
+			}).RowWidth(440).Grow(1).Children(func() {
 				if len(a.routeList) == 0 {
 					ui.Text(c, "No learned routes yet").TextColor(t.TextMuted).Padding(12)
 				}
 			})
-			ui.Row(c).Gap(8).Children(func() {
+			ui.Row(c).Gap(t.Space(2)).Children(func() {
 				ui.TextInput(c, &a.routeInput).Placeholder("1.2.3.0/24").Grow(1)
 				ui.Button(c, "Add").OnClick(a.addRoute)
 			})
-			ui.Row(c).Justify(ui.End).Gap(8).Children(func() {
+			ui.Row(c).Justify(ui.End).Gap(t.Space(2)).Children(func() {
 				ui.Button(c, "Clear all").Disabled(len(a.routeList) == 0).
 					OnClick(a.clearRoutes)
-				ui.PrimaryButton(c, "Close").OnClick(func() { a.routesOpen = false })
+				ui.PrimaryButton(c, "Close").OnClick(a.closeRoutes)
 			})
 			noteLine(c, t, a.routesNote)
 		})
@@ -328,10 +329,12 @@ func (a *app) routesDialog(c *ui.Context, t *ui.Theme) {
 
 // ------------------------------------------------------------- diagnostics
 
-func (a *app) diagnosticsDialog(c *ui.Context, t *ui.Theme) {
-	ui.Modal(c, &a.diagOpen, func() {
-		ui.Column(c).Width(376).Gap(10).Children(func() {
-			ui.Row(c).AlignItems(ui.Baseline).Gap(8).Children(func() {
+func (a *app) diagnosticsPanel(c *ui.Context) {
+	t := a.theme(c)
+	ui.Themed(c, t).Fill().Children(func() {
+		a.titleBar(c, t, "Diagnostics", a.diagWin)
+		ui.Column(c).Grow(1).Padding(t.Space(4)).Gap(t.Space(2)).Children(func() {
+			ui.Row(c).AlignItems(ui.Baseline).Gap(t.Space(2)).Children(func() {
 				ui.Text(c, "Diagnostics").FontSize(18).Bold()
 				if a.diagRunning {
 					ui.Text(c, "running...").FontSize(12).TextColor(t.TextMuted)
@@ -349,7 +352,7 @@ func (a *app) diagnosticsDialog(c *ui.Context, t *ui.Theme) {
 				case !r.OK:
 					color, mark = t.Danger, "X"
 				}
-				ui.Row(c).RowWidth(368).Gap(8).Padding(4, 6).
+				ui.Row(c).RowWidth(440).Gap(t.Space(2)).Padding(4, 6).
 					BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
 					ui.Text(c, mark).Width(26).Bold().TextColor(color)
 					ui.Column(c).Grow(1).Children(func() {
@@ -357,15 +360,15 @@ func (a *app) diagnosticsDialog(c *ui.Context, t *ui.Theme) {
 						ui.Text(c, r.Note).FontSize(11).TextColor(t.TextMuted)
 					})
 				})
-			}).RowWidth(368).Height(300).Children(func() {
+			}).RowWidth(440).Grow(1).Children(func() {
 				if len(a.diagResults) == 0 && !a.diagRunning {
 					ui.Text(c, "No checks yet").TextColor(t.TextMuted).Padding(12)
 				}
 			})
-			ui.Row(c).Justify(ui.End).Gap(8).Children(func() {
+			ui.Row(c).Justify(ui.End).Gap(t.Space(2)).Children(func() {
 				ui.PrimaryButton(c, "Run checks").Disabled(a.diagRunning).
 					OnClick(a.runDiagnostics)
-				ui.Button(c, "Close").OnClick(func() { a.diagOpen = false })
+				ui.Button(c, "Close").OnClick(a.closeDiagnostics)
 			})
 		})
 	})
@@ -373,20 +376,21 @@ func (a *app) diagnosticsDialog(c *ui.Context, t *ui.Theme) {
 
 // ---------------------------------------------------------------- settings
 
-func (a *app) settingsDialog(c *ui.Context, t *ui.Theme) {
-	ui.Modal(c, &a.settingsOpen, func() {
-		// The title and the buttons stay put; only the fields scroll.
-		ui.Column(c).Width(376).Gap(10).Children(func() {
+func (a *app) settingsPanel(c *ui.Context) {
+	t := a.theme(c)
+	ui.Themed(c, t).Fill().Children(func() {
+		a.titleBar(c, t, "Settings", a.settingsWin)
+		ui.Column(c).Grow(1).Padding(t.Space(4)).Gap(t.Space(2)).Children(func() {
 			ui.Text(c, "Settings").FontSize(18).Bold()
 			ui.Text(c, "The advanced options are written to hku.env and "+
 				"apply to the next connect.").FontSize(12).TextColor(t.TextMuted)
-			ui.Scroll(c).Height(360).Children(func() {
-				ui.Column(c).Width(376).Gap(10).Children(func() {
+			ui.Scroll(c).Grow(1).Children(func() {
+				ui.Column(c).Width(440).Gap(t.Space(2)).Children(func() {
 					ui.Field(c, "VPN endpoint", func() {
 						ui.TextInput(c, &a.settingsForm.Endpoint).
 							Placeholder("vpn2fa.hku.hk")
 					})
-					ui.Row(c).Gap(10).Children(func() {
+					ui.Row(c).Gap(t.Space(2)).Children(func() {
 						ui.Field(c, "SOCKS port", func() {
 							ui.NumberInput(c, &a.settingsForm.SocksPort, 1, 65535, 1)
 						}).Grow(1)
@@ -400,7 +404,7 @@ func (a *app) settingsDialog(c *ui.Context, t *ui.Theme) {
 					ui.Field(c, "Auto-learn routes", func() {
 						ui.Switch(c, &a.settingsForm.AutoRoutes)
 					})
-					ui.Row(c).Gap(10).Children(func() {
+					ui.Row(c).Gap(t.Space(2)).Children(func() {
 						ui.Field(c, "Prefix", func() {
 							ui.NumberInput(c, &a.settingsForm.RoutePrefix, 8, 32, 1)
 						}).Grow(1)
@@ -439,11 +443,12 @@ func (a *app) settingsDialog(c *ui.Context, t *ui.Theme) {
 					})
 				})
 			})
-			ui.Row(c).Justify(ui.End).Gap(8).Children(func() {
-				ui.Button(c, "Cancel").OnClick(func() { a.settingsOpen = false })
+			noteLine(c, t, a.settingsNote)
+			ui.Row(c).Justify(ui.End).Gap(t.Space(2)).Children(func() {
+				ui.Button(c, "Cancel").OnClick(a.closeSettings)
 				ui.PrimaryButton(c, "Save").OnClick(func() {
 					if a.saveSettings() {
-						toast(c, "Settings saved - they apply to the next connect.", false)
+						a.closeSettings()
 					}
 				})
 			})
@@ -451,8 +456,22 @@ func (a *app) settingsDialog(c *ui.Context, t *ui.Theme) {
 	})
 }
 
-// noteLine says what happened, inside the panel that asked for it: a
-// toast would hide behind the modal it belongs to.
+// titleBar draws the window's own title bar: the system's caption buttons
+// are hidden, so the view draws the ones it wants. The bar drags the
+// window.
+func (a *app) titleBar(c *ui.Context, t *ui.Theme, title string, target *mygo.Window) {
+	ui.Row(c).Height(32).Padding(0, t.Space(2)).Gap(t.Space(1)).DragWindow().Children(func() {
+		ui.Text(c, title).FontSize(13).Bold().TextColor(t.TextMuted)
+		ui.Spacer(c)
+		ui.Button(c, "–").Width(32).Height(24).
+			Tooltip("Minimize").OnClick(target.Minimize)
+		ui.Button(c, "✕").Width(32).Height(24).
+			Tooltip("Close").OnClick(target.Close)
+	})
+	ui.Box(c).Height(1).Background(t.Border)
+}
+
+// noteLine says what happened, inside the panel that asked for it.
 func noteLine(c *ui.Context, t *ui.Theme, note panelNote) {
 	if note.text == "" {
 		return
