@@ -13,11 +13,8 @@ One size each, no resizing: the app has little to show, and a window
 that cannot grow has no empty space in it (`DisableResize` and
 `DisableMaximize` in the window options).
 
-Windows 11 keeps drawing a greyed maximize button even when the window
-cannot maximize, so the caption is the app's own: `TitleBarStyle:
-mygo.TitleBarHidden` with `HideWindowButtons` takes the system's
-buttons away, and the view draws a title bar of its own (`DragWindow`
-makes it move the window).
+The caption is the system's own. Windows 11 keeps drawing the maximize
+button even when the window cannot maximize, so it shows greyed out.
 
 The four panels - the log, the diagnostics, the routes and the settings -
 open in windows of their own: the main window is small, and a log needs

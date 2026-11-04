@@ -717,15 +717,13 @@ func (a *app) openPanel(target **mygo.Window, title string, view func(*ui.Contex
 		return
 	}
 	*target = mygo.NewWindow(mygo.WindowOptions{
-		Title:             title,
-		Width:             w,
-		Height:            h,
-		UseContentSize:    true,
-		TitleBarStyle:     mygo.TitleBarHidden,
-		HideWindowButtons: true,
-		DisableResize:     true,
-		DisableMaximize:   true,
-		Content:           ui.View(view),
+		Title:           title,
+		Width:           w,
+		Height:          h,
+		UseContentSize:  true,
+		DisableResize:   true,
+		DisableMaximize: true,
+		Content:         ui.View(view),
 	})
 }
 

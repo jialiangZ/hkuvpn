@@ -32,14 +32,9 @@ func main() {
 			Width:          452,
 			Height:         376,
 			UseContentSize: true,
-			// The caption is the view's own: Windows 11 keeps drawing
-			// a greyed maximize button even when the window cannot
-			// maximize, so the system's buttons go and the view draws
-			// the ones it wants.
-			TitleBarStyle:     mygo.TitleBarHidden,
-			HideWindowButtons: true,
 			// No resizing, and no maximizing: the window is the size
-			// it needs.
+			// it needs. The caption is the system's own; Windows 11
+			// keeps drawing the maximize button, greyed out.
 			DisableResize:   true,
 			DisableMaximize: true,
 			Content:         ui.View(a.view),

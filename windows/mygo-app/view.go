@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 
-	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
 
@@ -52,8 +51,7 @@ func (a *app) view(c *ui.Context) {
 	}
 
 	ui.Themed(c, t).Fill().Children(func() {
-		a.titleBar(c, t, "HKU VPN", win)
-		ui.Scroll(c).Grow(1).Children(func() {
+		ui.Scroll(c).Fill().Children(func() {
 			ui.Column(c).Padding(t.Space(4)).Gap(t.Space(3)).Children(func() {
 
 				// The state of the session, in one card: what it is, how
@@ -199,7 +197,6 @@ func (a *app) logPanel(c *ui.Context) {
 	t := a.theme(c)
 	entries := a.visibleLog()
 	ui.Themed(c, t).Fill().Children(func() {
-		a.titleBar(c, t, "Connection log", a.logWin)
 		ui.Column(c).Grow(1).Padding(t.Space(4)).Gap(t.Space(2)).Children(func() {
 			ui.Row(c).AlignItems(ui.Baseline).Gap(t.Space(2)).Children(func() {
 				ui.Text(c, "Connection log").FontSize(18).Bold()
@@ -287,7 +284,6 @@ func logLevelColor(level logLevel, t *ui.Theme) ui.Color {
 func (a *app) routesPanel(c *ui.Context) {
 	t := a.theme(c)
 	ui.Themed(c, t).Fill().Children(func() {
-		a.titleBar(c, t, "Routes", a.routesWin)
 		ui.Column(c).Grow(1).Padding(t.Space(4)).Gap(t.Space(2)).Children(func() {
 			ui.Text(c, "Routes").FontSize(18).Bold()
 			ui.Text(c, "Learned routes go through the tunnel, so the resources that "+
@@ -332,7 +328,6 @@ func (a *app) routesPanel(c *ui.Context) {
 func (a *app) diagnosticsPanel(c *ui.Context) {
 	t := a.theme(c)
 	ui.Themed(c, t).Fill().Children(func() {
-		a.titleBar(c, t, "Diagnostics", a.diagWin)
 		ui.Column(c).Grow(1).Padding(t.Space(4)).Gap(t.Space(2)).Children(func() {
 			ui.Row(c).AlignItems(ui.Baseline).Gap(t.Space(2)).Children(func() {
 				ui.Text(c, "Diagnostics").FontSize(18).Bold()
@@ -379,7 +374,6 @@ func (a *app) diagnosticsPanel(c *ui.Context) {
 func (a *app) settingsPanel(c *ui.Context) {
 	t := a.theme(c)
 	ui.Themed(c, t).Fill().Children(func() {
-		a.titleBar(c, t, "Settings", a.settingsWin)
 		ui.Column(c).Grow(1).Padding(t.Space(4)).Gap(t.Space(2)).Children(func() {
 			ui.Text(c, "Settings").FontSize(18).Bold()
 			ui.Text(c, "The advanced options are written to hku.env and "+
@@ -454,21 +448,6 @@ func (a *app) settingsPanel(c *ui.Context) {
 			})
 		})
 	})
-}
-
-// titleBar draws the window's own title bar: the system's caption buttons
-// are hidden, so the view draws the ones it wants. The bar drags the
-// window.
-func (a *app) titleBar(c *ui.Context, t *ui.Theme, title string, target *mygo.Window) {
-	ui.Row(c).Height(32).Padding(0, t.Space(2)).Gap(t.Space(1)).DragWindow().Children(func() {
-		ui.Text(c, title).FontSize(13).Bold().TextColor(t.TextMuted)
-		ui.Spacer(c)
-		ui.Button(c, "–").Width(32).Height(24).
-			Tooltip("Minimize").OnClick(target.Minimize)
-		ui.Button(c, "✕").Width(32).Height(24).
-			Tooltip("Close").OnClick(target.Close)
-	})
-	ui.Box(c).Height(1).Background(t.Border)
 }
 
 // noteLine says what happened, inside the panel that asked for it.
