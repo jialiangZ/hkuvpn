@@ -118,8 +118,12 @@ func (a *app) view(c *ui.Context) {
 // iconButton is a button that shows only an icon. The tip names it, and
 // so does the label, for the screen readers that do not see the icon.
 func iconButton(c *ui.Context, icon *ui.SVG, label string, action func()) {
+	// The button's own padding (14 DIPs sideways) leaves a content box
+	// narrower than the icon, and the icon then hangs to the right of
+	// the center. A smaller, even padding keeps it centered.
 	ui.Button(c, "").Label(label).Tooltip(label).
 		Width(40).Height(36).
+		Padding(4, 6).
 		Children(func() {
 			ui.Icon(c, icon).FontSize(19)
 		}).
