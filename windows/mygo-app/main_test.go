@@ -413,3 +413,23 @@ func TestSessionStartIsRemembered(t *testing.T) {
 		t.Error("the session start did not survive")
 	}
 }
+
+// A worker that is alive is not a session that came up: the app must not
+// say "connected" while the worker still waits for the code.
+func TestAdoptionFollowsTheMarkers(t *testing.T) {
+	if got := decideAdoption(false, true, true, false); got != adoptNothing {
+		t.Errorf("no worker: %v", got)
+	}
+	if got := decideAdoption(true, false, true, false); got != adoptNothing {
+		t.Errorf("a stale heartbeat: %v", got)
+	}
+	if got := decideAdoption(true, true, true, false); got != adoptConnected {
+		t.Errorf("a session that came up: %v", got)
+	}
+	if got := decideAdoption(true, true, false, true); got != adoptWaitingForCode {
+		t.Errorf("a worker waiting for the code: %v", got)
+	}
+	if got := decideAdoption(true, true, false, false); got != adoptConnecting {
+		t.Errorf("a worker on its way: %v", got)
+	}
+}

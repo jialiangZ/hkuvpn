@@ -137,20 +137,9 @@ func (a *app) primaryAction(c *ui.Context, t *ui.Theme) {
 	// The tooltip names the shortcut, so the key is discoverable.
 	switch a.state {
 	case connecting:
-		if a.mfaPending {
-			// The worker waits for the code: offer it again after the
-			// dialog was closed, beside the cancel button, so the window
-			// keeps its size.
-			ui.Row(c).Gap(t.Space(2)).Children(func() {
-				ui.PrimaryButton(c, "Enter the code").Grow(1).Height(38).
-					OnClick(func() { a.mfaOpen = true })
-				ui.Button(c, "Cancel").Width(120).Height(38).
-					TextColor(t.Danger).Border(1, t.Danger).
-					Tooltip("Give up this attempt (Ctrl+Enter)").
-					OnClick(a.cancel)
-			})
-			return
-		}
+		// While the code is asked for, the dialog is the way out: it has
+		// to be answered or given up, so there is nothing to decide
+		// here.
 		ui.Button(c, "Cancel").FillWidth().Height(38).
 			Background(t.Warning).TextColor(ui.Hex("#FFFFFF")).
 			Tooltip("Give up this attempt (Ctrl+Enter)").
@@ -189,16 +178,18 @@ func (a *app) mfaDialog(c *ui.Context, t *ui.Theme) {
 				OnSubmit(a.submitMFA)
 			ui.Text(c, "The code is good for about 30 seconds.").
 				FontSize(12).TextColor(t.TextMuted)
+			ui.Text(c, "Enter to submit · Esc gives up").
+				FontSize(12).TextColor(t.TextMuted)
 			ui.Row(c).Justify(ui.End).Gap(t.Space(2)).Children(func() {
 				ui.PrimaryButton(c, "Submit").OnClick(a.submitMFA)
 			})
 		})
 	})
-	// Escape or a click outside closes the dialog, it does not kill the
-	// session: the worker keeps waiting for the code and the main window
-	// offers to enter it again.
+	// The dialog is a gate: a code leads on, and closing it (Escape or a
+	// click outside) gives up the attempt. There is no way to leave the
+	// code for later.
 	if dialog.Dismissed() && a.mfaPending && a.state == connecting {
-		a.mfaOpen = false
+		a.cancel()
 	}
 }
 

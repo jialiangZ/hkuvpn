@@ -150,7 +150,9 @@ Three long-session modes, by scenario (plus a tray app):
   proxies and the address the traffic leaves with), a Routes panel (the
   learned routes, added and removed by hand), a Settings panel (the
   advanced options of `hku.env`, start with Windows, reconnect) and an MFA
-  dialog, plus close-to-tray. The panels are a row of icons under the
+  dialog, plus close-to-tray. The MFA dialog is a gate: the code leads
+  on, and closing it (Escape or a click outside) gives the attempt up -
+  there is no "enter the code later". The panels are a row of icons under the
   window, each with a tip. The window has one size: it cannot be
   resized and has no maximize button. Built with Go alone (`GOOS=windows go build`, no cgo, no
   webview) - see `windows\mygo-app\build.sh`. The exe is built as a GUI
@@ -161,7 +163,8 @@ Three long-session modes, by scenario (plus a tray app):
   the app never kills a session.
 - **Regression script** (`windows\tests\session-flow.ps1`): drives the
   worker and the app through the whole session lifecycle - a stop while
-  the MFA code is pending, a cancel, a connect and a disconnect - and
+  the MFA dialog is a gate (closing it gives the attempt up), a connect
+  and a disconnect - and
   checks the invariants: the teardown marker, no force kill, no leftover
   `gost`/`openconnect`, and the app back at "Disconnected". The steps
   that need a person are the UAC prompt and the MFA code, so run it from

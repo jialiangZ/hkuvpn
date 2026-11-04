@@ -41,7 +41,8 @@ shown in the View log sheet.
 
 ## What the app does
 
-- **Session**: Connect (UAC) -> MFA code dialog -> tunnel up, with the
+- **Session**: Connect (UAC) -> MFA code dialog (a gate: the code leads
+  on, closing it gives the attempt up) -> tunnel up, with the
   VPN address, the uptime, the proxy endpoints and the learned routes on
   the status card. Cancel while connecting watches the worker until it is
   really gone; Disconnect needs no UAC. Closing the window hides it to the

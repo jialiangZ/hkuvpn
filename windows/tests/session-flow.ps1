@@ -9,7 +9,8 @@
       1. a stop while the worker waits for the MFA code tears the worker
          down quickly, with a teardown marker and without the force kill
          that "hkuvpn.ps1 --stop" escalates to,
-      2. closing the MFA dialog does not kill the session,
+      2. the MFA dialog is a gate: closing it gives the attempt up, and
+         the app ends up idle instead of stuck,
       3. a cancel in the app leads back to idle - the app used to stay on
          "Cancelling - waiting for the worker to exit" forever,
       4. a live session disconnects cleanly.
@@ -396,10 +397,10 @@ if (-not $AppOnly -and -not $LiveOnly) {
     Clear-SessionFiles
 }
 
-# --- 2. the app: closing the MFA dialog, then a cancel ----------------------
+# --- 2. the app: the MFA dialog is a gate -----------------------------------
 
 if (-not $WorkerOnly -and -not $LiveOnly) {
-    Write-Step 'App: closing the MFA dialog, then cancelling'
+    Write-Step 'App: the MFA dialog is a gate'
     Clear-SessionFiles
     Stop-App
     if (-not (Start-App)) {
@@ -416,8 +417,8 @@ if (-not $WorkerOnly -and -not $LiveOnly) {
         Check (Wait-AppStatus @{ state = 'connecting' } 20) 'the app is connecting'
         Check (Wait-AppStatus @{ mfa = 'true' } 20) 'the app knows a code is needed'
 
-        # Closing the dialog must not kill the session. The first Escape
-        # closes it; the app's status file says whether it did.
+        # The dialog is a gate: a code leads on, closing it gives the
+        # attempt up. The app's status file says whether it closed.
         $closed = $false
         for ($i = 0; $i -lt 4 -and -not $closed; $i++) {
             Focus-App | Out-Null
@@ -426,15 +427,9 @@ if (-not $WorkerOnly -and -not $LiveOnly) {
             $closed = ((Get-AppStatus)['mfaOpen'] -ne 'true')
         }
         Check $closed 'the MFA dialog closes on Escape'
-        $h = Get-AppStatus
-        Check ($h['state'] -eq 'connecting') 'closing the dialog keeps the session' ("state=" + $h['state'])
-        Check (Test-WorkerAlive) 'the worker is still waiting for the code'
 
-        # Cancel: another Escape gives up the attempt. The app may be
-        # done with it before the next look, so the check is the outcome:
-        # the app is idle and the worker is gone.
-        Focus-App | Out-Null
-        Send-Keys '{ESC}'
+        # Closing it stops the worker and leaves the app idle: there is
+        # no way to leave the code for later.
         Wait-NoConsent | Out-Null
         $end = (Get-Date).AddSeconds(60)
         while ((Get-Date) -lt $end) {
@@ -442,14 +437,8 @@ if (-not $WorkerOnly -and -not $LiveOnly) {
             if ($h['state'] -eq 'idle' -and -not (Test-WorkerAlive)) { break }
             Start-Sleep -Milliseconds 500
         }
-        Check (-not (Test-WorkerAlive)) 'the worker is gone after the cancel'
+        Check (-not (Test-WorkerAlive)) 'the worker is gone after the dialog was closed'
 
-        $end = (Get-Date).AddSeconds(60)
-        while ((Get-Date) -lt $end) {
-            $h = Get-AppStatus
-            if ($h['state'] -eq 'idle') { break }
-            Start-Sleep -Milliseconds 500
-        }
         $h = Get-AppStatus
         Check ($h['state'] -eq 'idle') 'the app is idle again' ("state=" + $h['state'])
         Check ($h['cancelling'] -eq 'false') 'the app is not stuck cancelling' ("cancelling=" + $h['cancelling'])

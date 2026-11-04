@@ -122,6 +122,31 @@ type app struct {
 // so a gateway that keeps refusing does not ask for UAC over and over.
 const maxReconnectTries = 3
 
+// What the app makes of a session that was running before it started.
+const (
+	adoptNothing = iota
+	adoptConnected
+	adoptConnecting
+	adoptWaitingForCode
+)
+
+// decideAdoption says what the app makes of a worker it finds running
+// when it starts: a session that came up, one that is still on its way,
+// one that waits for the code, or nothing at all.
+func decideAdoption(alive, fresh, connected, codeAsked bool) int {
+	if !alive || !fresh {
+		return adoptNothing
+	}
+	switch {
+	case connected:
+		return adoptConnected
+	case codeAsked:
+		return adoptWaitingForCode
+	default:
+		return adoptConnecting
+	}
+}
+
 func newApp() *app {
 	a := &app{
 		account: storedAccount(),
@@ -136,12 +161,26 @@ func newApp() *app {
 	a.logFilter = 1
 	// Adopt a session that survived a frontend restart, with the start
 	// time the last run remembered, so the timer does not start at zero.
-	if workerAlive() && heartbeatFresh() {
+	// A worker that is alive is not a session that came up: it may still
+	// be waiting for the code, and saying "connected" then would be a
+	// lie the app has to take back.
+	switch decideAdoption(workerAlive(), heartbeatFresh(),
+		markerContains("HKUVPN_CONNECTED"),
+		markerContains("HKUVPN_MFA_RESPONSE_REQUIRED")) {
+	case adoptConnected:
 		a.state = connected
 		a.connectedAt = a.prefs.SessionStart
 		if a.connectedAt.IsZero() {
 			a.connectedAt = time.Now()
 		}
+	case adoptWaitingForCode:
+		a.state = connecting
+		a.connectAt = time.Now()
+		a.mfaPending = true
+		a.mfaOpen = true
+	case adoptConnecting:
+		a.state = connecting
+		a.connectAt = time.Now()
 	}
 	a.refreshStatus(time.Now(), workerAlive(), heartbeatFresh())
 	return a
