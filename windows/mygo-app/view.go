@@ -51,7 +51,7 @@ func (a *app) view(c *ui.Context) {
 	}
 
 	ui.Themed(c, t).Fill().Children(func() {
-		ui.Scroll(c).Fill().Children(func() {
+		ui.Scroll(c).Fill().Scrollbars(false).Children(func() {
 			ui.Column(c).Padding(t.Space(4)).Gap(t.Space(3)).Children(func() {
 
 				// The state of the session, in one card: what it is, how
@@ -222,7 +222,7 @@ func (a *app) logPanel(c *ui.Context) {
 					ui.Text(c, entry.text).Width(544).
 						Font("monospace").FontSize(12).TextColor(color).Selectable()
 				})
-			}).RowWidth(600).Grow(1).Children(func() {
+			}).RowWidth(600).Grow(1).Scrollbars(false).Children(func() {
 				if len(a.logLines) == 0 {
 					ui.Text(c, "No log lines yet").TextColor(t.TextMuted).Padding(12)
 				} else if len(entries) == 0 {
@@ -307,7 +307,7 @@ func (a *app) routesPanel(c *ui.Context) {
 						}).
 						OnClick(func() { a.removeRoute(r.Base) })
 				})
-			}).RowWidth(444).Grow(1).Children(func() {
+			}).RowWidth(444).Grow(1).Scrollbars(false).Children(func() {
 				if len(a.routeList) == 0 {
 					ui.Text(c, "No learned routes yet").TextColor(t.TextMuted).Padding(12)
 				}
@@ -357,7 +357,7 @@ func (a *app) diagnosticsPanel(c *ui.Context) {
 						ui.Text(c, r.Note).FontSize(11).TextColor(t.TextMuted)
 					})
 				})
-			}).RowWidth(440).Grow(1).Children(func() {
+			}).RowWidth(440).Grow(1).Scrollbars(false).Children(func() {
 				if len(a.diagResults) == 0 && !a.diagRunning {
 					ui.Text(c, "No checks yet").TextColor(t.TextMuted).Padding(12)
 				}
@@ -382,7 +382,7 @@ func (a *app) settingsPanel(c *ui.Context) {
 
 			// A form: the labels sit beside the controls, so the panel
 			// is half as tall and every label weighs the same.
-			ui.Scroll(c).Grow(1).Children(func() {
+			ui.Scroll(c).Grow(1).Scrollbars(false).Children(func() {
 				ui.Column(c).Width(424).Gap(t.Space(3)).Children(func() {
 					ui.Form(c, func() {
 						ui.Field(c, "VPN endpoint", func() {
