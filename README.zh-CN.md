@@ -20,6 +20,21 @@
 
 容器内由 OpenConnect 建立 VPN，本机通过 SOCKS5 / HTTP 端口使用隧道。**应用可以直接设置代理；按网站或 IP 自动分流时，再接入 Clash 或 Surge。**
 
+## 用 Windows？有现成的 App
+
+整套东西有桌面版（`HKUVPN.exe`，MyGo 原生界面 —— 不用 WSL、不用 Docker、
+不弹终端窗口）。从 [Releases](https://github.com/jialiangZ/hkuvpn/releases)
+下载 **`HKUVPN-windows-<版本号>.zip`**，解压后以管理员身份运行一次
+`bin\get-tools.ps1`（它会安装 OpenConnect 并下载 gost），然后启动
+`HKUVPN.exe`：在窗口里填账号和 Portal PIN，点 Connect，它要码时输入
+6 位数字即可。
+
+[`START-HERE.md`](windows/mygo-app/START-HERE.md) ·
+[`START-HERE.zh-CN.md`](windows/mygo-app/START-HERE.zh-CN.md) ·
+[App 的说明](windows/mygo-app/README.zh-CN.md)
+
+下面的 Docker 版是另一条路，用法没有变。
+
 ## 快速上手
 
 准备好可用的 **Docker**、`openssl`、已开通 VPN 的 HKU 账号、**Portal 静态 PIN** 和 **Microsoft Authenticator 验证码**。当前入口为 `vpn2fa.hku.hk`，仍需 MFA；实际连通性取决于所在网络。
@@ -170,6 +185,19 @@ hkuvpn/
 │   └── shells/                # Zsh / Bash / Fish / PowerShell 封装
 └── docs/                      # 详细指南与配图
 ```
+
+---
+
+## 遇到问题
+
+用不了？欢迎[开个 issue](https://github.com/jialiangZ/hkuvpn/issues) ——
+表单会问你要预检输出和日志片段，附上它们问题就能修。App 自身的日志在
+`%LOCALAPPDATA%\HKUVPN\app.log`，会话日志在 `%TEMP%\hkuvpn\openconnect.log`。
+
+想一起改进？App 是 Go 程序（`windows/mygo-app`），工作进程是 PowerShell
+（`windows/bin/hkuvpn.ps1`），会话生命周期有回归脚本
+（`windows/tests/session-flow.ps1`）。欢迎提 PR；每次推送都会跑
+`windows/mygo-app` 里的 `go vet` 和 `go test`。
 
 ---
 

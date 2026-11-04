@@ -20,6 +20,23 @@ Need campus resources, lab SSH, or remote desktop while your browser and AI tool
 
 OpenConnect establishes the VPN inside the container, and local SOCKS5 / HTTP ports provide access to it. **Set a proxy directly in an application, or add Clash or Surge for automatic routing by domain or IP.**
 
+## On Windows? There is an app.
+
+The whole thing comes as a desktop app (`HKUVPN.exe`, MyGo native UI — no
+WSL, no Docker, no console window). Download
+**`HKUVPN-windows-<version>.zip`** from the
+[releases](https://github.com/jialiangZ/hkuvpn/releases), unpack it, run
+`bin\get-tools.ps1` once as administrator (it installs OpenConnect and
+downloads gost), and start `HKUVPN.exe`. Type your account and Portal PIN
+in the window, press Connect, and type the six-digit code when it asks.
+
+[`START-HERE.md`](windows/mygo-app/START-HERE.md) ·
+[`START-HERE.zh-CN.md`](windows/mygo-app/START-HERE.zh-CN.md) ·
+[the app's README](windows/mygo-app/README.md)
+
+The Docker edition below is the other way in, and it still works the same
+way.
+
 ## Quick Start
 
 You need a working **Docker** runtime, `openssl`, a VPN-enabled HKU account, your **static Portal PIN**, and a **Microsoft Authenticator code**. The launcher uses `vpn2fa.hku.hk` with MFA; reachability depends on your network.
@@ -171,6 +188,21 @@ hkuvpn/
 │   └── shells/                # Zsh / Bash / Fish / PowerShell wrappers
 └── docs/                      # Long-form guides and diagrams
 ```
+
+---
+
+## Getting help
+
+Something not working? [Open an issue](https://github.com/jialiangZ/hkuvpn/issues)
+— the form asks for the pre-flight output and the log lines, which is what
+makes a bug fixable. The app's log is at `%LOCALAPPDATA%\HKUVPN\app.log`
+and the session log at `%TEMP%\hkuvpn\openconnect.log`.
+
+Want to help? The app is a Go program (`windows/mygo-app`), the worker is
+PowerShell (`windows/bin/hkuvpn.ps1`), and the session lifecycle has a
+regression script (`windows/tests/session-flow.ps1`). Pull requests are
+welcome; `go vet` and `go test` in `windows/mygo-app` are the checks that
+run on every push.
 
 ---
 

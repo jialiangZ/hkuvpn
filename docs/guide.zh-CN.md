@@ -3,6 +3,7 @@
 [← 返回 README](../README.zh-CN.md) · [English](guide.en.md)
 
 - [日常使用](#日常使用)
+- [Windows 桌面 App](#windows-桌面-app)
 - [分流客户端](#接入规则客户端)
 - [SSH 与远程桌面](#ssh-与远程桌面)
 - [反向 SSH](#通过反向-ssh-为学校电脑提供代理)
@@ -10,6 +11,42 @@
 - [安全与项目参考](#安全说明)
 
 ## 日常使用
+
+### Windows 桌面 App
+
+Windows 上有本项目的桌面客户端：`HKUVPN.exe`，原生界面（MyGo，
+Direct3D —— 无 WebView、无终端窗口），驱动的是和 PowerShell 前端同一个
+工作进程。如果你用的是 Windows 10/11，这是最短的一条路。
+
+1. 从 [Releases](https://github.com/jialiangZ/hkuvpn/releases) 下载
+   **`HKUVPN-windows-<版本号>.zip`**。
+2. 解压到任意位置，比如 `C:\hkuvpn`。
+3. **以管理员身份运行一次** `bin\get-tools.ps1`。它会安装 OpenConnect
+   （自带 Wintun 网卡）并下载 gost；两个下载都做固定的 SHA-256 校验。
+4. 启动 `HKUVPN.exe`。在窗口里填 HKU 账号和 Portal PIN —— 边打边存，
+   不会离开本机 —— 点 **Connect**，UAC 弹窗点允许。弹出 **Verification
+   code** 时输入 Microsoft Authenticator 上的 6 位数字（只有约 30 秒
+   有效期，请输入此刻显示的那个）。
+
+代理地址和 Docker 版一样：SOCKS5 在 `127.0.0.1:1080`，HTTP 在
+`127.0.0.1:1088`。
+
+窗口里比启动器多出来的东西：
+
+- **状态卡** —— 状态、隧道地址、已连接时长、代理地址、学到的路由，一屏看完
+- **诊断面板** —— 和 `hkuvpn.ps1 --check` 相同的检查，外加本地代理的连通性
+  测试和流量出口地址
+- **路由面板** —— 学到的路由，可手动增删
+- **设置面板** —— `hku.env` 里的高级选项，以及"开机自启"的开关
+- **日志窗口** —— 会话日志，带级别标签、级别筛选、搜索框，可复制和导出
+
+关闭窗口只是把 App 收进托盘，隧道照常运行；**Disconnect** 不用 UAC，
+退出 App 也不会掐掉会话。
+
+压缩包里的 `START-HERE.md` 和 `START-HERE.zh-CN.md` 有完整步骤。App 自身的
+日志在 `%LOCALAPPDATA%\HKUVPN\app.log`，会话日志在
+`%TEMP%\hkuvpn\openconnect.log`。源码结构见 [App 的说明](../windows/mygo-app/README.zh-CN.md)，
+底下的启动器见 [Windows 原生版说明](../windows/README.zh-CN.md)。
 
 ### 安装简短的 `hkuvpn` 命令
 

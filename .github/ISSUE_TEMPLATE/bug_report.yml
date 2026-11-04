@@ -1,0 +1,82 @@
+name: Bug report
+description: Something does not work, or the app cannot connect
+title: ""
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting it. 中文也可以。
+
+        The most useful thing you can attach is what the app and the
+        worker said about it - the fields below.
+
+  - type: dropdown
+    id: edition
+    attributes:
+      label: Which edition?
+      options:
+        - Windows desktop app (HKUVPN.exe)
+        - Windows launcher (hkuvpn.ps1)
+        - Docker edition
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: symptom
+    attributes:
+      label: What happens?
+      options:
+        - It cannot connect at all
+        - The MFA code is rejected
+        - It connects but the proxy does not work
+        - The app crashes or freezes
+        - Something else
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: "Windows 11 build 26300"
+    validations:
+      required: false
+
+  - type: input
+    id: account
+    attributes:
+      label: HKU account
+      description: "Just the part before the @, e.g. u3015850 - not the PIN."
+      placeholder: "u3015850"
+    validations:
+      required: false
+
+  - type: textarea
+    id: check
+    attributes:
+      label: Output of the pre-flight check
+      description: "hkuvpn.ps1 --check, or the Diagnostics panel of the app."
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: log
+    attributes:
+      label: The log
+      description: |
+        The app's log is at %LOCALAPPDATA%\HKUVPN\app.log and the session
+        log at %TEMP%\hkuvpn\openconnect.log. Paste the lines around the
+        failure.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What did you expect, and what happened instead?
+    validations:
+      required: true

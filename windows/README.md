@@ -13,6 +13,28 @@ enters the campus network.
 > edition as a fallback. See
 > [Known differences](#known-differences-vs-the-wsldocker-edition).
 
+## Get the desktop app
+
+If you only want to use the VPN on Windows, you do not need anything from
+this repository beyond the app itself.
+
+1. Download **`HKUVPN-windows-<version>.zip`** from the
+   [releases](https://github.com/jialiangZ/hkuvpn/releases).
+2. Unpack it anywhere, for example `C:\hkuvpn`.
+3. Run `bin\get-tools.ps1` **once**, as administrator. It installs
+   OpenConnect (which brings the Wintun adapter) and downloads gost; both
+   downloads are checked against pinned SHA-256 hashes.
+4. Start `HKUVPN.exe`, type your HKU account and Portal PIN, and press
+   Connect.
+
+`START-HERE.md` (English) and `START-HERE.zh-CN.md` are in the archive and
+walk through it step by step. Nothing you type leaves your machine, and
+the app's own log stays on your disk.
+
+To build it from the source instead, see
+[`mygo-app/README.md`](mygo-app/README.md) - that needs Go 1.27 on
+Windows.
+
 Working on this port for the first time? Work through the
 [validation checklist](VALIDATION.md) — it walks through every step from
 `--check` to "nothing left behind on the host", with the expected output of

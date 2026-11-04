@@ -1,5 +1,7 @@
 # HKU VPN - MyGo desktop app
 
+[简体中文](README.zh-CN.md)
+
 Native UI client for the HKU campus VPN, built with
 [MyGo](https://github.com/egoist/mygo) (pure Go, Direct3D 11 on Windows,
 no WebView). It drives the same elevated worker as the PowerShell

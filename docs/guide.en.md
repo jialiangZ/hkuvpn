@@ -3,6 +3,7 @@
 [← README](../README.md) · [简体中文](guide.zh-CN.md)
 
 - [Everyday use](#everyday-use)
+- [The Windows desktop app](#the-windows-desktop-app)
 - [Proxy clients](#add-a-rules-client)
 - [SSH and remote desktop](#ssh-and-remote-desktop)
 - [Reverse SSH](#reverse-ssh-for-a-campus-computer)
@@ -10,6 +11,51 @@
 - [Security and reference](#security)
 
 ## Everyday use
+
+### The Windows desktop app
+
+On Windows there is a desktop client for this project: `HKUVPN.exe`, a
+native UI (MyGo, Direct3D — no WebView, no console window) that drives the
+same worker the PowerShell frontends use. It is the shortest way in if you
+are on Windows 10/11.
+
+1. Download **`HKUVPN-windows-<version>.zip`** from the
+   [releases](https://github.com/jialiangZ/hkuvpn/releases).
+2. Unpack it anywhere, for example `C:\hkuvpn`.
+3. Run `bin\get-tools.ps1` **once** as administrator. It installs
+   OpenConnect (which brings the Wintun adapter) and downloads gost; both
+   downloads are checked against pinned SHA-256 hashes.
+4. Start `HKUVPN.exe`. Type your HKU account and Portal PIN in the window
+   — they are saved as you type, and they never leave the machine — and
+   press **Connect**. Approve the UAC prompt. When the **Verification
+   code** dialog appears, type the six digits from Microsoft
+   Authenticator (it is only good for about 30 seconds, so type the one
+   showing now).
+
+The proxies are the same as in the Docker edition: SOCKS5 on
+`127.0.0.1:1080` and HTTP on `127.0.0.1:1088`.
+
+What the window gives you that the launcher does not:
+
+- a **status card** — the state, the tunnel address, the uptime, the proxy
+  endpoints and the learned routes, in one place
+- a **Diagnostics panel** — the same checks as `hkuvpn.ps1 --check`, plus a
+  live test of the local proxies and the address the traffic leaves with
+- a **Routes panel** — the learned routes, added and removed by hand
+- a **Settings panel** — the advanced options of `hku.env`, and a switch to
+  start the app with Windows
+- a **log window** — the session log with severity tags, a level filter, a
+  search field, and copy / export
+
+Closing the window hides the app in the tray and the tunnel keeps running;
+**Disconnect** needs no UAC, and exiting the app never kills a session.
+
+`START-HERE.md` and `START-HERE.zh-CN.md` in the archive have the steps in
+full. The app's own log is at `%LOCALAPPDATA%\HKUVPN\app.log`, the session
+log at `%TEMP%\hkuvpn\openconnect.log`. See
+[the app's README](../windows/mygo-app/README.md) for the source layout,
+or [the Windows edition guide](../windows/README.md) for the launcher
+underneath it.
 
 ### Install the Short `hkuvpn` Command
 

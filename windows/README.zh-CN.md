@@ -4,6 +4,23 @@
 
 > **状态：已实地验证，但还年轻。** 所用组件均为官方构建（OpenConnect 官方 Windows 版、gost 官方发行包），并已在真实 HKU 账号 + Windows 11 + PowerShell 5.1 上跑通完整会话（连接、路由、授权资源路由、干净退出）。它仍比容器版新很多，建议保留 Docker/WSL 版本作为后备。差异详见[已知差异](#与-wsldocker-版的已知差异)。
 
+## 拿到桌面 App
+
+只想在 Windows 上用这个 VPN，不需要从本仓库拿任何东西——除了 App 本身。
+
+1. 从 [Releases](https://github.com/jialiangZ/hkuvpn/releases) 下载
+   **`HKUVPN-windows-<版本号>.zip`**。
+2. 解压到任意位置，比如 `C:\hkuvpn`。
+3. **以管理员身份运行一次** `bin\get-tools.ps1`。它会安装 OpenConnect
+   （自带 Wintun 网卡）并下载 gost；两个下载都做固定的 SHA-256 校验。
+4. 启动 `HKUVPN.exe`，填入 HKU 账号和 Portal PIN，点 Connect。
+
+压缩包里有 `START-HERE.md`（英文）和 `START-HERE.zh-CN.md`（中文），
+一步一步写清楚了。你输入的东西不会离开本机，App 的日志也只留在本地磁盘。
+
+想自己从源码编译，见 [`mygo-app/README.zh-CN.md`](mygo-app/README.zh-CN.md)
+—— 那需要在 Windows 上装 Go 1.27。
+
 第一次在本移植上动手？先按[验收清单](VALIDATION.zh-CN.md)走一遍 —— 从 `--check`
 到"主机上没有任何残留"，每一步都写明了期望输出。
 
