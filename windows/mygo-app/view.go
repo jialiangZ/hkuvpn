@@ -198,10 +198,7 @@ func (a *app) logPanel(c *ui.Context) {
 	entries := a.visibleLog()
 	ui.Themed(c, t).Fill().Children(func() {
 		ui.Column(c).Grow(1).Padding(t.Space(4)).Gap(t.Space(2)).Children(func() {
-			ui.Row(c).AlignItems(ui.Baseline).Gap(t.Space(2)).Children(func() {
-				ui.Text(c, "Connection log").FontSize(18).Bold()
-				ui.Text(c, "this session").FontSize(12).TextColor(t.TextMuted)
-			})
+			ui.Text(c, "This session").FontSize(12).TextColor(t.TextMuted)
 			ui.Row(c).AlignItems(ui.Center).Gap(t.Space(2)).Children(func() {
 				ui.Text(c, "Level").FontSize(12).TextColor(t.TextMuted)
 				ui.Segmented(c, &a.logFilter, "All", "Info+", "Warnings", "Errors")
@@ -285,38 +282,44 @@ func (a *app) routesPanel(c *ui.Context) {
 	t := a.theme(c)
 	ui.Themed(c, t).Fill().Children(func() {
 		ui.Column(c).Grow(1).Padding(t.Space(4)).Gap(t.Space(2)).Children(func() {
-			ui.Text(c, "Routes").FontSize(18).Bold()
-			ui.Text(c, "Learned routes go through the tunnel, so the resources that "+
-				"need the campus exit are reachable. They are installed when the "+
-				"tunnel comes up.").FontSize(12).TextColor(t.TextMuted)
+			ui.Text(c, "Learned routes go through the tunnel, so the resources "+
+				"that need the campus exit are reachable.").
+				FontSize(12).TextColor(t.TextMuted)
 			ui.List(c, nil, len(a.routeList), func(i int) {
 				r := a.routeList[i]
 				host := r.Host
 				if host == "" {
 					host = "no host recorded"
 				}
-				ui.Row(c).RowWidth(440).Gap(t.Space(2)).Padding(4, 6).
+				// One line per route: the block, what it was learned for
+				// and how long ago.
+				ui.Row(c).RowWidth(444).Gap(t.Space(2)).Padding(7, 8).
 					BorderWidth(0, 0, 1, 0).BorderColor(t.Border).Children(func() {
-					ui.Column(c).Grow(1).Children(func() {
-						ui.Text(c, r.Cidr()).Font("monospace").FontSize(12)
-						ui.Text(c, host+" · "+routeAge(r.Seen)).
-							FontSize(11).TextColor(t.TextMuted)
-					})
-					ui.Button(c, "Remove").OnClick(func() { a.removeRoute(r.Base) })
+					ui.Text(c, r.Cidr()).Font("monospace").FontSize(12).Width(150)
+					ui.Text(c, host+" · "+routeAge(r.Seen)).
+						FontSize(11).TextColor(t.TextMuted).Grow(1)
+					// A quiet button: the route is removed with it, so it
+					// says what it does and stays out of the way.
+					ui.ButtonBase(c).Label("Remove").Tooltip("Remove this route").
+						Padding(4, 8).
+						Children(func() {
+							ui.Text(c, "Remove").FontSize(12).TextColor(t.TextMuted)
+						}).
+						OnClick(func() { a.removeRoute(r.Base) })
 				})
-			}).RowWidth(440).Grow(1).Children(func() {
+			}).RowWidth(444).Grow(1).Children(func() {
 				if len(a.routeList) == 0 {
 					ui.Text(c, "No learned routes yet").TextColor(t.TextMuted).Padding(12)
 				}
 			})
 			ui.Row(c).Gap(t.Space(2)).Children(func() {
 				ui.TextInput(c, &a.routeInput).Placeholder("1.2.3.0/24").Grow(1)
-				ui.Button(c, "Add").OnClick(a.addRoute)
+				ui.Button(c, "Add").Height(32).OnClick(a.addRoute)
 			})
 			ui.Row(c).Justify(ui.End).Gap(t.Space(2)).Children(func() {
-				ui.Button(c, "Clear all").Disabled(len(a.routeList) == 0).
+				ui.Button(c, "Clear all").Height(32).Disabled(len(a.routeList) == 0).
 					OnClick(a.clearRoutes)
-				ui.PrimaryButton(c, "Close").OnClick(a.closeRoutes)
+				ui.PrimaryButton(c, "Close").Height(32).OnClick(a.closeRoutes)
 			})
 			noteLine(c, t, a.routesNote)
 		})
@@ -330,14 +333,13 @@ func (a *app) diagnosticsPanel(c *ui.Context) {
 	ui.Themed(c, t).Fill().Children(func() {
 		ui.Column(c).Grow(1).Padding(t.Space(4)).Gap(t.Space(2)).Children(func() {
 			ui.Row(c).AlignItems(ui.Baseline).Gap(t.Space(2)).Children(func() {
-				ui.Text(c, "Diagnostics").FontSize(18).Bold()
+				ui.Text(c, "What the app needs to connect, and whether the local "+
+					"proxies carry traffic through the campus.").
+					FontSize(12).TextColor(t.TextMuted)
 				if a.diagRunning {
 					ui.Text(c, "running...").FontSize(12).TextColor(t.TextMuted)
 				}
 			})
-			ui.Text(c, "What the app needs to connect, and whether the local "+
-				"proxies carry traffic through the campus.").
-				FontSize(12).TextColor(t.TextMuted)
 			ui.List(c, nil, len(a.diagResults), func(i int) {
 				r := a.diagResults[i]
 				color, mark := t.Text, "OK"
@@ -375,7 +377,6 @@ func (a *app) settingsPanel(c *ui.Context) {
 	t := a.theme(c)
 	ui.Themed(c, t).Fill().Children(func() {
 		ui.Column(c).Grow(1).Padding(t.Space(4)).Gap(t.Space(2)).Children(func() {
-			ui.Text(c, "Settings").FontSize(18).Bold()
 			ui.Text(c, "The advanced options are written to hku.env and "+
 				"apply to the next connect.").FontSize(12).TextColor(t.TextMuted)
 			ui.Scroll(c).Grow(1).Children(func() {
