@@ -25,12 +25,18 @@ func main() {
 
 	mygo.App.WhenReady(func() {
 		win = mygo.NewWindow(mygo.WindowOptions{
-			Title:     "HKU VPN",
-			Width:     480,
-			Height:    600,
-			MinWidth:  440,
-			MinHeight: 540,
-			Content:   ui.View(a.view),
+			Title: "HKU VPN",
+			// The window has one size: the app has little to show, and
+			// a window that cannot grow has no empty space in it. The
+			// size is the page area, the title bar is added on top.
+			Width:          452,
+			Height:         344,
+			UseContentSize: true,
+			// No resizing, and no maximize button: the window is the
+			// size it needs.
+			DisableResize:   true,
+			DisableMaximize: true,
+			Content:         ui.View(a.view),
 		})
 		// The app carries no icon: a fully transparent image keeps the title
 		// bar and the taskbar button blank.

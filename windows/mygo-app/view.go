@@ -52,57 +52,52 @@ func (a *app) view(c *ui.Context) {
 
 	ui.Themed(c, t).Fill().Children(func() {
 		ui.Scroll(c).Fill().Children(func() {
-			ui.Column(c).Padding(24).Gap(16).Children(func() {
+			ui.Column(c).Padding(t.Space(4)).Gap(t.Space(3)).Children(func() {
 
-				// Header.
-				ui.Column(c).Gap(3).Children(func() {
-					ui.Text(c, "HKU VPN").FontSize(22).Bold()
-					ui.Text(c, "HKU Portal VPN · vpn2fa.hku.hk").TextColor(t.TextMuted)
-				})
-
-				// Status card.
-				ui.Column(c).Padding(16).Gap(10).Radius(12).
+				// The state of the session, in one card: what it is, how
+				// long it has been up, the address of the tunnel and the
+				// local proxies.
+				ui.Column(c).Padding(t.Space(3)).Gap(t.Space(2)).Radius(10).
 					Background(t.Surface).Border(1, t.Border).Children(func() {
-					ui.Row(c).AlignItems(ui.Center).Gap(8).Children(func() {
+					ui.Row(c).AlignItems(ui.Center).Gap(t.Space(2)).Children(func() {
 						ui.Box(c).Size(10, 10).Radius(5).Background(a.statusColor)
 						ui.Text(c, a.statusText).Bold()
+						if a.statusNote != "" {
+							ui.Text(c, a.statusNote).TextColor(t.TextMuted)
+						}
 						ui.Spacer(c)
 						ui.Text(c, a.duration).Font("monospace").TextColor(t.TextMuted)
 					})
-					if a.headlineMuted {
-						ui.Text(c, a.headline).FontSize(17).TextColor(t.TextMuted)
-					} else {
-						// The big number is the tunnel adapter address, not
-						// the public IP: label it so it reads at a glance.
-						ui.Row(c).AlignItems(ui.Baseline).Gap(10).Children(func() {
-							ui.Text(c, "VPN address").FontSize(13).TextColor(t.TextMuted)
-							ui.Text(c, a.headline).FontSize(26).Bold()
-						})
-					}
+					// The tunnel address is the adapter address, not the
+					// public IP: label it so it reads at a glance.
+					detailRow(c, t, "VPN address", a.address)
 					detailRow(c, t, "Proxy", fmt.Sprintf("socks5://127.0.0.1:%d · http://127.0.0.1:%d",
 						a.settings.SocksPort, a.settings.HttpPort))
 					detailRow(c, t, "Routes", a.routes)
 				})
 
-				// Credentials: editing persists them automatically.
-				ui.Field(c, "HKU account", func() {
-					ui.TextInput(c, &a.account).
-						Placeholder("u1234567@connect.hku.hk").
-						OnChange(a.credentialsEdited)
-				})
-				ui.Field(c, "Portal PIN", func() {
-					ui.TextInput(c, &a.pin).
-						Password().
-						Placeholder("Portal password").
-						OnChange(a.credentialsEdited)
+				// The credentials, in a form: the labels sit beside the
+				// fields, so the window keeps its room for what matters.
+				ui.Form(c, func() {
+					ui.Field(c, "HKU account", func() {
+						ui.TextInput(c, &a.account).
+							Placeholder("u1234567@connect.hku.hk").
+							OnChange(a.credentialsEdited)
+					})
+					ui.Field(c, "Portal PIN", func() {
+						ui.TextInput(c, &a.pin).
+							Password().
+							Placeholder("Portal password").
+							OnChange(a.credentialsEdited)
+					})
 				})
 
-				// Primary action.
+				// The main action.
 				a.primaryAction(c, t)
 
 				// The panels, as a row of icons: each one names itself in
 				// a tip when the pointer rests on it.
-				ui.Row(c).Gap(8).Children(func() {
+				ui.Row(c).Gap(t.Space(2)).Children(func() {
 					ui.Spacer(c)
 					iconButton(c, iconLog, "View log", a.openLog)
 					iconButton(c, iconDiagnostics, "Diagnostics", a.openDiagnostics)
@@ -124,17 +119,17 @@ func (a *app) view(c *ui.Context) {
 // so does the label, for the screen readers that do not see the icon.
 func iconButton(c *ui.Context, icon *ui.SVG, label string, action func()) {
 	ui.Button(c, "").Label(label).Tooltip(label).
-		Width(38).Height(34).
+		Width(40).Height(36).
 		Children(func() {
-			ui.Icon(c, icon).FontSize(18)
+			ui.Icon(c, icon).FontSize(19)
 		}).
 		OnClick(action)
 }
 
 func detailRow(c *ui.Context, t *ui.Theme, label, value string) {
-	ui.Row(c).Gap(12).Children(func() {
-		ui.Text(c, label).TextColor(t.TextMuted).Width(56)
-		ui.Text(c, value).TextColor(t.TextMuted).Grow(1)
+	ui.Row(c).Gap(t.Space(3)).Children(func() {
+		ui.Text(c, label).TextColor(t.TextMuted).Width(92)
+		ui.Text(c, value).Grow(1)
 	})
 }
 
@@ -144,12 +139,16 @@ func (a *app) primaryAction(c *ui.Context, t *ui.Theme) {
 	case connecting:
 		if a.mfaPending {
 			// The worker waits for the code: offer it again after the
-			// dialog was closed.
-			ui.PrimaryButton(c, "Enter the code").FillWidth().Height(38).
-				OnClick(func() { a.mfaOpen = true })
-			ui.Button(c, "Cancel").FillWidth().Height(34).
-				TextColor(t.Danger).Border(1, t.Danger).
-				OnClick(a.cancel)
+			// dialog was closed, beside the cancel button, so the window
+			// keeps its size.
+			ui.Row(c).Gap(t.Space(2)).Children(func() {
+				ui.PrimaryButton(c, "Enter the code").Grow(1).Height(38).
+					OnClick(func() { a.mfaOpen = true })
+				ui.Button(c, "Cancel").Width(120).Height(38).
+					TextColor(t.Danger).Border(1, t.Danger).
+					Tooltip("Give up this attempt (Ctrl+Enter)").
+					OnClick(a.cancel)
+			})
 			return
 		}
 		ui.Button(c, "Cancel").FillWidth().Height(38).
@@ -171,23 +170,29 @@ func (a *app) primaryAction(c *ui.Context, t *ui.Theme) {
 
 func (a *app) mfaDialog(c *ui.Context, t *ui.Theme) {
 	dialog := ui.Modal(c, &a.mfaOpen, func() {
-		ui.Text(c, "Verification code").FontSize(18).Bold()
-		ui.Text(c, "Enter the 6-digit code from Microsoft Authenticator.").
-			TextColor(t.TextMuted)
-		if a.mfaNote != "" {
-			ui.Text(c, a.mfaNote).TextColor(t.Danger)
-		}
-		ui.TextInput(c, &a.mfaCode).
-			Placeholder("000000").
-			AutoFocus().
-			Font("monospace").
-			FontSize(20).
-			Width(200).
-			OnSubmit(a.submitMFA)
-		ui.Row(c).Justify(ui.End).Gap(8).Children(func() {
-			ui.PrimaryButton(c, "Submit").OnClick(a.submitMFA)
+		ui.Column(c).Width(320).Gap(t.Space(2)).Children(func() {
+			ui.Text(c, "Verification code").FontSize(18).Bold()
+			ui.Text(c, "Enter the 6-digit code from Microsoft Authenticator.").
+				TextColor(t.TextMuted)
+			if a.mfaNote != "" {
+				ui.Text(c, a.mfaNote).TextColor(t.Danger)
+			}
+			// The code is a number: it is shown in a fixed-width font,
+			// centered, so a mistyped digit stands out.
+			ui.TextInput(c, &a.mfaCode).
+				Placeholder("000000").
+				AutoFocus().
+				Font("monospace").
+				FontSize(22).
+				TextAlign(ui.Center).
+				FillWidth().
+				OnSubmit(a.submitMFA)
+			ui.Text(c, "The code is good for about 30 seconds.").
+				FontSize(12).TextColor(t.TextMuted)
+			ui.Row(c).Justify(ui.End).Gap(t.Space(2)).Children(func() {
+				ui.PrimaryButton(c, "Submit").OnClick(a.submitMFA)
+			})
 		})
-		ui.Text(c, "Enter to submit · Esc closes").FontSize(12).TextColor(t.TextMuted)
 	})
 	// Escape or a click outside closes the dialog, it does not kill the
 	// session: the worker keeps waiting for the code and the main window

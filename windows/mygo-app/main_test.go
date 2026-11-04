@@ -15,7 +15,7 @@ func TestViewShowsTheDisconnectedState(t *testing.T) {
 	a := newApp()
 	tt := ui.NewTester(a.view, 480, 600)
 
-	for _, want := range []string{"HKU VPN", "Disconnected", "Not connected", "Connect", "View log"} {
+	for _, want := range []string{"Disconnected", "VPN address", "Proxy", "Routes", "Connect", "HKU account", "Portal PIN"} {
 		if !tt.HasText(want) {
 			t.Errorf("missing text %q", want)
 		}

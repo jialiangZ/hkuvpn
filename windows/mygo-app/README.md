@@ -7,6 +7,14 @@ frontends: `windows/bin/hkuvpn.ps1 --Worker` / `--stop`, with the
 protocol files under `%TEMP%\hkuvpn` (markers.log, hb.log, pids.txt,
 vpnc-state.txt, response.txt, stop.flag).
 
+## The window
+
+One size, no resizing: the app has little to show, and a window that
+cannot grow has no empty space in it (`DisableResize` and
+`DisableMaximize` in the window options). The layout is built from the
+theme's own spacing (`t.Space(n)`), so it stays in step with the
+official widgets.
+
 ## Build
 
     ./build.sh          # GOOS=windows go build -> publish/HKUVPN.exe

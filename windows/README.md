@@ -151,7 +151,8 @@ Three long-session modes, by scenario (plus a tray app):
   learned routes, added and removed by hand), a Settings panel (the
   advanced options of `hku.env`, start with Windows, reconnect) and an MFA
   dialog, plus close-to-tray. The panels are a row of icons under the
-  window, each with a tip. Built with Go alone (`GOOS=windows go build`, no cgo, no
+  window, each with a tip. The window has one size: it cannot be
+  resized and has no maximize button. Built with Go alone (`GOOS=windows go build`, no cgo, no
   webview) - see `windows\mygo-app\build.sh`. The exe is built as a GUI
   app (`-H=windowsgui`), so it never opens a terminal window; its own
   diagnostics go to `%TEMP%\hkuvpn\app.log`. The tray icon is a 4-state

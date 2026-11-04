@@ -63,14 +63,14 @@ type app struct {
 	reconnectTry  int
 
 	// Derived display values.
-	statusText    string
-	statusColor   ui.Color
-	headline      string
-	headlineMuted bool
-	duration      string
-	routes        string
-	workerOK      bool
-	hbOK          bool
+	statusText  string
+	statusColor ui.Color
+	statusNote  string
+	address     string
+	duration    string
+	routes      string
+	workerOK    bool
+	hbOK        bool
 
 	// Dialogs.
 	mfaOpen    bool
@@ -513,9 +513,9 @@ func (a *app) refreshStatus(now time.Time, alive, fresh bool) {
 	case idle:
 		a.statusText = "Disconnected"
 		a.statusColor = colorGray
-		a.headline = "Not connected"
-		a.headlineMuted = true
-		a.routes = "-"
+		a.statusNote = ""
+		a.address = "—"
+		a.routes = "—"
 		if !a.reconnectAt.IsZero() {
 			a.statusText = "Reconnecting"
 			a.statusColor = colorAmber
@@ -523,17 +523,17 @@ func (a *app) refreshStatus(now time.Time, alive, fresh bool) {
 			if secs < 1 {
 				secs = 1
 			}
-			a.headline = fmt.Sprintf("Reconnecting in %d s", secs)
+			a.statusNote = fmt.Sprintf("in %d s", secs)
 		}
 	case connecting:
 		a.statusText = "Connecting"
 		a.statusColor = colorAmber
-		a.headline = "Waiting for sign-in"
+		a.statusNote = "Waiting for sign-in"
 		if a.subOverride != "" {
-			a.headline = a.subOverride
+			a.statusNote = a.subOverride
 		}
-		a.headlineMuted = true
-		a.routes = "-"
+		a.address = "—"
+		a.routes = "—"
 	case connected:
 		if alive && fresh {
 			a.statusText = "Connected"
@@ -542,12 +542,11 @@ func (a *app) refreshStatus(now time.Time, alive, fresh bool) {
 			a.statusText = "Worker unresponsive"
 			a.statusColor = colorRed
 		}
-		if ip := stateValue("IP4"); ip != "" {
-			a.headline = ip
-		} else {
-			a.headline = "Connected"
+		a.statusNote = ""
+		a.address = stateValue("IP4")
+		if a.address == "" {
+			a.address = "—"
 		}
-		a.headlineMuted = false
 		if !a.connectedAt.IsZero() {
 			el := int(now.Sub(a.connectedAt).Seconds())
 			if el < 0 {

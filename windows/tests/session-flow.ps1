@@ -72,6 +72,13 @@ $StopFlag = Join-Path $TempBase 'stop.flag'
 $Status   = Join-Path $TempBase 'app-status.txt'
 $Wedge    = Join-Path $TempBase 'wedge-diagnostics.txt'
 
+# The full path of PowerShell: starting it elevated goes through the
+# shell, which does not look at the PATH of this process.
+$PowerShellExe = (Get-Command powershell.exe -ErrorAction SilentlyContinue).Source
+if (-not $PowerShellExe) {
+    $PowerShellExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+}
+
 $ResultFile = Join-Path $TempBase 'session-flow-result.txt'
 $script:Passed = 0
 $script:Failed = 0
@@ -299,7 +306,7 @@ function Start-App {
 
 function Start-WorkerElevated {
     $workerArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$Worker`"", '--Worker')
-    Start-Process -FilePath 'powershell.exe' -ArgumentList $workerArgs -Verb RunAs -WindowStyle Hidden | Out-Null
+    Start-Process -FilePath $PowerShellExe -ArgumentList $workerArgs -Verb RunAs -WindowStyle Hidden | Out-Null
 }
 
 function Request-Stop {
@@ -307,7 +314,7 @@ function Request-Stop {
     # flag behind, so a worker that is still starting sees it too.
     Set-Content -Path $StopFlag -Value 'stop' -NoNewline
     $stopArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$Worker`"", '--stop')
-    Start-Process -FilePath 'powershell.exe' -ArgumentList $stopArgs -WindowStyle Hidden | Out-Null
+    Start-Process -FilePath $PowerShellExe -ArgumentList $stopArgs -WindowStyle Hidden | Out-Null
 }
 
 function Clear-SessionFiles {
