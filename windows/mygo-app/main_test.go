@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -431,5 +432,31 @@ func TestAdoptionFollowsTheMarkers(t *testing.T) {
 	}
 	if got := decideAdoption(true, true, false, false); got != adoptConnecting {
 		t.Errorf("a worker on its way: %v", got)
+	}
+}
+
+// reg.exe says in the console's code page that a value is not there;
+// that is not an error when the user asked for it to go.
+func TestValueMissing(t *testing.T) {
+	if !valueMissing("ERROR: The system was unable to find the specified registry key or value.") {
+		t.Error("the English message was not recognized")
+	}
+	if !valueMissing("错误: 系统找不到指定的注册表项或值。") {
+		t.Error("the Chinese message was not recognized")
+	}
+	if valueMissing("ERROR: Access is denied.") {
+		t.Error("a real error was taken for a missing value")
+	}
+}
+
+// Deleting an autostart value that is not there is what the user asked
+// for, not a failure.
+func TestDeleteAutostartValueThatIsNotThere(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("the registry is Windows'")
+	}
+	name := "HKUVPN_TEST_VALUE_THAT_IS_NOT_THERE"
+	if err := deleteAutostartValue(runKey, name); err != nil {
+		t.Errorf("deleting a value that is not there failed: %v", err)
 	}
 }

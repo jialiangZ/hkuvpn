@@ -308,12 +308,7 @@ func autostartEnabled() bool {
 // with Windows.
 func setAutostart(enabled bool) error {
 	if !enabled {
-		out, err := exec.Command("reg.exe", "delete", runKey, "/v", runValue, "/f").CombinedOutput()
-		if err != nil && !strings.Contains(string(out), "cannot find") &&
-			!strings.Contains(string(out), "找不到") {
-			return fmt.Errorf("%s", strings.TrimSpace(string(out)))
-		}
-		return nil
+		return deleteAutostartValue(runKey, runValue)
 	}
 	exe, err := os.Executable()
 	if err != nil {
@@ -322,7 +317,31 @@ func setAutostart(enabled bool) error {
 	out, err := exec.Command("reg.exe", "add", runKey, "/v", runValue, "/t", "REG_SZ",
 		"/d", `"`+exe+`"`, "/f").CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("%s", strings.TrimSpace(string(out)))
+		return fmt.Errorf("%s", strings.TrimSpace(acpDecode(out)))
 	}
 	return nil
+}
+
+// deleteAutostartValue removes a value from the Run key. A value that is
+// not there is not an error: the state the user asked for is already the
+// state on disk.
+func deleteAutostartValue(key, name string) error {
+	out, err := exec.Command("reg.exe", "delete", key, "/v", name, "/f").CombinedOutput()
+	if err != nil && !valueMissing(acpDecode(out)) {
+		return fmt.Errorf("%s", strings.TrimSpace(acpDecode(out)))
+	}
+	return nil
+}
+
+// valueMissing says whether reg.exe only complained that the value is not
+// there, which is what deleting an absent value says - the state the user
+// asked for is already the state on disk. The message is in the console's
+// code page, so it is compared after decoding it.
+func valueMissing(msg string) bool {
+	m := strings.ToLower(msg)
+	return strings.Contains(m, "cannot find") ||
+		strings.Contains(m, "unable to find") ||
+		strings.Contains(m, "not found") ||
+		strings.Contains(m, "找不到") ||
+		strings.Contains(m, "无法找到")
 }
