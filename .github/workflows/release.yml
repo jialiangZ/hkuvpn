@@ -45,8 +45,10 @@ jobs:
       - name: Pack the bundle
         shell: pwsh
         run: |
+          # A file that fails to copy must fail the step: otherwise the
+          # archive is published half-empty and nobody notices.
+          $ErrorActionPreference = 'Stop'
           $tag = "${{ github.ref_name }}"
-          New-Item -ItemType Directory -Path bundle -Force | Out-Null
           New-Item -ItemType Directory -Path bundle/bin -Force | Out-Null
           New-Item -ItemType Directory -Path bundle/etc -Force | Out-Null
           New-Item -ItemType Directory -Path bundle/examples -Force | Out-Null
@@ -57,12 +59,45 @@ jobs:
           Copy-Item windows/examples/hku.env.example bundle/examples/
           Copy-Item windows/mygo-app/START-HERE.md bundle/
           Copy-Item windows/mygo-app/START-HERE.zh-CN.md bundle/
+
+          # The archive is written by hand, one entry at a time.
+          # Compress-Archive and the .NET Framework spell the paths with
+          # backslashes ("bin\hkuvpn.ps1"), which is not what the zip
+          # format says and which some extractors turn into files
+          # literally named "bin\hkuvpn.ps1". Forward slashes work
+          # everywhere.
+          Add-Type -AssemblyName System.IO.Compression
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
           $zip = "HKUVPN-windows-$tag.zip"
-          Compress-Archive -Path bundle/* -DestinationPath $zip
+          Remove-Item $zip -Force -ErrorAction SilentlyContinue
+          $fs = [IO.File]::Open($zip, [IO.FileMode]::Create)
+          $archive = New-Object IO.Compression.ZipArchive($fs, [IO.Compression.ZipArchiveMode]::Create)
+          # The entry name is the path relative to the bundle. The search
+          # is for "." because the working directory is the bundle
+          # itself: looking for "bundle" here would look for
+          # bundle\bundle and find nothing, and the archive would be
+          # published empty.
+          Push-Location bundle
+          foreach ($file in Get-ChildItem -Recurse -File .) {
+              $name = (Resolve-Path -Relative $file.FullName) -replace '^\.[\\/]', ''
+              $name = $name.Replace('\', '/')
+              [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $file.FullName, $name) | Out-Null
+          }
+          Pop-Location
+          $archive.Dispose()
+          $fs.Dispose()
+          # Verify what was actually written. The entry list of an archive
+          # in Create mode stays empty until it is closed, so it has to be
+          # reopened to be counted.
+          $check = [IO.Compression.ZipFile]::OpenRead($zip)
+          $count = $check.Entries.Count
+          $check.Dispose()
+          if ($count -lt 7) { throw "the archive has $count entries - something did not get copied" }
+
           # The hash next to the archive, so a student can check it.
           $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
           "$hash  $zip" | Out-File "$zip.sha256" -Encoding ascii
-          Write-Host "packed $zip"
+          Write-Host "packed $zip ($count entries)"
           Write-Host $hash
 
       - name: Attach the bundle to the release
@@ -70,6 +105,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $tag = "${{ github.ref_name }}"
           $assets = @("HKUVPN-windows-$tag.zip", "HKUVPN-windows-$tag.zip.sha256")
           $notes = @'
@@ -85,11 +121,18 @@ jobs:
 
           The Docker edition is unchanged - see the README.
           '@
-          if (gh release view $tag) {
+          # The check uses the exit code, not the output: a native
+          # command that fails throws under PowerShell 7's
+          # ErrorActionPreference, and "no such release" is the normal
+          # answer here, not an error.
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
             # The release is already there (it was made by hand, or by an
             # earlier run): upload the build without touching its notes.
             gh release upload $tag @assets --clobber
+            if ($LASTEXITCODE -ne 0) { throw "gh release upload failed" }
           } else {
             $notes | Out-File notes.md -Encoding utf8
             gh release create $tag --title "hkuvpn $tag" --notes-file notes.md @assets
+            if ($LASTEXITCODE -ne 0) { throw "gh release create failed" }
           }
