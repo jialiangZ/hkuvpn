@@ -19,11 +19,12 @@ jobs:
     name: Windows app
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: windows/mygo-app/go.mod
+          cache-dependency-path: windows/mygo-app/go.sum
 
       - name: Vet and test
         working-directory: windows/mygo-app
@@ -33,6 +34,9 @@ jobs:
 
       - name: Build the app
         working-directory: windows/mygo-app
+        env:
+          GOOS: windows
+          GOARCH: amd64
         run: >-
           go build -trimpath
           -ldflags "-s -w -H=windowsgui -X github.com/egoist/mygo.production=1"

@@ -25,11 +25,12 @@ jobs:
       run:
         working-directory: windows/mygo-app
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: windows/mygo-app/go.mod
+          cache-dependency-path: windows/mygo-app/go.sum
 
       - name: Vet
         run: go vet ./...
@@ -38,6 +39,13 @@ jobs:
         run: go test ./...
 
       - name: Build
+        # The app is a Windows program on every runner: GOOS=windows
+        # picks Go's own Windows linker, which is what understands
+        # -H=windowsgui. Without it the flag would switch the host
+        # linker to its mingw mode, and the native gcc would refuse.
+        env:
+          GOOS: windows
+          GOARCH: amd64
         run: >-
           go build -trimpath
           -ldflags "-s -w -H=windowsgui -X github.com/egoist/mygo.production=1"
