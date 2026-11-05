@@ -224,7 +224,23 @@ func (a *app) connect() {
 	}
 	if workerAlive() {
 		if heartbeatFresh() {
-			a.setState(connected)
+			// A worker that is alive and fresh is not necessarily a session
+			// that came up: the one waiting for the MFA code also beats its
+			// heart. Claiming "connected" then would close the door on the
+			// code - the dialog never reopens and the session dies waiting.
+			// Only a session that reported the tunnel up is connected.
+			if markerContains("HKUVPN_CONNECTED") {
+				a.setState(connected)
+				return
+			}
+			// It is on its way (or waiting for the code): adopt it as
+			// connecting, and bring the dialog back if it asks for a code.
+			a.connectAt = time.Now()
+			a.setState(connecting)
+			if markerContains("HKUVPN_MFA_RESPONSE_REQUIRED") {
+				a.mfaPending = true
+				a.mfaOpen = true
+			}
 			return
 		}
 		// A wedged leftover would make the UI claim a session that is not

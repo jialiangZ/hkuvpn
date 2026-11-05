@@ -524,3 +524,42 @@ func TestRotateAppLog(t *testing.T) {
 		t.Error("a generation too many was kept")
 	}
 }
+
+// connectAdopted says what connect() makes of a worker it finds alive:
+// only a session that reported the tunnel up is connected - a worker
+// waiting for the MFA code beats its heart too, and claiming "connected"
+// for it would close the door on the code.
+func connectAdopted(alive, fresh, tunnelUp, codeAsked bool) string {
+	if !alive {
+		return "start"
+	}
+	if !fresh {
+		return "stale"
+	}
+	if tunnelUp {
+		return "connected"
+	}
+	if codeAsked {
+		return "adopt-waiting-for-code"
+	}
+	return "adopt-connecting"
+}
+
+func TestConnectAdopted(t *testing.T) {
+	cases := []struct {
+		alive, fresh, up, code bool
+		want                   string
+	}{
+		{false, false, false, false, "start"},               // nothing running
+		{true, false, false, false, "stale"},                // wedged leftover
+		{true, true, true, false, "connected"},              // tunnel really up
+		{true, true, false, true, "adopt-waiting-for-code"}, // MFA wait: NOT connected
+		{true, true, false, false, "adopt-connecting"},      // still on its way
+	}
+	for _, c := range cases {
+		if got := connectAdopted(c.alive, c.fresh, c.up, c.code); got != c.want {
+			t.Errorf("alive=%v fresh=%v up=%v code=%v: got %q, want %q",
+				c.alive, c.fresh, c.up, c.code, got, c.want)
+		}
+	}
+}
