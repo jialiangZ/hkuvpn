@@ -58,6 +58,7 @@ type app struct {
 	cancelling    bool
 	cancelAt      time.Time
 	connectAt     time.Time
+	workerSeen    bool
 	mfaShown      bool
 	reconnectAt   time.Time
 	reconnectTry  int
@@ -281,6 +282,9 @@ func (a *app) connect() {
 	// A new session starts its timer over.
 	a.prefs.SessionStart = time.Time{}
 	_ = saveAppState(a.prefs)
+	// The worker has not been seen yet: the UAC prompt can sit in front of
+	// the user for any length of time before the worker even exists.
+	a.workerSeen = false
 	// The worker starts a fresh log for every session: read it from the top
 	// the next time the log window opens.
 	a.logLoaded = false
@@ -389,11 +393,37 @@ func (a *app) tick(now time.Time) {
 	}
 	// The worker stopped before the tunnel came up. The marker is the
 	// normal way to hear it; the clock covers a worker that died without
-	// writing one (the grace period covers its slow start).
-	if a.state == connecting && !alive && !a.cancelling {
-		if markerContains("HKUVPN_EXITED") || now.Sub(a.connectAt) > 20*time.Second {
-			a.setState(idle)
-			a.say("The worker stopped before the tunnel came up - see the log.", true)
+	// writing one. The clock only starts counting down once the worker has
+	// been seen: before that it is the UAC prompt that is waiting for the
+	// user, and that can take any amount of time. Giving up while the
+	// prompt is still up orphans the worker that starts afterwards - it
+	// asks for a code nobody will deliver.
+	if a.state == connecting && alive {
+		a.workerSeen = true
+	}
+	if a.state == connecting && !alive && !a.cancelling &&
+		giveUpConnecting(a.workerSeen, markerContains("HKUVPN_EXITED"),
+			now.Sub(a.connectAt)) {
+		a.setState(idle)
+		a.say("The worker stopped before the tunnel came up - see the log.", true)
+	}
+	// A worker that came up while the app was not looking for it - the
+	// connect attempt timed out during the UAC prompt and the user
+	// approved it afterwards. Adopt what is there instead of leaving the
+	// worker waiting for a code nobody will type.
+	if a.state == idle && alive && fresh && !a.cancelling && !a.disconnecting {
+		switch idleAdoption(markerContains("HKUVPN_CONNECTED"),
+			markerContains("HKUVPN_MFA_RESPONSE_REQUIRED"),
+			markerContains("HKUVPN_EXITED")) {
+		case idleAdoptConnected:
+			a.markedConnected(now)
+			a.setState(connected)
+		case idleAdoptWaitingForCode:
+			a.connectAt = now
+			a.workerSeen = true
+			a.mfaPending = true
+			a.mfaOpen = true
+			a.setState(connecting)
 		}
 	}
 	// A dropped session comes back on its own when the user asked for that.
@@ -533,6 +563,44 @@ func cancelOutcome(cancelling, alive bool, elapsed time.Duration) int {
 		return cancelTimedOut
 	}
 	return cancelNone
+}
+
+// giveUpConnecting says whether a connect attempt that has not produced a
+// tunnel is over. Once the worker has been seen, a short grace covers one
+// that died without writing a marker; before that the wait is the UAC
+// prompt in front of the user, which has no natural limit.
+func giveUpConnecting(workerSeen, exitedMarker bool, elapsed time.Duration) bool {
+	if exitedMarker {
+		return true
+	}
+	if workerSeen {
+		return elapsed > 20*time.Second
+	}
+	return elapsed > 90*time.Second
+}
+
+// What the app makes of a live worker it finds while idle.
+const (
+	idleAdoptNone = iota
+	idleAdoptConnected
+	idleAdoptWaitingForCode
+)
+
+// idleAdoption says what the app does with a worker that turned up while it
+// was idle: adopt a session that came up, adopt one that waits for the code,
+// or nothing (the worker is tearing down, or says nothing yet).
+func idleAdoption(connected, codeAsked, exited bool) int {
+	if exited {
+		return idleAdoptNone
+	}
+	switch {
+	case connected:
+		return idleAdoptConnected
+	case codeAsked:
+		return idleAdoptWaitingForCode
+	default:
+		return idleAdoptNone
+	}
 }
 
 // markedConnected remembers when the session started, so the timer keeps

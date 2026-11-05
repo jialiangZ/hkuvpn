@@ -563,3 +563,43 @@ func TestConnectAdopted(t *testing.T) {
 		}
 	}
 }
+
+func TestGiveUpConnecting(t *testing.T) {
+	cases := []struct {
+		seen, exited bool
+		elapsed      time.Duration
+		want         bool
+	}{
+		{false, false, 30 * time.Second, false}, // UAC still in front of the user
+		{false, false, 89 * time.Second, false}, // ... however long it takes
+		{false, false, 91 * time.Second, true},  // nothing ever started
+		{true, false, 10 * time.Second, false},  // worker seen, still starting
+		{true, false, 21 * time.Second, true},   // seen and gone without a word
+		{true, true, time.Second, true},         // it said it exited
+		{false, true, time.Second, true},
+	}
+	for _, c := range cases {
+		if got := giveUpConnecting(c.seen, c.exited, c.elapsed); got != c.want {
+			t.Errorf("seen=%v exited=%v elapsed=%v: got %v, want %v",
+				c.seen, c.exited, c.elapsed, got, c.want)
+		}
+	}
+}
+
+func TestIdleAdoption(t *testing.T) {
+	if idleAdoption(true, false, false) != idleAdoptConnected {
+		t.Error("a session that came up is adopted as connected")
+	}
+	if idleAdoption(false, true, false) != idleAdoptWaitingForCode {
+		t.Error("a worker waiting for the code is adopted, not ignored")
+	}
+	if idleAdoption(false, false, false) != idleAdoptNone {
+		t.Error("a worker that says nothing is left alone")
+	}
+	if idleAdoption(true, true, true) != idleAdoptNone {
+		t.Error("an exited worker is never adopted, whatever else it said")
+	}
+	if idleAdoption(false, true, true) != idleAdoptNone {
+		t.Error("a finished session is not adopted back")
+	}
+}
