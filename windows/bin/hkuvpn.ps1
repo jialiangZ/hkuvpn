@@ -1070,7 +1070,7 @@ function Initialize-ConnectConfig {
         Gost         = $gost
         SocksPort    = 1080
         HttpPort     = 1088
-        NoDtls       = ([string]$envMap['HKU_DTLS'] -eq '0')
+        NoDtls       = ([string]$envMap['HKU_DTLS'] -ne '1')
         ResolveArgs  = $resolveArgs
         ServerCert   = $serverCert
         ExtraRoutes  = [string]$envMap['HKU_EXTRA_ROUTES']

@@ -570,12 +570,13 @@ handles UDP (node/policy switch) is a common trigger inside WSL. Fix:
 
 ```bash
 hkuvpn --stop
-# add HKU_DTLS=0 to ~/.vpn/hku.env (or run: HKU_DTLS=0 hkuvpn) and reconnect
+# TCP is the default; if you had enabled DTLS, remove that HKU_DTLS=1
+# line from ~/.vpn/hku.env (or run: HKU_DTLS=0 hkuvpn) and reconnect
 ```
 
-This forces all data over the CSTP/TCP channel (`--no-dtls`). Interactive
-SSH use is unaffected by the speed trade-off; restore the default when you
-need bulk throughput again.
+This keeps all data on the CSTP/TCP channel (`--no-dtls`). Interactive
+SSH use is unaffected by the speed trade-off; set `HKU_DTLS=1` again only
+on a path with clean UDP, where it cuts round-trips to about a quarter.
 
 ### Security
 

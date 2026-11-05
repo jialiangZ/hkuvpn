@@ -251,14 +251,14 @@ HTTP `127.0.0.1:1088`, and point Clash Verge / Surge at them with the same
   still work** — the UDP data channel (DTLS) is being throttled on your
   path. Cross-border links often treat UDP — especially UDP/443 — much
   worse than TCP; measure it with `ping -n 100 <campus-host>` through the
-  tunnel. On such a network set `HKU_DTLS=0` in `%USERPROFILE%\.vpn\hku.env`
-  to force everything over the TCP channel: round-trips roughly quadruple
-  (measured 192 ms against 44 ms with DTLS on a good path) but the session
-  is stable. On a network with a clean UDP path (on campus, for example),
-  leave DTLS on — the worker caps the tunnel MTU at what DTLS carries, so
-  big transfers no longer stall.
-- **Session freezes (no keepalives)** — same fix: `HKU_DTLS=0` in
-  `%USERPROFILE%\.vpn\hku.env`, same as the Docker edition.
+  tunnel. DTLS is off by default for exactly this reason; leave it that
+  way unless your path is clean. On a network with clean UDP (inside Hong
+  Kong, for example) set `HKU_DTLS=1` in `%USERPROFILE%\.vpn\hku.env`:
+  round-trips drop to roughly a quarter (measured 44 ms against 192 ms),
+  and the worker caps the tunnel MTU at what DTLS carries, so big
+  transfers no longer stall.
+- **Session freezes (no keepalives)** — same cause and same answer: stay
+  on the default TCP channel (no `HKU_DTLS` line at all, or `HKU_DTLS=0`).
 - **Stale routes after a crash** — run `hkuvpn --stop` (it replays the
   disconnect script and removes the NRPT rule), or check `route print`.
   A gost orphan holding 1080/1088 is reaped automatically at the next

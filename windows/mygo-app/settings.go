@@ -30,7 +30,7 @@ func defaultSettings() settings {
 	return settings{
 		SocksPort:   1080,
 		HttpPort:    1088,
-		DTLS:        true,
+		DTLS:        false,
 		NRPT:        true,
 		NRPTDomains: "hku.hk",
 		AutoRoutes:  true,
@@ -77,7 +77,7 @@ func loadSettings() settings {
 	if v, err := strconv.Atoi(m["HKU_HTTP_PORT"]); err == nil && v > 0 && v < 65536 {
 		s.HttpPort = v
 	}
-	s.DTLS = m["HKU_DTLS"] != "0"
+	s.DTLS = m["HKU_DTLS"] == "1"
 	s.NRPT = m["HKU_NRPT"] != "0"
 	if v := strings.TrimSpace(m["HKU_NRPT_DOMAINS"]); v != "" {
 		s.NRPTDomains = v
@@ -154,13 +154,22 @@ func saveSettings(s settings) error {
 		"HKU_EXTRA_ROUTES":       s.ExtraRoutes,
 		"HKU_NRPT_DOMAINS":       s.NRPTDomains,
 	}
-	if !s.DTLS {
-		values["HKU_DTLS"] = "0"
+	// The switches must always be written, one way or the other: leaving a
+	// key out keeps whatever line the file already has, so a switch that
+	// goes back to its default would be pinned by the stale line.
+	if s.DTLS {
+		values["HKU_DTLS"] = "1"
+	} else {
+		values["HKU_DTLS"] = "" // unset: absent means the default (TCP)
 	}
-	if !s.NRPT {
+	if s.NRPT {
+		values["HKU_NRPT"] = "" // unset: absent means the default (on)
+	} else {
 		values["HKU_NRPT"] = "0"
 	}
-	if !s.AutoRoutes {
+	if s.AutoRoutes {
+		values["HKU_AUTO_ROUTES"] = ""
+	} else {
 		values["HKU_AUTO_ROUTES"] = "0"
 	}
 	return setEnvValues(values)

@@ -224,8 +224,8 @@ show_status() {
     if ! docker logs --since 150s "$CONTAINER_NAME" 2>&1 \
         | grep -qE 'Keepalive|DPD'; then
         echo "           the session looks frozen (no keepalives for 150s) - a dead"
-        echo "           DTLS/UDP path can wedge it. Stop, then reconnect with:"
-        echo "           HKU_DTLS=0 hkuvpn   (or set HKU_DTLS=0 in ~/.vpn/hku.env)"
+        echo "           DTLS/UDP path can wedge it. TCP is the default; if you"
+        echo "           enabled DTLS (HKU_DTLS=1), remove it and reconnect"
     fi
     return 5
 }
@@ -543,7 +543,7 @@ docker_args=(
 if [[ -n "$resolve_spec" ]]; then
     docker_args+=(-e "OC_RESOLVE=$resolve_spec")
 fi
-if [[ "${HKU_DTLS:-1}" == "0" ]]; then
+if [[ "${HKU_DTLS:-0}" != "1" ]]; then
     docker_args+=(-e OC_NO_DTLS=1)
 fi
 

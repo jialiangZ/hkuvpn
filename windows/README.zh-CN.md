@@ -151,13 +151,13 @@ hkuvpn --stop       # 停止（活跃 worker 自清理，免 UAC；死会话强�
   `route print -4` 可查看全部已装路由。
 - **传大文件卡死、交互式会话挂起，但短命令正常** —— UDP 数据通道（DTLS）在你
   的线路上被限速了。跨境链路对 UDP（尤其 UDP/443）的待遇往往远差于 TCP；可以用
-  `ping -n 100 <校园主机>` 经隧道测一下丢包。这种网络请在
-  `%USERPROFILE%\.vpn\hku.env` 设置 `HKU_DTLS=0`，强制全部走 TCP 通道：
-  延迟约变为四倍（实测 DTLS 好线路 44 ms vs TCP 192 ms），但会话稳定。
-  UDP 质量好的网络（如校内）请保持 DTLS 开启——worker 现在会把隧道 MTU
-  压到 DTLS 实际承载值，大传输不再卡死。
-- **会话冻结（无 keepalive）** —— 同上：在 `%USERPROFILE%\.vpn\hku.env` 设置
-  `HKU_DTLS=0`，与 Docker 版相同。
+  `ping -n 100 <校园主机>` 经隧道测一下丢包。DTLS 默认关闭正是为此——除非你的
+  线路很干净，否则保持默认。UDP 质量好的网络（如在香港境内）可在
+  `%USERPROFILE%\.vpn\hku.env` 设置 `HKU_DTLS=1`：往返延迟降到约四分之一
+  （实测 44 ms vs 192 ms），且 worker 会把隧道 MTU 压到 DTLS 实际承载值，
+  大传输不会卡死。
+- **会话冻结（无 keepalive）** —— 同因同解：保持默认 TCP 通道即可
+  （不写 `HKU_DTLS` 行，或写 `HKU_DTLS=0`）。
 - **异常退出后路由残留** —— 运行 `hkuvpn --stop`（会重放 disconnect 脚本
   并删除 NRPT 规则），或用 `route print` 检查。若 gost 孤儿进程占着
   1080/1088，下次连接会自动回收（`HKUVPN_ORPHAN_GOST_REAPED`）。

@@ -603,3 +603,37 @@ func TestIdleAdoption(t *testing.T) {
 		t.Error("a finished session is not adopted back")
 	}
 }
+
+// DTLS is off unless the env file says "1": the cross-border UDP path most
+// users sit on throttles the data channel into a stall, so TCP ships as
+// the default. And a switch that goes back to its default must not be
+// pinned by a stale line from before.
+func TestDtlsDefaultsToTcp(t *testing.T) {
+	dir := isolatedConfig(t)
+	write := func(body string) {
+		if err := os.WriteFile(filepath.Join(dir, "hku.env"), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("HKU_USER=u1@connect.hku.hk\n")
+	if loadSettings().DTLS {
+		t.Error("an absent HKU_DTLS must mean TCP")
+	}
+	write("HKU_USER=u1@connect.hku.hk\nHKU_DTLS=0\n")
+	if loadSettings().DTLS {
+		t.Error("HKU_DTLS=0 must mean TCP")
+	}
+	write("HKU_USER=u1@connect.hku.hk\nHKU_DTLS=1\n")
+	if !loadSettings().DTLS {
+		t.Error("HKU_DTLS=1 must mean DTLS")
+	}
+	// Flipping the switch back off must clear the line, not leave it.
+	s := loadSettings()
+	s.DTLS = false
+	if err := saveSettings(s); err != nil {
+		t.Fatal(err)
+	}
+	if loadSettings().DTLS {
+		t.Error("a stale HKU_DTLS=1 survived turning the switch off")
+	}
+}

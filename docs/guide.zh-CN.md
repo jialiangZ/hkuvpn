@@ -427,10 +427,11 @@ ssh -G campus-host | grep -E 'proxycommand|hostname|port'
 
 ```bash
 hkuvpn --stop
-# 在 ~/.vpn/hku.env 加 HKU_DTLS=0（或临时 HKU_DTLS=0 hkuvpn），强制走 TCP 通道后重连
+# TCP 本来就是默认；如果你开过 DTLS，删掉 ~/.vpn/hku.env 里的 HKU_DTLS=1
+# （或临时 HKU_DTLS=0 hkuvpn），重连
 ```
 
-SSH 等交互场景不受 TCP 通道的速度影响；需要大吞吐时再改回 DTLS 默认值。
+SSH 等交互场景不受 TCP 通道的速度影响；只有在 UDP 干净的线路上再设 `HKU_DTLS=1`——那能把往返延迟降到约四分之一。
 
 ### 安全说明
 
