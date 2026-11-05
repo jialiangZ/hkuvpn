@@ -149,7 +149,14 @@ hkuvpn --stop       # 停止（活跃 worker 自清理，免 UAC；死会话强�
   学习的路由）会经过 VPN。新校外资源的第一次请求会触发学习（看
   `%TEMP%\hkuvpn\markers.log` 里的 `HKUVPN_ROUTE_ADDED`），重试一次即走隧道。
   `route print -4` 可查看全部已装路由。
-- **会话冻结（无 keepalive）** —— 在 `%USERPROFILE%\.vpn\hku.env` 设置
+- **传大文件卡死、交互式会话挂起，但短命令正常** —— UDP 数据通道（DTLS）在你
+  的线路上被限速了。跨境链路对 UDP（尤其 UDP/443）的待遇往往远差于 TCP；可以用
+  `ping -n 100 <校园主机>` 经隧道测一下丢包。这种网络请在
+  `%USERPROFILE%\.vpn\hku.env` 设置 `HKU_DTLS=0`，强制全部走 TCP 通道：
+  延迟约变为四倍（实测 DTLS 好线路 44 ms vs TCP 192 ms），但会话稳定。
+  UDP 质量好的网络（如校内）请保持 DTLS 开启——worker 现在会把隧道 MTU
+  压到 DTLS 实际承载值，大传输不再卡死。
+- **会话冻结（无 keepalive）** —— 同上：在 `%USERPROFILE%\.vpn\hku.env` 设置
   `HKU_DTLS=0`，与 Docker 版相同。
 - **异常退出后路由残留** —— 运行 `hkuvpn --stop`（会重放 disconnect 脚本
   并删除 NRPT 规则），或用 `route print` 检查。若 gost 孤儿进程占着
