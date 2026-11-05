@@ -388,43 +388,43 @@ func (a *app) settingsPanel(c *ui.Context) {
 						ui.Field(c, "VPN endpoint", func() {
 							ui.TextInput(c, &a.settingsForm.Endpoint).
 								Placeholder("vpn2fa.hku.hk")
-						})
+						}).Tooltip("The gateway to connect to. vpn2fa.hku.hk is HKU's.")
 						ui.Field(c, "SOCKS port", func() {
 							ui.NumberInput(c, &a.settingsForm.SocksPort, 1, 65535, 1)
-						})
+						}).Tooltip("The port of the local SOCKS5 proxy. Point apps that take a SOCKS proxy at 127.0.0.1 and this port.")
 						ui.Field(c, "HTTP port", func() {
 							ui.NumberInput(c, &a.settingsForm.HttpPort, 1, 65535, 1)
-						})
+						}).Tooltip("The port of the local HTTP proxy, beside the SOCKS one.")
 						ui.Field(c, "DTLS", func() {
 							ui.Switch(c, &a.settingsForm.DTLS)
-						})
+						}).Tooltip("Carry the tunnel data over UDP instead of TCP. Faster on a line with clean UDP; TCP (off) is the safer default on a lossy one.")
 						ui.Field(c, "Learn routes", func() {
 							ui.Switch(c, &a.settingsForm.AutoRoutes)
-						})
+						}).Tooltip("Route what the proxy connects to through the tunnel automatically, and remember it across sessions.")
 						ui.Field(c, "Route prefix", func() {
 							ui.NumberInput(c, &a.settingsForm.RoutePrefix, 8, 32, 1)
-						})
+						}).Tooltip("How wide a learned route is: 24 covers the whole /24 block around the address, 32 only the address itself.")
 						ui.Field(c, "Max routes", func() {
 							ui.NumberInput(c, &a.settingsForm.RouteMax, 1, 10000, 1)
-						})
+						}).Tooltip("The most learned routes to keep. The least recently seen fall off first.")
 						ui.Field(c, "TTL days", func() {
 							ui.NumberInput(c, &a.settingsForm.RouteTTL, 1, 365, 1)
-						})
+						}).Tooltip("How many days a learned route survives without being seen again before it is forgotten.")
 						ui.Field(c, "Proxy domains", func() {
 							ui.TextInput(c, &a.settingsForm.ProxyDomains).
 								Placeholder("library.hku.hk, api.hku.hk")
-						})
+						}).Tooltip("Domains resolved and routed at connect time, so even their first request goes through HKU. Comma-separated.")
 						ui.Field(c, "Extra routes", func() {
 							ui.TextInput(c, &a.settingsForm.ExtraRoutes).
 								Placeholder("10.0.0.0/8")
-						})
+						}).Tooltip("Subnets routed through the tunnel in addition to the learned ones, as a comma-separated CIDR list.")
 						ui.Field(c, "Campus DNS", func() {
 							ui.Switch(c, &a.settingsForm.NRPT)
-						})
+						}).Tooltip("Resolve the suffixes below with the VPN's own DNS servers. The rule is added only when those servers are reachable through the tunnel.")
 						ui.Field(c, "DNS domains", func() {
 							ui.TextInput(c, &a.settingsForm.NRPTDomains).
 								Placeholder("hku.hk")
-						})
+						}).Tooltip("The suffixes the campus DNS rule covers, comma- or space-separated.")
 					})
 
 					// The app's own preferences, in a group of their own.
@@ -433,13 +433,13 @@ func (a *app) settingsPanel(c *ui.Context) {
 					ui.Form(c, func() {
 						ui.Field(c, "Start with Windows", func() {
 							ui.Switch(c, &a.settingsForm.AutoStart)
-						})
+						}).Tooltip("Launch the app when you sign in (a registry Run entry).")
 						ui.Field(c, "Reconnect if dropped", func() {
 							ui.Switch(c, &a.settingsForm.AutoReconnect)
-						})
+						}).Tooltip("Bring the session back on its own after it drops, up to three tries.")
 						ui.Field(c, "Connect at start", func() {
 							ui.Switch(c, &a.settingsForm.ConnectOnStart)
-						})
+						}).Tooltip("Start connecting as soon as the app opens, unless a session is already running.")
 					})
 				})
 			})
