@@ -128,24 +128,6 @@ function ipCovered(ip, net, len) {
     return ((ipToInt(ip) & m) >>> 0) === ((ipToInt(net) & m) >>> 0);
 }
 
-function cstpOption(name) {
-    // Reads one option out of CISCO_CSTP_OPTIONS, which openconnect sets
-    // to the raw gateway headers as "opt=value" lines. Used for the
-    // X-DTLS-MTU value, which the MTU below must respect.
-    var opts = env("CISCO_CSTP_OPTIONS");
-    if (!opts) {
-        return "";
-    }
-    var lines = opts.split("\n");
-    for (var i = 0; i < lines.length; i++) {
-        var eq = lines[i].indexOf("=");
-        if (eq > 0 && lines[i].substring(0, eq) === name) {
-            return myTrim(lines[i].substring(eq + 1));
-        }
-    }
-    return "";
-}
-
 // -------------------------------------------------------------- state file
 
 function stateWrite(lines) {
@@ -230,24 +212,8 @@ function doConnect() {
         ip4 + " " + mask + " store=active");
 
     if (myTrim(env("INTERNAL_IP4_MTU"))) {
-        // The tunnel adapter must not accept packets the data channel
-        // cannot carry. openconnect's INTERNAL_IP4_MTU is the CSTP
-        // (TCP) value; when DTLS is negotiated its MTU is smaller
-        // (X-DTLS-MTU), and a packet sized between the two is dropped at
-        // the DTLS layer - which is how a big SSH transfer or a file
-        // download stalls while tiny packets still get through.
-        var mtu = parseInt(myTrim(env("INTERNAL_IP4_MTU")), 10);
-        var dtlsMtu = parseInt(cstpOption("X-DTLS-MTU"), 10);
-        if (isNaN(mtu) || mtu <= 0) {
-            mtu = 1500;
-        }
-        if (!isNaN(dtlsMtu) && dtlsMtu > 0 && dtlsMtu < mtu) {
-            log("capping tunnel MTU at DTLS MTU " + dtlsMtu +
-                " (CSTP was " + mtu + ")");
-            mtu = dtlsMtu;
-        }
         run("netsh interface ipv4 set subinterface " + tunidx +
-            " mtu=" + mtu + " store=active");
+            " mtu=" + myTrim(env("INTERNAL_IP4_MTU")) + " store=active");
     }
 
     // Split routes pushed by the server.

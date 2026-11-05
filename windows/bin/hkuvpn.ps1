@@ -773,6 +773,34 @@ function Invoke-CleanupSession {
     }
 }
 
+function Set-TunnelMtuFromDtls {
+    # openconnect sizes the tunnel adapter from the CSTP (TCP) channel's
+    # MTU, which is larger than what the DTLS (UDP) channel carries
+    # (X-DTLS-MTU). A packet sized between the two is dropped at the DTLS
+    # layer - small packets still work, so a shell responds, while a big
+    # transfer stalls forever. The DTLS value never reaches the vpnc script
+    # (openconnect keeps the X-DTLS-* options in a list it does not export
+    # to the environment), so it is read from the session log here and the
+    # adapter is capped at it.
+    param([System.Text.StringBuilder]$LogBuffer)
+    $idx = Read-StateValue 'TUNIDX'
+    if (-not $idx) { return }
+    $m = [regex]::Match($LogBuffer.ToString(), 'X-DTLS-MTU:\s*(\d+)')
+    if (-not $m.Success) { return }
+    $dtlsMtu = [int]$m.Groups[1].Value
+    if ($dtlsMtu -lt 576 -or $dtlsMtu -gt 1500) { return }
+    try {
+        $cur = (Get-NetIPInterface -InterfaceIndex ([int]$idx) -AddressFamily IPv4 -ErrorAction Stop).NlMtu
+    } catch { return }
+    if ($cur -le $dtlsMtu) { return }
+    if (Invoke-BoundedProcess 'netsh' ("interface ipv4 set subinterface $idx mtu=$dtlsMtu store=active") 5000) {
+        Write-Info ("DTLS carries {0} bytes; tunnel MTU capped from {1} to {2}" -f $dtlsMtu, $cur, $dtlsMtu)
+        Write-Marker ("HKUVPN_MTU_CAPPED dtls={0} was={1}" -f $dtlsMtu, $cur)
+    } else {
+        Write-Marker ("HKUVPN_MTU_CAP_TIMEOUT dtls={0}" -f $dtlsMtu)
+    }
+}
+
 function Invoke-RotateLog {
     # Rolls a log file: the current one becomes .1, .1 becomes .2 and so
     # on, and the oldest generation goes away. The usual log hygiene -
@@ -1399,6 +1427,7 @@ function Invoke-TunnelWorker {
                     Start-Sleep -Milliseconds 250
                 }
                 Add-HkuNrptFromState
+                Set-TunnelMtuFromDtls -LogBuffer $logAll
                 if ($Cfg.AutoRoutes) { Initialize-AutoRoutes -Cfg $Cfg }
                 if (Test-Path $Script:StateFile) {
                     Write-Info ("Connected - split routes installed (see hkuvpn.ps1 --logs)" )
