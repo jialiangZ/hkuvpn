@@ -73,9 +73,9 @@ The first command writes `%USERPROFILE%\.vpn\hku.env` and `hku.pass`
 second puts `shell` on your user PATH once (no administrator rights).
 `hkuvpn` then connects with the MFA code typed in that window - no second
 console - and closing the window after "Connected" leaves the tunnel up. A
-window closed before that is cleaned up by the guard, so nothing is left
-waiting for a code. `hkuvpn --status`, `--stop` and `--logs` work from any
-terminal too.
+window closed, or a Ctrl+C, before that is cleaned up by the guard, so
+nothing is left waiting for a code. `hkuvpn --status`, `--stop` and
+`--logs` work from any terminal too.
 
 If the machine has to reach a campus-only host such as a lab server, give
 the subnet when `bootstrap.ps1` asks (e.g. `10.128.0.0/16`): that is the

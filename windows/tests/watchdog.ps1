@@ -9,14 +9,17 @@
     waiting forever. hkuvpn-watchdog.ps1 exists to stop exactly that case and
     nothing else.
 
-    Four cases, each in a throw-away folder passed as -TempBase so the real
-    %TEMP%\hkuvpn state is never touched. A sleeping powershell acts as the
-    caller's console, because what matters is that its pid disappears.
+    Four-plus-one cases, each in a throw-away folder passed as -TempBase so
+    the real %TEMP%\hkuvpn state is never touched. A sleeping powershell
+    acts as the caller's console, because what matters is that its pid
+    disappears.
 
       1. console dies before the tunnel is up  -> stop.flag written
       2. HKUVPN_CONNECTED from this run        -> hands off, no stop.flag
-      3. wrapper finished normally (done file) -> no stop.flag
+      3. wrapper finished, console alive       -> no stop.flag
       4. stale HKUVPN_CONNECTED from last time -> ignored, stop.flag written
+      5. console dies with a done file present -> stop.flag written: the
+         pid, not the done file, is the authority (Ctrl+C writes done too)
 
     No administrator rights and no VPN session are needed.
 #>
@@ -133,7 +136,22 @@ $wd = Start-Watchdog -Dir $dir -TermPid $console.Id -Start $start
 $exited = Wait-Exit $wd 15
 Stop-Quietly $console
 $stopped = Test-Path (Join-Path $dir 'stop.flag')
-Write-Case 'normal finish -> no stop.flag' ((-not $stopped) -and $exited) `
+Write-Case 'normal finish (console alive) -> no stop.flag' ((-not $stopped) -and $exited) `
+    ("stop.flag={0} exited={1}" -f $stopped, $exited)
+$cases += $dir
+
+# --- 5. console dies with a done file present -------------------------------
+# Ctrl+C writes the done file on the way out; the dead pid must still win.
+$dir = New-CaseDir
+$console = Start-FakeConsole
+$start = Get-Date
+Set-Content -Path (Join-Path $dir 'watchdog.done') -Value 'done' -NoNewline
+$wd = Start-Watchdog -Dir $dir -TermPid $console.Id -Start $start
+Start-Sleep -Seconds 2
+Stop-Quietly $console
+$stopped = Wait-File (Join-Path $dir 'stop.flag') 15
+$exited = Wait-Exit $wd 10
+Write-Case 'console dies with done present -> stop.flag written' ($stopped -and $exited) `
     ("stop.flag={0} exited={1}" -f $stopped, $exited)
 $cases += $dir
 

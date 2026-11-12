@@ -7,6 +7,15 @@
 # forever (that loop has no timeout). This watchdog notices the dead console
 # and writes the worker's stop flag so it cleans itself up.
 #
+# "Dead" means the console pid is gone, whatever made it go: closing the
+# window, or Ctrl+C at the MFA prompt (the wrapper's finally block writes
+# the done file BEFORE the process exits, so on a done file the watchdog
+# waits a few seconds for the pid to leave - only a console that stays up
+# is a real "finished normally"). A failed connect from the bare command
+# also takes the wrapper's process down, so it may leave one stray
+# stop.flag behind; the next session's worker deletes a flag that predates
+# it, so that flag can never kill a later connect.
+#
 # It never touches a CONNECTED session: once HKUVPN_CONNECTED is seen it
 # exits, so closing the terminal after "Connected" leaves the VPN running.
 
@@ -50,15 +59,27 @@ function Test-Connected {
 $deadline = (Get-Date).AddMinutes(20)
 while ((Get-Date) -lt $deadline) {
     Start-Sleep -Seconds 1
-    if (Test-Path $done) { break }          # wrapper finished normally
     if (Test-Connected) { break }            # tunnel is up: hands off
-    if (-not (Get-Process -Id $TermPid -ErrorAction SilentlyContinue)) {
-        # The terminal died before connecting. Wait two seconds in case the
-        # worker completes the connection on its own before we judge it.
-        Start-Sleep -Seconds 2
-        if (Test-Path $done) { break }
-        if (Test-Connected) { break }
-        Set-Content -Path $stop -Value 'stop' -NoNewline
-        break
+    $consoleAlive = [bool](Get-Process -Id $TermPid -ErrorAction SilentlyContinue)
+    if ((Test-Path $done) -and $consoleAlive) {
+        # The wrapper wrote its done file but the process is still there.
+        # Ctrl+C writes done in a finally block on the way out, so give the
+        # pid a moment to leave; one that stays up is a real shell that
+        # finished normally.
+        $grace = (Get-Date).AddSeconds(5)
+        do {
+            Start-Sleep -Milliseconds 250
+            $consoleAlive = [bool](Get-Process -Id $TermPid -ErrorAction SilentlyContinue)
+        } while ($consoleAlive -and (Get-Date) -lt $grace)
     }
+    if ($consoleAlive) {
+        if (Test-Path $done) { break }        # normal finish, console still up
+        continue
+    }
+    # The terminal is gone. Wait two seconds in case the worker completes
+    # the connection on its own before we judge it.
+    Start-Sleep -Seconds 2
+    if (Test-Connected) { break }
+    Set-Content -Path $stop -Value 'stop' -NoNewline
+    break
 }

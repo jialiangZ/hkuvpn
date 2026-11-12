@@ -38,7 +38,8 @@ Prefer a shell? Run `shell\bootstrap.ps1` once for the account and Portal
 PIN, then `shell\install-path.ps1` once (user PATH, no administrator
 rights), and a bare `hkuvpn` connects from any terminal: the MFA code is
 typed there, closing the window after "Connected" keeps the tunnel, and a
-window closed before that cannot leave a worker waiting for a code.
+window closed or interrupted with Ctrl+C before that cannot leave a worker
+waiting for a code.
 `hkuvpn --status`, `--stop`, `--logs` are the same launcher flags
 everywhere else.
 
