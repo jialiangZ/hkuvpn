@@ -135,16 +135,31 @@ Set-Content $HOME\.vpn\hku.pass 'YOUR-STATIC-PORTAL-PIN'
 powershell -ExecutionPolicy Bypass -File .\hkuvpn.ps1 --check
 ```
 
-Optional profile shortcut (add to your `$PROFILE`):
+Optional: put `shell` on the user PATH once, so `hkuvpn` is a real command
+from cmd, PowerShell, Windows Terminal or anything else (no `$PROFILE`
+function to shadow it, no administrator rights needed):
 
 ```powershell
-function hkuvpn { & "$HOME\hkuvpn\windows\bin\hkuvpn.ps1" @args }
+powershell -ExecutionPolicy Bypass -File ..\shell\install-path.ps1
 ```
+
+A bare `hkuvpn` then runs `-t` - the MFA code is typed in the same window, no
+second console - and adds one thing `-t` cannot do alone: if that window is
+closed *before* the tunnel is up, `hkuvpn-watchdog.ps1` notices and tells the
+hidden worker to stop, instead of leaving it waiting for a code forever. A
+connected session is never touched. `install-path.ps1 -Remove` takes the PATH
+entry out again.
+
+`shell` is a separate folder from `bin` on purpose: PowerShell runs a `.ps1`
+script in preference to a `.cmd` with the same base name, so `hkuvpn.cmd`
+next to `hkuvpn.ps1` would make the bare command mean the smart mode in
+PowerShell but `-t` in cmd. Keeping them apart keeps one meaning.
 
 ## Everyday commands
 
 ```powershell
 hkuvpn              # smart connect: prompts for the MFA code, waits for the tunnel
+                    # (a bare `hkuvpn` on PATH means -t instead - see Install)
 hkuvpn              # run again while connected: reports status (elevated window holds 5s)
 hkuvpn --check      # pre-flight check (exit 0 = ready)
 hkuvpn -f           # foreground connect, echoes the raw OpenConnect log
@@ -195,14 +210,21 @@ Three long-session modes, by scenario (plus a tray app):
   `gost`/`openconnect`, and the app back at "Disconnected". The steps
   that need a person are the UAC prompt and the MFA code, so run it from
   a PowerShell window (the code is typed in). `-SkipLive` leaves out the
-  check that needs a code.
+  check that needs a code. The orphan guard has its own run -
+  `windows\tests\watchdog.ps1` - with four cases, no UAC prompt and no
+  VPN session.
 - **Smart mode** (default): the session stays attached to its console;
   closing the window (or Ctrl+C) disconnects, like `hkuvpn -f` in the
   Docker edition. The natural fit for the desktop shortcut.
 - **`-t` terminal mode**: the tunnel runs in a hidden elevated worker and
   the MFA code is typed right in the invoking terminal (an empty answer
   or a timeout stops the worker cleanly). Closing the terminal afterwards
-  does NOT affect the VPN - the everyday choice from a shell.
+  does NOT affect the VPN - the everyday choice from a shell. A window
+  closed *before* that is covered when you start from the bare command:
+  `hkuvpn-connect.ps1` runs `hkuvpn-watchdog.ps1` beside the launcher, and
+  when the console pid disappears before `HKUVPN_CONNECTED` appears, the
+  watchdog writes the worker's stop flag. A connected session is left
+  alone, so the same command still survives closing the window.
 - **`-d` detach mode**: no interaction at start; deliver the code with
   `--mfa`. For scripts.
 

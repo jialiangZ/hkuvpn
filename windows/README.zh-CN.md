@@ -85,16 +85,27 @@ Set-Content $HOME\.vpn\hku.pass '你的静态Portal-PIN'
 powershell -ExecutionPolicy Bypass -File .\hkuvpn.ps1 --check
 ```
 
-可选：把简短命令加进 PowerShell 配置文件（`$PROFILE`）：
+可选：把 `shell` 目录加进用户 PATH（只需一次），这样 `hkuvpn` 在 cmd、PowerShell、
+Windows Terminal 里都是真命令 —— 不再需要在 `$PROFILE` 里定义函数去覆盖它，也不需要管理员权限：
 
 ```powershell
-function hkuvpn { & "$HOME\hkuvpn\windows\bin\hkuvpn.ps1" @args }
+powershell -ExecutionPolicy Bypass -File ..\shell\install-path.ps1
 ```
+
+之后裸 `hkuvpn` 走 `-t`：MFA 就在当前窗口输入、不开第二个控制台，并且补上 `-t`
+自己做不了的一件事 —— 如果在隧道建立**之前**关掉窗口，`hkuvpn-watchdog.ps1`
+会发现并让隐藏的 worker 停下，而不是让它一直等验证码。已连接的会话不会被碰，
+所以连上之后关窗照旧不影响 VPN。`install-path.ps1 -Remove` 可撤销这条 PATH。
+
+`shell` 与 `bin` 分开是故意的：PowerShell 在基名相同时会优先执行 `.ps1` 而不是
+`.cmd`，若把 `hkuvpn.cmd` 放在 `hkuvpn.ps1` 旁边，裸命令在 PowerShell 里会变成
+"智能模式"、在 cmd 里却是 `-t`。分开之后两边语义一致。
 
 ## 日常命令
 
 ```powershell
 hkuvpn              # 智能连接：提示输入 MFA 动态码，等待隧道建立
+                    #（PATH 上的裸 `hkuvpn` 走的是 -t，见「安装」）
 hkuvpn              # 已连接时再次运行：报告状态（提权窗口停 5 秒后自动关闭）
 hkuvpn --check      # 预检（退出码 0 = 就绪）
 hkuvpn -f           # 前台连接，回显 OpenConnect 原始日志
@@ -112,13 +123,14 @@ hkuvpn --stop       # 停止（活跃 worker 自清理，免 UAC；死会话强�
 
 - **桌面 App**（MyGo 原生 UI，`windows\mygo-app`）：`HKUVPN.exe`，用 MyGo 官方组件搭的紧凑窗口 —— 状态卡片（状态、隧道地址、时长、代理、路由）、带标签的 HKU 账号与 Portal PIN 输入框（编辑后自动保存）、单一主按钮 Connect / Cancel / Disconnect、View log 日志面板（级别标签 + 分级筛选 + 搜索 + 复制 + 导出）、Diagnostics 诊断面板（连接前的自检 + 本地代理连通性与出口地址）、Routes 路由面板（查看/增删自动学习到的路由）、Settings 设置面板（`hku.env` 里的高级选项、开机自启、断线自动重连）与 MFA 对话框（**必经关口**：输入 6 位码才继续，关掉弹窗＝取消这次连接，没有"待会儿再输"），关闭窗口收进托盘；几个面板入口是窗口下方的一排图标（悬停有提示），每个面板都开在自己的窗口里（日志才有地方显示）。所有窗口大小固定：不能缩放，最大化按钮是灰掉的。纯 Go 构建（`GOOS=windows go build`，无 cgo、无 WebView），见 `windows\mygo-app\build.sh`；exe 以 GUI 方式编译（`-H=windowsgui`），启动时不会弹出终端窗口，App 自身日志写入 `%LOCALAPPDATA%\HKUVPN\app.log`（不是 `%TEMP%`：这份日志是留着事后查的，临时目录会被系统随时清掉），按天或超过 1 MB 滚动，保留 7 天。托盘图标为四状态盾牌（灰/绿/琥珀/红），由 `windows\mygo-app\assets\tray-icon.svg` 生成。断开免 UAC，退出 App 不影响会话。
 - **智能模式**（默认）：整个会话挂在当前控制台，关窗/Ctrl+C 即断开，适合双击图标使用；
-- **`-t` 终端模式**：隧道跑在隐藏的提权 worker 里，MFA 直接在你的终端输入（投递空码或超时会自动停掉 worker）。连接后**关闭终端不影响 VPN**，适合日常从终端启动；
+- **`-t` 终端模式**：隧道跑在隐藏的提权 worker 里，MFA 直接在你的终端输入（投递空码或超时会自动停掉 worker）。连接后**关闭终端不影响 VPN**，适合日常从终端启动；如果窗口在连上**之前**就关掉，从裸命令启动时会有 `hkuvpn-connect.ps1` 拉起的 `hkuvpn-watchdog.ps1` 兜底：它看到控制台进程消失、且还没出现 `HKUVPN_CONNECTED`，就写下 worker 的停止标记。已连接的会话不动，所以同一条命令连上之后关窗仍然安全；
 - **`-d` 后台模式**：无交互启动，配合 `--mfa` 投递，适合脚本。
 
 **回归脚本**（`windows\tests\session-flow.ps1`）：把 worker 和 App 完整跑一遍会话
 生命周期 —— 动态码弹窗是关口（关掉即取消）、连接、断开 —— 并检查不变量：拆除标记、没有强杀、
 没有残留的 `gost`/`openconnect`、App 回到"未连接"。需要人参与的只有 UAC 弹窗和动态码，
 所以要在 PowerShell 窗口里跑（动态码要手输）；`-SkipLive` 可以跳过需要动态码的那一项。
+孤儿守护另有独立测试 `windows\tests\watchdog.ps1`：四个用例，不需要 UAC，也不需要真连 VPN。
 
 另外两个自愈机制：连接入口会自动回收上个崩溃会话遗留的 gost（否则它占着 1080/1088 会让之后每次连接都失败，标记 `HKUVPN_ORPHAN_GOST_REAPED` 留痕）；任何模式的异常退出都会把错误写进 markers（`HKUVPN_EXITED error=...`），窗口闪退也不会丢失诊断线索。
 

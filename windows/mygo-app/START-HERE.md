@@ -16,6 +16,10 @@ Extract `HKUVPN-windows-<version>.zip` anywhere you like, for example
 HKUVPN.exe               the app
 bin\hkuvpn.ps1           the worker it drives
 bin\get-tools.ps1        fetches the two dependencies (step 2)
+shell\hkuvpn.cmd         one-word command from a shell
+shell\hkuvpn-connect.ps1 the bare-command flow and its orphan guard
+shell\hkuvpn-watchdog.ps1
+shell\install-path.ps1   puts shell on the PATH (optional)
 etc\vpnc-script-win.js   the routing script
 examples\hku.env.example the configuration template
 START-HERE.md            this file
@@ -54,6 +58,20 @@ The window shows the state of the session, two fields, and a button.
 
 The proxies are on `127.0.0.1:1080` (SOCKS5) and `127.0.0.1:1088` (HTTP).
 Point a browser, an SSH session or a rules client at them.
+
+### Prefer a terminal?
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\shell\install-path.ps1
+hkuvpn
+```
+
+The first command puts `shell` on your user PATH once (no administrator
+rights); open a new terminal afterwards. `hkuvpn` then connects with the
+MFA code typed in that window - no second console - and closing the window
+after "Connected" leaves the tunnel up. A window closed before that is
+cleaned up by the guard, so nothing is left waiting for a code.
+`hkuvpn --status`, `--stop` and `--logs` work from any terminal too.
 
 ## 4. When you are done
 

@@ -50,11 +50,20 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $tag = "${{ github.ref_name }}"
           New-Item -ItemType Directory -Path bundle/bin -Force | Out-Null
+          New-Item -ItemType Directory -Path bundle/shell -Force | Out-Null
           New-Item -ItemType Directory -Path bundle/etc -Force | Out-Null
           New-Item -ItemType Directory -Path bundle/examples -Force | Out-Null
           Copy-Item windows/mygo-app/HKUVPN.exe bundle/
           Copy-Item windows/bin/hkuvpn.ps1 bundle/bin/
           Copy-Item windows/bin/get-tools.ps1 bundle/bin/
+          # The bare-`hkuvpn` entry point and its orphan guard live in shell\,
+          # not bin\: PowerShell runs a .ps1 in preference to a .cmd with the
+          # same base name, so hkuvpn.cmd must not sit next to hkuvpn.ps1.
+          # install-path.ps1 puts shell\ on the user PATH.
+          Copy-Item windows/shell/hkuvpn.cmd bundle/shell/
+          Copy-Item windows/shell/hkuvpn-connect.ps1 bundle/shell/
+          Copy-Item windows/shell/hkuvpn-watchdog.ps1 bundle/shell/
+          Copy-Item windows/shell/install-path.ps1 bundle/shell/
           Copy-Item windows/etc/vpnc-script-win.js bundle/etc/
           Copy-Item windows/examples/hku.env.example bundle/examples/
           Copy-Item windows/mygo-app/START-HERE.md bundle/
@@ -118,6 +127,12 @@ jobs:
 
           `START-HERE.md` and `START-HERE.zh-CN.md` in the archive have
           the full steps, in English and in Chinese.
+
+          For a shell, run `shell\install-path.ps1` once: it puts `shell` on
+          the user PATH (no administrator rights), and then a bare
+          `hkuvpn` connects from any terminal, `hkuvpn --status` reports,
+          and `hkuvpn --stop` stops. Closing the terminal after
+          "Connected" leaves the tunnel up.
 
           The Docker edition is unchanged - see the README.
           '@
