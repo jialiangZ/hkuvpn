@@ -101,6 +101,35 @@ Side effect worth knowing: a learned `/24` applies to the whole OS, so
 non-proxied apps reaching the same network also egress via HKU (usually
 irrelevant — that block belongs to the licensed resource anyway).
 
+## Reaching hosts inside the campus network
+
+The gateway in this deployment pushes a single split route
+(`10.64.192.0/20`, the tunnel's own subnet). Nothing else on `10.x` is
+routed, and the auto-learner above deliberately never learns RFC1918
+addresses — so a lab server such as `10.128.12.79` is unreachable until you
+name its subnet yourself:
+
+```ini
+# %USERPROFILE%\.vpn\hku.env
+HKU_EXTRA_ROUTES=10.128.0.0/16
+```
+
+Rules that save time:
+
+- **Comma-separated list**, e.g. `10.128.0.0/16,10.140.0.0/16`.
+- **Reconnect** after editing: routes are installed by the vpnc script at
+  connect time (`HKUVPN_AUTOROUTE_ON` / `route print -4` shows them).
+- **Keep it narrow.** A `/8` covers your own Wi-Fi LAN block too; a
+  `/16` for the lab is enough, and the tunnel's own subnet
+  (`10.64.192.0/20`) is already routed.
+- The value is the same one `shell\bootstrap.ps1` writes, so a new machine
+  can set it in the same step as the account.
+
+Then reach the host directly — `ssh jialiang@10.128.12.79 -p 11022`,
+`Test-NetConnection 10.128.12.79 -Port 11022` — not through the proxy:
+`HKU_EXTRA_ROUTES` adds an OS route, and the host belongs to the campus
+side of the tunnel.
+
 ## Requirements
 
 - Windows 10 1803+ / Windows 11, 64-bit (`curl.exe` ships with the OS)
@@ -125,7 +154,15 @@ the **v9.21 tag** (its artifacts never expire, unlike the moving `master`
 ones) — the same OpenConnect version the Docker image builds. The installer
 is deleted once it has run.
 
-Then configure — same files and formats as the Docker edition:
+Fastest: `shell\bootstrap.ps1` asks for the account and the Portal PIN,
+writes both files, and can record the campus subnets you need in the same
+step (see below). It never overwrites existing files without `-Force`.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ..\shell\bootstrap.ps1
+```
+
+Or do it by hand — same files and formats as the Docker edition:
 
 ```powershell
 mkdir $HOME\.vpn
@@ -135,16 +172,31 @@ Set-Content $HOME\.vpn\hku.pass 'YOUR-STATIC-PORTAL-PIN'
 powershell -ExecutionPolicy Bypass -File .\hkuvpn.ps1 --check
 ```
 
-Optional profile shortcut (add to your `$PROFILE`):
+Optional: put `shell` on the user PATH once, so `hkuvpn` is a real command
+from cmd, PowerShell, Windows Terminal or anything else (no `$PROFILE`
+function to shadow it, no administrator rights needed):
 
 ```powershell
-function hkuvpn { & "$HOME\hkuvpn\windows\bin\hkuvpn.ps1" @args }
+powershell -ExecutionPolicy Bypass -File ..\shell\install-path.ps1
 ```
+
+A bare `hkuvpn` then runs `-t` - the MFA code is typed in the same window, no
+second console - and adds one thing `-t` cannot do alone: if that window is
+closed *before* the tunnel is up, `hkuvpn-watchdog.ps1` notices and tells the
+hidden worker to stop, instead of leaving it waiting for a code forever. A
+connected session is never touched. `install-path.ps1 -Remove` takes the PATH
+entry out again.
+
+`shell` is a separate folder from `bin` on purpose: PowerShell runs a `.ps1`
+script in preference to a `.cmd` with the same base name, so `hkuvpn.cmd`
+next to `hkuvpn.ps1` would make the bare command mean the smart mode in
+PowerShell but `-t` in cmd. Keeping them apart keeps one meaning.
 
 ## Everyday commands
 
 ```powershell
 hkuvpn              # smart connect: prompts for the MFA code, waits for the tunnel
+                    # (a bare `hkuvpn` on PATH means -t instead - see Install)
 hkuvpn              # run again while connected: reports status (elevated window holds 5s)
 hkuvpn --check      # pre-flight check (exit 0 = ready)
 hkuvpn -f           # foreground connect, echoes the raw OpenConnect log
@@ -195,14 +247,21 @@ Three long-session modes, by scenario (plus a tray app):
   `gost`/`openconnect`, and the app back at "Disconnected". The steps
   that need a person are the UAC prompt and the MFA code, so run it from
   a PowerShell window (the code is typed in). `-SkipLive` leaves out the
-  check that needs a code.
+  check that needs a code. The orphan guard has its own run -
+  `windows\tests\watchdog.ps1` - with four cases, no UAC prompt and no
+  VPN session.
 - **Smart mode** (default): the session stays attached to its console;
   closing the window (or Ctrl+C) disconnects, like `hkuvpn -f` in the
   Docker edition. The natural fit for the desktop shortcut.
 - **`-t` terminal mode**: the tunnel runs in a hidden elevated worker and
   the MFA code is typed right in the invoking terminal (an empty answer
   or a timeout stops the worker cleanly). Closing the terminal afterwards
-  does NOT affect the VPN - the everyday choice from a shell.
+  does NOT affect the VPN - the everyday choice from a shell. A window
+  closed *before* that is covered when you start from the bare command:
+  `hkuvpn-connect.ps1` runs `hkuvpn-watchdog.ps1` beside the launcher, and
+  when the console pid disappears before `HKUVPN_CONNECTED` appears, the
+  watchdog writes the worker's stop flag. A connected session is left
+  alone, so the same command still survives closing the window.
 - **`-d` detach mode**: no interaction at start; deliver the code with
   `--mfa`. For scripts.
 

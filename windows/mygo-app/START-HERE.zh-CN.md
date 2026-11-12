@@ -16,6 +16,11 @@
 HKUVPN.exe               桌面 App
 bin\hkuvpn.ps1           App 驱动的工作进程
 bin\get-tools.ps1        下载两个依赖（第 2 步）
+shell\hkuvpn.cmd         在终端里使用的单字命令
+shell\hkuvpn-connect.ps1 裸命令的流程与孤儿守护
+shell\hkuvpn-watchdog.ps1
+shell\bootstrap.ps1      写入账号与 PIN 配置（可选）
+shell\install-path.ps1   把 shell 加进 PATH（可选）
 etc\vpnc-script-win.js   路由脚本
 examples\hku.env.example 配置模板
 START-HERE.zh-CN.md      本文件
@@ -50,6 +55,23 @@ UAC 弹窗请点允许。它会安装 **OpenConnect**（自带 Wintun 虚拟网�
 
 代理在 `127.0.0.1:1080`（SOCKS5）和 `127.0.0.1:1088`（HTTP）。
 把浏览器、SSH 或规则客户端指过去就行。
+
+### 更想用命令行？
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\shell\bootstrap.ps1      # 账号、PIN、校园网段
+powershell -ExecutionPolicy Bypass -File .\shell\install-path.ps1   # 只需一次，之后开新终端
+hkuvpn
+```
+
+第一条写 `%USERPROFILE%\.vpn\hku.env` 和 `hku.pass`（两项都会问你，已有文件不加
+`-Force` 不会覆盖）。第二条把 `shell` 写进用户 PATH（只需一次，不需要管理员权限）。
+之后裸 `hkuvpn` 会在当前窗口要动态码、不开第二个控制台；连上之后关掉窗口，隧道照旧。
+如果在连上之前就关窗，守护脚本会让 worker 停下，不会留下一个傻等验证码的进程。
+`hkuvpn --status`、`--stop`、`--logs` 在任何终端里都能用。
+
+如果这台机器要访问实验室内网这类校园专用主机，在 `bootstrap.ps1` 问网段时填上
+（例如 `10.128.0.0/16`）：那正是 `HKU_EXTRA_ROUTES`，没有它 `10.x` 根本不通。
 
 ## 4. 用完之后
 

@@ -33,6 +33,12 @@
 [`START-HERE.zh-CN.md`](windows/mygo-app/START-HERE.zh-CN.md) ·
 [App 的说明](windows/mygo-app/README.zh-CN.md)
 
+更喜欢命令行？先跑一次 `shell\bootstrap.ps1` 配好账号和 Portal PIN，再跑一次
+`shell\install-path.ps1`（写用户 PATH，不需要管理员权限），
+之后任何终端里裸 `hkuvpn` 就能连：动态码就输在当前窗口，连上后关窗不影响隧道；
+连上之前关窗也不会留下一个傻等验证码的 worker。`hkuvpn --status`、`--stop`、
+`--logs` 与其它平台用的是同一套启动器参数。
+
 下面的 Docker 版是另一条路，用法没有变。
 
 ## 快速上手
