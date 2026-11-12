@@ -61,3 +61,10 @@ Write-Host 'Open a NEW terminal (the current one keeps its old PATH), then:'
 Write-Host '  hkuvpn --check      # pre-flight: config, PIN file, tools, ports'
 Write-Host '  hkuvpn              # connect; type the MFA code when asked'
 Write-Host '  hkuvpn --stop       # stop'
+
+$cfgDir = if ($env:HKU_CONFIG_DIR) { $env:HKU_CONFIG_DIR } else { Join-Path $env:USERPROFILE '.vpn' }
+if (-not (Test-Path (Join-Path $cfgDir 'hku.env'))) {
+    Write-Host ''
+    Write-Host ("No configuration yet in {0} - run shell\bootstrap.ps1 first:" -f $cfgDir)
+    Write-Host '  it asks for the HKU account, the Portal PIN and any campus subnets.'
+}

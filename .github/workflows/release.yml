@@ -63,6 +63,7 @@ jobs:
           Copy-Item windows/shell/hkuvpn.cmd bundle/shell/
           Copy-Item windows/shell/hkuvpn-connect.ps1 bundle/shell/
           Copy-Item windows/shell/hkuvpn-watchdog.ps1 bundle/shell/
+          Copy-Item windows/shell/bootstrap.ps1 bundle/shell/
           Copy-Item windows/shell/install-path.ps1 bundle/shell/
           Copy-Item windows/etc/vpnc-script-win.js bundle/etc/
           Copy-Item windows/examples/hku.env.example bundle/examples/
@@ -128,9 +129,11 @@ jobs:
           `START-HERE.md` and `START-HERE.zh-CN.md` in the archive have
           the full steps, in English and in Chinese.
 
-          For a shell, run `shell\install-path.ps1` once: it puts `shell` on
-          the user PATH (no administrator rights), and then a bare
-          `hkuvpn` connects from any terminal, `hkuvpn --status` reports,
+          For a shell, run `shell\bootstrap.ps1` once (account and Portal
+          PIN; it can record a campus subnet too), then
+          `shell\install-path.ps1` once: it puts `shell` on the user PATH
+          (no administrator rights), and then a bare `hkuvpn` connects from
+          any terminal, `hkuvpn --status` reports,
           and `hkuvpn --stop` stops. Closing the terminal after
           "Connected" leaves the tunnel up.
 

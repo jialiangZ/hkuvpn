@@ -19,6 +19,7 @@ bin\get-tools.ps1        fetches the two dependencies (step 2)
 shell\hkuvpn.cmd         one-word command from a shell
 shell\hkuvpn-connect.ps1 the bare-command flow and its orphan guard
 shell\hkuvpn-watchdog.ps1
+shell\bootstrap.ps1      writes the account and PIN config (optional)
 shell\install-path.ps1   puts shell on the PATH (optional)
 etc\vpnc-script-win.js   the routing script
 examples\hku.env.example the configuration template
@@ -62,16 +63,23 @@ Point a browser, an SSH session or a rules client at them.
 ### Prefer a terminal?
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\shell\install-path.ps1
+powershell -ExecutionPolicy Bypass -File .\shell\bootstrap.ps1      # account, PIN, campus subnets
+powershell -ExecutionPolicy Bypass -File .\shell\install-path.ps1   # once, then open a new terminal
 hkuvpn
 ```
 
-The first command puts `shell` on your user PATH once (no administrator
-rights); open a new terminal afterwards. `hkuvpn` then connects with the
-MFA code typed in that window - no second console - and closing the window
-after "Connected" leaves the tunnel up. A window closed before that is
-cleaned up by the guard, so nothing is left waiting for a code.
-`hkuvpn --status`, `--stop` and `--logs` work from any terminal too.
+The first command writes `%USERPROFILE%\.vpn\hku.env` and `hku.pass`
+(it asks for both; existing files are kept unless you add `-Force`). The
+second puts `shell` on your user PATH once (no administrator rights).
+`hkuvpn` then connects with the MFA code typed in that window - no second
+console - and closing the window after "Connected" leaves the tunnel up. A
+window closed before that is cleaned up by the guard, so nothing is left
+waiting for a code. `hkuvpn --status`, `--stop` and `--logs` work from any
+terminal too.
+
+If the machine has to reach a campus-only host such as a lab server, give
+the subnet when `bootstrap.ps1` asks (e.g. `10.128.0.0/16`): that is the
+`HKU_EXTRA_ROUTES` value, and it is what makes `10.x` reachable at all.
 
 ## 4. When you are done
 

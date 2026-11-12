@@ -101,6 +101,35 @@ Side effect worth knowing: a learned `/24` applies to the whole OS, so
 non-proxied apps reaching the same network also egress via HKU (usually
 irrelevant — that block belongs to the licensed resource anyway).
 
+## Reaching hosts inside the campus network
+
+The gateway in this deployment pushes a single split route
+(`10.64.192.0/20`, the tunnel's own subnet). Nothing else on `10.x` is
+routed, and the auto-learner above deliberately never learns RFC1918
+addresses — so a lab server such as `10.128.12.79` is unreachable until you
+name its subnet yourself:
+
+```ini
+# %USERPROFILE%\.vpn\hku.env
+HKU_EXTRA_ROUTES=10.128.0.0/16
+```
+
+Rules that save time:
+
+- **Comma-separated list**, e.g. `10.128.0.0/16,10.140.0.0/16`.
+- **Reconnect** after editing: routes are installed by the vpnc script at
+  connect time (`HKUVPN_AUTOROUTE_ON` / `route print -4` shows them).
+- **Keep it narrow.** A `/8` covers your own Wi-Fi LAN block too; a
+  `/16` for the lab is enough, and the tunnel's own subnet
+  (`10.64.192.0/20`) is already routed.
+- The value is the same one `shell\bootstrap.ps1` writes, so a new machine
+  can set it in the same step as the account.
+
+Then reach the host directly — `ssh jialiang@10.128.12.79 -p 11022`,
+`Test-NetConnection 10.128.12.79 -Port 11022` — not through the proxy:
+`HKU_EXTRA_ROUTES` adds an OS route, and the host belongs to the campus
+side of the tunnel.
+
 ## Requirements
 
 - Windows 10 1803+ / Windows 11, 64-bit (`curl.exe` ships with the OS)
@@ -125,7 +154,15 @@ the **v9.21 tag** (its artifacts never expire, unlike the moving `master`
 ones) — the same OpenConnect version the Docker image builds. The installer
 is deleted once it has run.
 
-Then configure — same files and formats as the Docker edition:
+Fastest: `shell\bootstrap.ps1` asks for the account and the Portal PIN,
+writes both files, and can record the campus subnets you need in the same
+step (see below). It never overwrites existing files without `-Force`.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ..\shell\bootstrap.ps1
+```
+
+Or do it by hand — same files and formats as the Docker edition:
 
 ```powershell
 mkdir $HOME\.vpn

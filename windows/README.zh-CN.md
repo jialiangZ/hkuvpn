@@ -56,6 +56,28 @@ Windows 没有按进程分流的能力，原生版用**自动学习路由**（`H
 
 需要知道的副作用：学习到的 `/24` 对整个系统生效，未走代理的程序访问同一网段也会从 HKU 出网（通常无关紧要——那个网段本来就属于授权资源）。
 
+## 访问校园内网主机
+
+这个部署的网关只下发一条分片路由（`10.64.192.0/20`，即隧道自己的网段），
+`10.x` 里其它地址一律不进隧道；上面的自动学习又**明确拒绝 RFC1918** 私网地址。
+所以像 `10.128.12.79` 这样的实验室服务器，必须自己把网段写进去：
+
+```ini
+# %USERPROFILE%\.vpn\hku.env
+HKU_EXTRA_ROUTES=10.128.0.0/16
+```
+
+几条能省时间的规则：
+
+- **逗号分隔**，例如 `10.128.0.0/16,10.140.0.0/16`；
+- 改完必须**重连**：路由是 vpnc 脚本在连接时加的（`HKUVPN_AUTOROUTE_ON` 标记、`route print -4` 可见）；
+- **尽量窄**：写 `/8` 会把你自己的 Wi-Fi 内网段也罩进去；实验室一个 `/16` 就够，隧道自己的 `10.64.192.0/20` 本来就有路由；
+- 这个值和 `shell\bootstrap.ps1` 写进 `hku.env` 的是同一个，换机器时可以跟账号一起配好。
+
+配好之后直接连主机 —— `ssh jialiang@10.128.12.79 -p 11022`、
+`Test-NetConnection 10.128.12.79 -Port 11022` —— 而不是走代理：
+`HKU_EXTRA_ROUTES` 加的是系统路由，该主机在隧道的校园一侧。
+
 ## 环境要求
 
 - Windows 10 1803+ / Windows 11，64 位（系统自带 `curl.exe`）
@@ -75,7 +97,14 @@ powershell -ExecutionPolicy Bypass -File .\get-tools.ps1
 
 该脚本会下载 gost 和 OpenConnect 安装包，**两者都做 SHA-256 固定校验**，并在已提权时自动静默安装。gost 取官方 go-gost 发行包；OpenConnect 取官方 GitLab CI 的 **v9.21 tag** 构建（tag 流水线的产物永久保留，而漂移的 `master` 产物会过期）—— 与 Docker 镜像内的 OpenConnect 版本一致。安装完成后安装包会被删除。
 
-然后配置 —— 文件路径和格式与 Docker 版一致：
+最快：`shell\bootstrap.ps1` 会问账号和 Portal PIN、把两个文件写好，还能顺带记下
+你要用的校园网段（见上一节）。已有的文件不加 `-Force` 不会被覆盖。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ..\shell\bootstrap.ps1
+```
+
+或者手工来 —— 文件路径和格式与 Docker 版一致：
 
 ```powershell
 mkdir $HOME\.vpn

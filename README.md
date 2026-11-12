@@ -34,11 +34,12 @@ in the window, press Connect, and type the six-digit code when it asks.
 [`START-HERE.zh-CN.md`](windows/mygo-app/START-HERE.zh-CN.md) ·
 [the app's README](windows/mygo-app/README.md)
 
-Prefer a shell? Run `shell\install-path.ps1` once (user PATH, no
-administrator rights), and a bare `hkuvpn` connects from any terminal: the
-MFA code is typed there, closing the window after "Connected" keeps the
-tunnel, and a window closed before that cannot leave a worker waiting for a
-code. `hkuvpn --status`, `--stop`, `--logs` are the same launcher flags
+Prefer a shell? Run `shell\bootstrap.ps1` once for the account and Portal
+PIN, then `shell\install-path.ps1` once (user PATH, no administrator
+rights), and a bare `hkuvpn` connects from any terminal: the MFA code is
+typed there, closing the window after "Connected" keeps the tunnel, and a
+window closed before that cannot leave a worker waiting for a code.
+`hkuvpn --status`, `--stop`, `--logs` are the same launcher flags
 everywhere else.
 
 The Docker edition below is the other way in, and it still works the same
