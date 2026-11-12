@@ -217,6 +217,11 @@ logs are kept beside it as `openconnect.log.1`, `.2` and `.3`, so logs never
 mix runs and the runs before last can still be read. A log that passes two
 megabytes is rolled during the session, three generations kept.
 
+`hkuvpn --logs` follows that file and hides one thing: OpenConnect prints
+a three-line "Support for Wintun is experimental" warning on every Windows
+session, whether or not anything is wrong. The file keeps every raw line;
+only the view drops it.
+
 Three long-session modes, by scenario (plus a tray app):
 
 - **Desktop app** (MyGo native UI, `windows\mygo-app`): `HKUVPN.exe` with a

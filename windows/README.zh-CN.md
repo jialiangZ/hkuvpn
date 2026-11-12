@@ -213,6 +213,9 @@ hkuvpn --stop       # 停止（活跃 worker 自清理，免 UAC；死会话强�
 - 运行状态（日志、标记、PID 列表）位于 `%TEMP%\hkuvpn`；**日志保留策略**：每次连接一份
   （`openconnect.log`，旧的滚动为 `.1 .2 .3`，超过 2 MB 也滚），`gost.log` 同样 2 MB × 3 代，
   App 自身日志在 `%LOCALAPPDATA%\HKUVPN\app.log`，按天滚动保留 7 天。
+- `hkuvpn --logs` 跟随该文件时会隐掉一样东西：OpenConnect 在每次 Windows 会话里
+  都会打印三行 "Support for Wintun is experimental" 警告，与本次会话是否正常无关。
+  文件仍保留全部原始行，只有显示时过滤掉。
 - MFA 动态码文件只在 `--mfa` 投递到 worker 消费之间的几秒内存在，随后
   立即删除。
 - 与容器版不同，OpenConnect 外面没有沙箱；信任模型等同于信任官方二进
