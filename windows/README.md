@@ -106,8 +106,8 @@ irrelevant — that block belongs to the licensed resource anyway).
 The gateway in this deployment pushes a single split route
 (`10.64.192.0/20`, the tunnel's own subnet). Nothing else on `10.x` is
 routed, and the auto-learner above deliberately never learns RFC1918
-addresses — so a lab server such as `10.128.12.79` is unreachable until you
-name its subnet yourself:
+addresses — so a lab server on a campus-only subnet is unreachable until
+you name that subnet yourself:
 
 ```ini
 # %USERPROFILE%\.vpn\hku.env
@@ -125,8 +125,8 @@ Rules that save time:
 - The value is the same one `shell\bootstrap.ps1` writes, so a new machine
   can set it in the same step as the account.
 
-Then reach the host directly — `ssh jialiang@10.128.12.79 -p 11022`,
-`Test-NetConnection 10.128.12.79 -Port 11022` — not through the proxy:
+Then reach the host directly — `ssh <user>@<lab-host> -p <port>`,
+`Test-NetConnection <lab-host> -Port <port>` — not through the proxy:
 `HKU_EXTRA_ROUTES` adds an OS route, and the host belongs to the campus
 side of the tunnel.
 

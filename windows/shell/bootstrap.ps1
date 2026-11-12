@@ -17,7 +17,7 @@ omitted are asked for interactively, so the usual run is just:
 Non-interactive use (CI, a scripted new machine):
 
   powershell -ExecutionPolicy Bypass -File bootstrap.ps1 `
-      -User u3015850 -Pin <portal-pin> -ExtraRoutes 10.128.0.0/16
+      -User youruid -Pin <portal-pin> -ExtraRoutes 10.128.0.0/16
 
 -User may be the bare uid: @connect.hku.hk is appended when no @ is given.
 -ExtraRoutes is the comma-separated CIDR list for campus-only hosts (the
