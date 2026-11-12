@@ -66,6 +66,10 @@ $Script:LearnedFile  = Join-Path $Script:ConfigDir 'learned-routes.txt'
 # while the UAC prompt is still up) and must be honored, not erased.
 $Script:SessionStartUtc = $null
 
+# Lines still to drop from the log view (the two continuation lines of the
+# Wintun warning); see Test-LogLine.
+$Script:LogFilterSkip = 0
+
 # Log hygiene: a log file never grows past $Script:MaxLogBytes, and a few
 # generations are kept so the runs before last can still be read.
 $Script:MaxLogBytes   = 2MB
@@ -1169,6 +1173,30 @@ function Drain-PendingRead {
     }
 }
 
+function Test-LogLine {
+    # OpenConnect prints a Wintun warning on every Windows session, from
+    # tun-win32.c, unconditionally - three lines: one with a timestamp and
+    # two continuation lines without one. It says nothing about this
+    # session and only adds noise, so the follow view hides it. The log
+    # FILE keeps every line (it is the raw output, and the warning is part
+    # of it); only what is displayed is filtered.
+    #
+    # The counter lives in the script scope on purpose: a closure would get
+    # a fresh copy of it on every call (PowerShell copies captured
+    # variables per invocation), and the two continuation lines would then
+    # not be skipped.
+    param([string]$Line)
+    if ($Script:LogFilterSkip -gt 0) {
+        $Script:LogFilterSkip--
+        return $false
+    }
+    if ($Line -match 'WARNING: Support for Wintun is experimental') {
+        $Script:LogFilterSkip = 2
+        return $false
+    }
+    return $true
+}
+
 function Find-TrailingPrompt {
     # Detects an interactive prompt ("Password:", "Response:") in a child's
     # output buffer.
@@ -1746,7 +1774,8 @@ Usage: hkuvpn.ps1 [hk|-f|-d|-t|--mfa CODE|--check|--status|--logs|--stop]
   --check      Pre-flight check. Exit 0 = ready
   --status     Layered health check. Exit codes: 0 ok, 2 process down,
                3 tunnel down, 4 proxy down, 5 e2e failed
-  --logs       Follow the OpenConnect log
+  --logs       Follow the OpenConnect log. The unconditional Wintun
+               warning is hidden here; the log file keeps every line.
   --stop       Stop the VPN (a live worker cleans up itself, no UAC;
                force-stop of a dead session elevates)
 '@
@@ -1791,7 +1820,12 @@ switch ($command) {
             Write-Err "No log yet: $Script:LogFile"
             exit 1
         }
-        Get-Content $Script:LogFile -Tail 40 -Wait
+        # The file keeps every raw line; the view hides the Wintun warning
+        # OpenConnect prints unconditionally on Windows.
+        $Script:LogFilterSkip = 0
+        Get-Content $Script:LogFile -Tail 40 -Wait | ForEach-Object {
+            if (Test-LogLine $_) { Write-Host $_ }
+        }
         exit 0
     }
     '--stop' {
