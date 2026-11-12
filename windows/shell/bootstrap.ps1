@@ -9,8 +9,13 @@ this script writes them from the template in examples\ and asks for the
 values. Every other file the VPN needs is in the checkout or the release
 bundle.
 
-Existing files are left alone unless -Force is given. Parameters that are
-omitted are asked for interactively, so the usual run is just:
+Existing files are left alone unless -Force is given, with one exception:
+-ExtraRoutes always updates just that key, even in an existing hku.env -
+it is not a secret, and re-running bootstrap to add a lab subnet should not
+have to rewrite the account too (clearing it again means editing the file
+or re-running with -Force).
+Parameters that are omitted are asked for interactively, so the usual run
+is just:
 
   powershell -ExecutionPolicy Bypass -File bootstrap.ps1
 
@@ -52,6 +57,19 @@ function Read-Secret {
     }
 }
 
+# Replaces (or appends) one KEY= line in a file's line list. Defined before
+# any early exit so both write paths can use it.
+$setKey = {
+    param([string[]]$All, [string]$Key, [string]$Value)
+    $hit = $false
+    $out = foreach ($l in $All) {
+        if ($l -match ('^' + [regex]::Escape($Key) + '=')) { $hit = $true; "$Key=$Value" }
+        else { $l }
+    }
+    if (-not $hit) { $out = @($out) + "$Key=$Value" }
+    return ,@($out)
+}
+
 # --- where things live ------------------------------------------------------
 
 $shellDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -67,11 +85,24 @@ if (-not (Test-Path $vpnDir)) {
     New-Item -ItemType Directory -Path $vpnDir -Force | Out-Null
 }
 
+# Both files are written as plain ASCII, no BOM: Windows PowerShell 5.1
+# reads a BOM-less file as the system code page, and a stray multi-byte
+# character can swallow the newline and glue the next value onto a comment.
+# ASCII cannot represent anything else, so non-ASCII input is rejected
+# instead of silently written as '?'.
+function Test-Ascii {
+    param([string]$Value, [string]$What)
+    if ("$Value" -match '[^\x00-\x7F]') {
+        Fail ("the {0} contains non-ASCII characters; edit the file by hand instead." -f $What)
+    }
+}
+
 # --- account ----------------------------------------------------------------
 
 $writeEnv = $Force -or -not (Test-Path $envFile)
 if (-not $writeEnv) {
     Write-Host ("bootstrap: keeping the existing {0}" -f $envFile)
+    Write-Host '  (to change the campus subnets only, pass -ExtraRoutes; -Force rewrites everything)'
 }
 
 $userValue = $User
@@ -91,6 +122,7 @@ if ($writeEnv) {
     } elseif ($userValue -notmatch '^[^@\s]+@[^@\s]+$') {
         Fail ("'{0}' does not look like an account." -f $userValue)
     }
+    Test-Ascii $userValue 'HKU account (HKU_USER)'
 }
 
 # --- extra routes (campus-only hosts) --------------------------------------
@@ -128,29 +160,23 @@ if (-not $writePass) {
     $pinValue = "$pinValue".Trim()
     if (-not $pinValue) { Fail 'a Portal PIN is required.' }
     if ($pinValue -match '\s') { Fail 'the Portal PIN contains a space.' }
+    Test-Ascii $pinValue 'Portal PIN'
 }
 
 # --- write hku.env ----------------------------------------------------------
 
 if ($writeEnv) {
     $lines = @(Get-Content $template)
-    $setKey = {
-        param([string[]]$All, [string]$Key, [string]$Value)
-        $hit = $false
-        $out = foreach ($l in $All) {
-            if ($l -match ('^' + [regex]::Escape($Key) + '=')) { $hit = $true; "$Key=$Value" }
-            else { $l }
-        }
-        if (-not $hit) { $out = @($out) + "$Key=$Value" }
-        return ,@($out)
-    }
     $lines = & $setKey $lines 'HKU_USER' $userValue
     $lines = & $setKey $lines 'HKU_EXTRA_ROUTES' $routeValue
-    # ASCII, no BOM: Windows PowerShell 5.1 reads a BOM-less file as the
-    # system code page, and a stray multi-byte character can swallow the
-    # newline and glue the next value onto a comment.
     [IO.File]::WriteAllLines($envFile, [string[]]$lines, (New-Object Text.ASCIIEncoding))
     Write-Host ("bootstrap: wrote {0}" -f $envFile)
+} elseif ($null -ne $ExtraRoutes) {
+    # An explicit -ExtraRoutes updates only that key in the existing file.
+    $lines = @(Get-Content $envFile)
+    $lines = & $setKey $lines 'HKU_EXTRA_ROUTES' $routeValue
+    [IO.File]::WriteAllLines($envFile, [string[]]$lines, (New-Object Text.ASCIIEncoding))
+    Write-Host ("bootstrap: updated HKU_EXTRA_ROUTES in {0}" -f $envFile)
 }
 
 # --- write hku.pass ---------------------------------------------------------

@@ -182,10 +182,12 @@ powershell -ExecutionPolicy Bypass -File ..\shell\install-path.ps1
 
 A bare `hkuvpn` then runs `-t` - the MFA code is typed in the same window, no
 second console - and adds one thing `-t` cannot do alone: if that window is
-closed *before* the tunnel is up, `hkuvpn-watchdog.ps1` notices and tells the
-hidden worker to stop, instead of leaving it waiting for a code forever. A
-connected session is never touched. `install-path.ps1 -Remove` takes the PATH
-entry out again.
+closed (or interrupted with Ctrl+C) *before* the tunnel is up,
+`hkuvpn-watchdog.ps1` notices and tells the hidden worker to stop, instead
+of leaving it waiting for a code forever. A stop flag that arrives while the
+UAC prompt is still up is honored too: the worker refuses to connect rather
+than erasing it. A connected session is never touched. `install-path.ps1
+-Remove` takes the PATH entry out again.
 
 `shell` is a separate folder from `bin` on purpose: PowerShell runs a `.ps1`
 script in preference to a `.cmd` with the same base name, so `hkuvpn.cmd`
@@ -257,11 +259,14 @@ Three long-session modes, by scenario (plus a tray app):
   the MFA code is typed right in the invoking terminal (an empty answer
   or a timeout stops the worker cleanly). Closing the terminal afterwards
   does NOT affect the VPN - the everyday choice from a shell. A window
-  closed *before* that is covered when you start from the bare command:
-  `hkuvpn-connect.ps1` runs `hkuvpn-watchdog.ps1` beside the launcher, and
-  when the console pid disappears before `HKUVPN_CONNECTED` appears, the
-  watchdog writes the worker's stop flag. A connected session is left
-  alone, so the same command still survives closing the window.
+  closed or interrupted with Ctrl+C *before* that is covered when you
+  start from the bare command: `hkuvpn-connect.ps1` runs
+  `hkuvpn-watchdog.ps1` beside the launcher, and when the console pid
+  disappears before `HKUVPN_CONNECTED` appears, the watchdog writes the
+  worker's stop flag. The worker honors such a flag even while the UAC
+  prompt delayed its start (a flag newer than the session is a stop
+  request, not leftovers). A connected session is left alone, so the same
+  command still survives closing the window.
 - **`-d` detach mode**: no interaction at start; deliver the code with
   `--mfa`. For scripts.
 

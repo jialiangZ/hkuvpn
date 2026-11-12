@@ -9,7 +9,10 @@ same window and closing that window after "Connected" leaves the VPN up.
 The PATH entry is per user (HKCU\Environment), so no administrator rights are
 needed and nothing outside your account changes. Re-running is harmless, and
 -Remove takes the entry out again. Other entries are copied through byte for
-byte: this script never re-sorts, de-duplicates or reformats your PATH.
+byte - never re-sorted, de-duplicated or reformatted - and so is the registry
+value kind: a stock Windows profile keeps Path as REG_EXPAND_SZ holding
+%USERPROFILE% entries, and a rewrite as REG_SZ would turn those into dead
+text that nothing expands.
 
 Usage:
   powershell -ExecutionPolicy Bypass -File install-path.ps1
@@ -21,9 +24,53 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+function Get-UserPathRaw {
+    # Not [Environment]::GetEnvironmentVariable('Path','User'): it EXPANDS
+    # REG_EXPAND_SZ values, so "%USERPROFILE%\..." would silently come back
+    # as the expanded text and a write-back would replace it.
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment')
+    if (-not $key) { return '' }
+    try {
+        $v = $key.GetValue('Path', $null, 'DoNotExpandEnvironmentNames')
+        if ($null -eq $v) { return '' }
+        return [string]$v
+    } finally {
+        $key.Close()
+    }
+}
+
+function Set-UserPathRaw {
+    param([string]$Value)
+    # Not [Environment]::SetEnvironmentVariable: it writes REG_SZ (verified:
+    # the kind flips from ExpandString to String), which leaves
+    # "%USERPROFILE%\..." entries unexpanded. Write with the kind the value
+    # already has - ExpandString on a stock profile - and broadcast
+    # WM_SETTINGCHANGE ourselves, the way SetEnvironmentVariable would have.
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
+    if (-not $key) { throw 'cannot open HKCU\Environment for writing' }
+    try {
+        $kind = [Microsoft.Win32.RegistryValueKind]::ExpandString
+        try { $kind = $key.GetValueKind('Path') } catch {}
+        $key.SetValue('Path', $Value, $kind)
+    } finally {
+        $key.Close()
+    }
+    if (-not ('Win32.NativeEnv' -as [type])) {
+        Add-Type -Namespace Win32 -Name NativeEnv -MemberDefinition @'
+[DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg,
+    UIntPtr wParam, string lParam, uint fuFlags, uint uTimeout,
+    out UIntPtr lpdwResult);
+'@
+    }
+    $result = [UIntPtr]::Zero
+    # HWND_BROADCAST, WM_SETTINGCHANGE "Environment", SMTO_ABORTIFHUNG.
+    $null = [Win32.NativeEnv]::SendMessageTimeout(
+        [IntPtr]0xFFFF, 0x1A, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$result)
+}
+
 $shellDir = (Split-Path -Parent $MyInvocation.MyCommand.Path).TrimEnd('\')
-$raw = [Environment]::GetEnvironmentVariable('Path', 'User')
-if ($null -eq $raw) { $raw = '' }
+$raw = Get-UserPathRaw
 
 # Compare the way Windows does: case-insensitively, ignoring a trailing
 # backslash and surrounding spaces.
@@ -36,7 +83,7 @@ if ($Remove) {
         exit 0
     }
     $kept = @($parts | Where-Object { $_.Trim().TrimEnd('\') -ine $shellDir })
-    [Environment]::SetEnvironmentVariable('Path', ($kept -join ';'), 'User')
+    Set-UserPathRaw -Value ($kept -join ';')
     Write-Host ("hkuvpn: removed {0} from the user PATH." -f $shellDir)
     Write-Host 'Open a new terminal for the change to take effect.'
     exit 0
@@ -52,7 +99,7 @@ if ($found.Count -gt 0) {
     Write-Host ("hkuvpn: {0} is already on the user PATH." -f $shellDir)
 } else {
     $sep = if ($raw -and -not $raw.EndsWith(';')) { ';' } else { '' }
-    [Environment]::SetEnvironmentVariable('Path', ($raw + $sep + $shellDir), 'User')
+    Set-UserPathRaw -Value ($raw + $sep + $shellDir)
     Write-Host ("hkuvpn: added {0} to the user PATH." -f $shellDir)
 }
 

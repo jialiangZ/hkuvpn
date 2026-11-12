@@ -40,18 +40,23 @@ if (-not (Test-Path $tempBase)) {
 # A leftover "done" from a previous run must never stop this watchdog early.
 Remove-Item $doneFile -Force -ErrorAction SilentlyContinue
 
+# One clock reading for both the watchdog and the launcher: the worker uses
+# it to tell a stop flag written for THIS session (console died, e.g.
+# during the UAC prompt) from leftovers of an earlier one.
+$startMs = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+
 $null = Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList @(
     '-NoProfile', '-ExecutionPolicy', 'Bypass',
     '-File', ('"{0}"' -f $watchdog),
     '-TermPid', $PID,
     # Unix milliseconds: always positive, so the command line never shows it
     # as a "-parameter" token (binary ticks are negative for modern dates).
-    '-StartTimeMs', ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())
+    '-StartTimeMs', $startMs
 )
 
 $code = 0
 try {
-    & $upstream -t
+    & $upstream -t --SessionStartMs $startMs
     $code = $LASTEXITCODE
 } finally {
     Set-Content -Path $doneFile -Value 'done' -NoNewline -ErrorAction SilentlyContinue

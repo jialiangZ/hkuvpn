@@ -60,6 +60,12 @@ $Script:HbFile       = Join-Path $Script:TempBase 'hb.log'
 # across sessions as "base/prefix|lastseen-epoch|host" lines.
 $Script:LearnedFile  = Join-Path $Script:ConfigDir 'learned-routes.txt'
 
+# Terminal mode (-t) passes --SessionStartMs to its worker: the moment the
+# shell wrapper began. A stop.flag written after that belongs to THIS
+# session (the watchdog writes one when the caller's console dies, e.g.
+# while the UAC prompt is still up) and must be honored, not erased.
+$Script:SessionStartUtc = $null
+
 # Log hygiene: a log file never grows past $Script:MaxLogBytes, and a few
 # generations are kept so the runs before last can still be read.
 $Script:MaxLogBytes   = 2MB
@@ -1233,7 +1239,22 @@ function Invoke-TunnelWorker {
     $dir = Split-Path -Parent $Script:LogFile
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     Remove-Item $Script:MarkerFile, $Script:StateFile, $Script:ResponseFile,
-        $Script:StopFlagFile, $Script:HbFile -Force -ErrorAction SilentlyContinue
+        $Script:HbFile -Force -ErrorAction SilentlyContinue
+    if (Test-Path $Script:StopFlagFile) {
+        $flagWritten = (Get-Item $Script:StopFlagFile).LastWriteTimeUtc
+        if ($Script:SessionStartUtc -and $flagWritten -gt $Script:SessionStartUtc) {
+            # A stop request that arrived after this session was asked for
+            # (the shell watchdog writes one when the caller's console died
+            # before connecting - e.g. during the UAC prompt): honor it
+            # instead of wiping it, or the worker would sit in the MFA wait
+            # with nobody left to deliver a code.
+            Write-Info 'A stop flag newer than this session arrived; not connecting.'
+            Write-Marker 'HKUVPN_EXITED error=stop-flag-newer-than-session'
+            Remove-Item $Script:StopFlagFile, $Script:PidFile -Force -ErrorAction SilentlyContinue
+            return 1
+        }
+        Remove-Item $Script:StopFlagFile -Force -ErrorAction SilentlyContinue
+    }
     # One log per session: the previous session's log becomes .1 so the
     # viewer never mixes old and new runs, and the runs before that are
     # kept as .2 and .3.
@@ -1625,6 +1646,13 @@ function Invoke-TerminalConnect {
     Write-Info 'Requesting administrator rights (UAC prompt)...'
     $parts = @('-NoProfile', '-ExecutionPolicy', 'Bypass',
                '-File', ('"{0}"' -f $PSCommandPath), '"--Worker"')
+    # Hand the wrapper's start time down so the worker can tell a stop flag
+    # written for THIS session (console died during the UAC prompt) from
+    # leftovers of an earlier one.
+    if ($Script:SessionStartUtc) {
+        $parts += @('"-SessionStartMs"',
+                    ('"{0}"' -f ([DateTimeOffset]$Script:SessionStartUtc).ToUnixTimeMilliseconds()))
+    }
     try {
         $null = Start-Process -FilePath 'powershell.exe' `
             -ArgumentList ($parts -join ' ') -Verb RunAs -WindowStyle Hidden
@@ -1738,6 +1766,18 @@ $worker = $false
 foreach ($a in $args) {
     if ("$a" -eq '--Elevated') { $elevated = $true }
     if ("$a" -eq '--Worker') { $worker = $true }
+}
+# --SessionStartMs <ms> - when this session was asked for (Unix epoch
+# milliseconds, from the shell wrapper). Consumed here, never forwarded;
+# only the -t worker path uses it. Kept as a pair scan so it works in any
+# position and alongside the internal --Worker invocation.
+for ($i = 0; $i -lt ($args.Count - 1); $i++) {
+    if ("$($args[$i])" -eq '-SessionStartMs' -or "$($args[$i])" -eq '--SessionStartMs') {
+        [long]$ms = 0
+        if ([long]::TryParse([string]$args[$i + 1], [ref]$ms)) {
+            try { $Script:SessionStartUtc = [DateTimeOffset]::FromUnixTimeMilliseconds($ms).UtcDateTime } catch {}
+        }
+    }
 }
 
 switch ($command) {
