@@ -242,9 +242,10 @@ Three long-session modes, by scenario (plus a tray app):
   resized and has no maximize button. Built with Go alone (`GOOS=windows go build`, no cgo, no
   webview) - see `windows\mygo-app\build.sh`. The exe is built as a GUI
   app (`-H=windowsgui`), so it never opens a terminal window; its own
-  diagnostics go to `%LOCALAPPDATA%\HKUVPN\app.log`. The tray icon is a 4-state
-  shield (grey / green / amber / red) rendered from
-  `windows\mygo-app\assets\tray-icon.svg`. Disconnect is UAC-free and exiting
+  diagnostics go to `%LOCALAPPDATA%\HKUVPN\app.log`. The window and the
+  tray carry the HKU crest (`windows\mygo-app\assets\app-icon.png`); the
+  tray adds a state badge in grey / green / amber / red, rendered from
+  that icon by `make-tray-icons.py`. Disconnect is UAC-free and exiting
   the app never kills a session.
 - **Regression script** (`windows\tests\session-flow.ps1`): drives the
   worker and the app through the whole session lifecycle - a stop while

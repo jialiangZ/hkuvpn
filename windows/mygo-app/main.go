@@ -1,10 +1,7 @@
 package main
 
 import (
-	"bytes"
 	"embed"
-	"image"
-	"image/png"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -39,9 +36,14 @@ func main() {
 			DisableMaximize: true,
 			Content:         ui.View(a.view),
 		})
-		// The app carries no icon: a fully transparent image keeps the title
-		// bar and the taskbar button blank.
-		_ = win.SetIcon(blankPNG())
+		// The HKU crest is the app icon: title bar, taskbar and Alt+Tab
+		// all show assets/app-icon.png. The tray carries the same crest
+		// with a state-coloured badge.
+		if icon, err := assets.ReadFile("assets/app-icon.png"); err == nil {
+			_ = win.SetIcon(icon)
+		} else {
+			logf("app icon: %v", err)
+		}
 
 		win.OnClose(func(e *mygo.CloseEvent) {
 			// Closing the window keeps the tunnel alive in the tray.
@@ -65,13 +67,6 @@ func main() {
 	if err := mygo.App.Run(); err != nil {
 		fatal("HKU VPN", "The app could not start: "+err.Error())
 	}
-}
-
-func blankPNG() []byte {
-	img := image.NewRGBA(image.Rect(0, 0, 16, 16))
-	var buf bytes.Buffer
-	_ = png.Encode(&buf, img)
-	return buf.Bytes()
 }
 
 func setupTray(a *app) {

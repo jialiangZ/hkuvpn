@@ -85,11 +85,14 @@ While it runs, the app writes what it is doing to
 code, the VPN address). It is what the regression script reads, and it
 answers "what does the app think it is doing?" without the window.
 
-## Tray icons
+## Icons
 
-`assets/tray-{gray,green,amber,red}.png` (64px, embedded) encode the
-connection state; MyGo scales them for the taskbar. They are rendered
-from `assets/tray-icon.svg` with `python3 make-tray-icons.py` - rerun it
-after editing the SVG.
+`assets/app-icon.png` (256px, transparent) is the app icon: the window,
+the taskbar and Alt+Tab show it, and the README header uses the same
+artwork rendered at 256px in `docs/images/hkuvpn-icon.png`.
 
-The app window itself is intentionally icon-less.
+`assets/tray-{gray,green,amber,red}.png` (64px, embedded) carry the same
+crest with a badge in the connection-state colour; MyGo scales them for
+the taskbar. They are rendered from `assets/app-icon.png` with
+`python3 make-tray-icons.py` (Pillow) - rerun it after replacing the
+icon.

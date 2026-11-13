@@ -78,10 +78,13 @@ App 自己的状态（偏好和本次会话的开始时间）在
 （状态、worker、心跳、待输入的码、VPN 地址）。回归脚本读的就是它，
 它也回答了"不打开窗口，App 觉得自己在干什么"。
 
-## 托盘图标
+## 图标
 
-`assets/tray-{gray,green,amber,red}.png`（64px，内嵌）表示连接状态，
-由 MyGo 缩放到任务栏尺寸。它们用 `python3 make-tray-icons.py`
-从 `assets/tray-icon.svg` 渲染 —— 改完 SVG 要重跑一次。
+`assets/app-icon.png`（256px，透明底）就是 App 图标：窗口、任务栏和
+Alt+Tab 都显示它；README 顶部的图标是同一张图，在
+`docs/images/hkuvpn-icon.png` 里同样以 256px 保存。
 
-App 窗口本身刻意不放任何图标。
+`assets/tray-{gray,green,amber,red}.png`（64px，内嵌）是同一枚盾徽加
+一个状态色圆点，由 MyGo 缩放到任务栏尺寸。它们用
+`python3 make-tray-icons.py`（Pillow）从 `assets/app-icon.png` 生成 ——
+换图标后重跑一次。
