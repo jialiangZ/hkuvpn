@@ -1,6 +1,6 @@
 {
   "name": "HKU VPN",
   "identifier": "hk.hku.vpn",
-  "version": "0.1.0",
+  "version": "1.4.0",
   "out": "build"
 }
