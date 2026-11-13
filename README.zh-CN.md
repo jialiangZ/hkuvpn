@@ -1,6 +1,7 @@
 # <img src="docs/images/hkuvpn-icon.png" width="44" alt="hkuvpn 图标"> hkuvpn
 
 [![MIT 许可证](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Listed on Awesome MyGo](https://awesomemygo.dev/badge.svg)](https://awesomemygo.dev/apps/hku-vpn)
 
 **访问港大校园网，同时继续使用你原来的上网线路。**
 

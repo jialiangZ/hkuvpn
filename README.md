@@ -1,6 +1,7 @@
 # <img src="docs/images/hkuvpn-icon.png" width="44" alt="hkuvpn icon"> hkuvpn
 
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Listed on Awesome MyGo](https://awesomemygo.dev/badge.svg)](https://awesomemygo.dev/apps/hku-vpn)
 
 **Access HKU's campus network while keeping your usual Internet connection.**
 
