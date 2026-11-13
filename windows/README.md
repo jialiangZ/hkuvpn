@@ -130,6 +130,31 @@ Then reach the host directly — `ssh <user>@<lab-host> -p <port>`,
 `HKU_EXTRA_ROUTES` adds an OS route, and the host belongs to the campus
 side of the tunnel.
 
+## Keeping an idle session alive
+
+HKU's gateway ends a session 30 minutes after the last data packet crossed
+the tunnel (`X-CSTP-Idle-Timeout: 1800`). OpenConnect's DPD/keepalive
+packets do **not** reset that timer, so a session that is left alone
+disconnects with `Received server disconnect: 'Idle Timeout'` even though
+the client is healthy.
+
+The worker sends one tiny proxied request (`https://www.hku.hk/`) every
+`HKU_KEEPALIVE` seconds while connected — default **600** (10 minutes),
+`0` turns it off. Keep it below 1800, or it cannot beat the gateway's
+timer. It runs in every mode (smart, `-t`, `-d`, the app), only
+after the tunnel is up, and appends one line per attempt to
+`%TEMP%\hkuvpn\keepalive.log` (`... keepalive http=200`; `000` means the
+request did not get through). `--check` prints the interval.
+
+```ini
+# %USERPROFILE%\.vpn\hku.env
+HKU_KEEPALIVE=600
+```
+
+A proxied request is used on purpose: only traffic through the tunnel
+resets the gateway's timer, and `www.hku.hk` is already the end-to-end
+probe the connect path uses.
+
 ## Requirements
 
 - Windows 10 1803+ / Windows 11, 64-bit (`curl.exe` ships with the OS)

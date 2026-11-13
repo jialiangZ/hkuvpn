@@ -49,6 +49,7 @@ $Script:VpncScript = Join-Path $Script:VpnHome 'etc\vpnc-script-win.js'
 $Script:TempBase     = Join-Path $env:TEMP 'hkuvpn'
 $Script:LogFile      = Join-Path $Script:TempBase 'openconnect.log'
 $Script:GostLogFile  = Join-Path $Script:TempBase 'gost.log'
+$Script:KeepaliveLog = Join-Path $Script:TempBase 'keepalive.log'
 $Script:MarkerFile   = Join-Path $Script:TempBase 'markers.log'
 $Script:PidFile      = Join-Path $Script:TempBase 'pids.txt'
 $Script:StateFile    = Join-Path $Script:TempBase 'vpnc-state.txt'
@@ -950,6 +951,16 @@ function Invoke-Preflight {
     }
     Write-Info ("autoroute: {0} ({1} learned route(s) cached; external HKU resources are routed on demand)" -f $autoOn, $learnedCount)
 
+    $keepalive = 600
+    $kaVal = 0
+    if ([int]::TryParse([string]$envMap['HKU_KEEPALIVE'], [ref]$kaVal)) {
+        if ($kaVal -le 0) { $keepalive = 0 }
+        elseif ($kaVal -lt 60) { $keepalive = 60 }
+        else { $keepalive = $kaVal }
+    }
+    $kaText = if ($keepalive -gt 0) { "on ({0}s; the gateway drops a session after 1800s without data)" -f $keepalive } else { 'off' }
+    Write-Info ("keepalive: {0}" -f $kaText)
+
     if ($failures -gt 0) {
         Write-Err ("result   : NOT ready - {0} problem(s) listed above" -f $failures)
         return 1
@@ -1088,6 +1099,7 @@ function Initialize-ConnectConfig {
         RoutePrefix  = 24
         RouteMax     = 512
         RouteTtl     = 14
+        Keepalive    = 600
         ProxyDomains = @()
     }
     if ($envMap['HKU_SOCKS_PORT']) { $cfg.SocksPort = [int]$envMap['HKU_SOCKS_PORT'] }
@@ -1103,6 +1115,14 @@ function Initialize-ConnectConfig {
     $rt = 0
     if ([int]::TryParse([string]$envMap['HKU_AUTO_ROUTES_TTL'], [ref]$rt) -and $rt -ge 1 -and $rt -le 365) {
         $cfg.RouteTtl = $rt
+    }
+    # Keepalive: 0 disables it, anything else is the interval in seconds
+    # (floored at 60 so a typo cannot hammer the proxy once a second).
+    $ka = 0
+    if ([int]::TryParse([string]$envMap['HKU_KEEPALIVE'], [ref]$ka)) {
+        if ($ka -le 0) { $cfg.Keepalive = 0 }
+        elseif ($ka -lt 60) { $cfg.Keepalive = 60 }
+        else { $cfg.Keepalive = $ka }
     }
     $pd = [string]$envMap['HKU_PROXY_DOMAINS']
     if ($pd) { $cfg.ProxyDomains = @($pd -split '[,\s]+' | Where-Object { $_ }) }
@@ -1387,6 +1407,7 @@ function Invoke-TunnelWorker {
     $connected = $false
     $mfaAttempts = 0
     $lastFlush = Get-Date
+    $lastKeepalive = Get-Date
     $exitCode = 0
 
     try {
@@ -1461,6 +1482,7 @@ function Invoke-TunnelWorker {
                 (($outBuf.ToString().IndexOf('CSTP connected', [StringComparison]::OrdinalIgnoreCase) -ge 0) -or
                  ($errBuf.ToString().IndexOf('CSTP connected', [StringComparison]::OrdinalIgnoreCase) -ge 0))) {
                 $connected = $true
+                $lastKeepalive = Get-Date
                 Write-Marker 'HKUVPN_CONNECTED'
                 Write-Info 'Tunnel established; waiting for split routes...'
                 # The vpnc-script runs once the wintun adapter comes up. A
@@ -1494,6 +1516,25 @@ function Invoke-TunnelWorker {
                 }
             }
 
+            # Gateway idle timeout. HKU's gateway drops a session after 30
+            # minutes (X-CSTP-Idle-Timeout: 1800) in which nothing crossed
+            # the tunnel - DPD/keepalive packets do not count. One tiny
+            # proxied request per HKU_KEEPALIVE seconds (default 600) is
+            # real data and keeps the session up. It runs here, in the
+            # worker, so smart/-t/-d and the app all get it.
+            if ($connected -and $Cfg.Keepalive -gt 0 -and
+                ((Get-Date) - $lastKeepalive).TotalSeconds -ge $Cfg.Keepalive) {
+                $lastKeepalive = Get-Date
+                $kaCode = & curl.exe -s -m 10 -x "socks5h://127.0.0.1:$($Cfg.SocksPort)" `
+                    -o NUL -w '%{http_code}' 'https://www.hku.hk/' 2>$null
+                $kaCode = "$kaCode".Trim()
+                if (-not $kaCode) { $kaCode = '000' }
+                try {
+                    [IO.File]::AppendAllText($Script:KeepaliveLog,
+                        ("{0} keepalive http={1}`n" -f (Get-Date -Format s), $kaCode))
+                } catch {}
+            }
+
             # Bound buffer growth; keep the tail for pattern context.
             foreach ($b in @($outBuf, $errBuf)) {
                 if ($b.Length -gt 16384) {
@@ -1516,6 +1557,7 @@ function Invoke-TunnelWorker {
                 try {
                     if (Test-LogTooBig $Script:LogFile) { Invoke-RotateLog $Script:LogFile }
                     if (Test-LogTooBig $Script:GostLogFile) { Invoke-RotateLog $Script:GostLogFile }
+                    if (Test-LogTooBig $Script:KeepaliveLog) { Invoke-RotateLog $Script:KeepaliveLog }
                 } catch {}
                 try {
                     [IO.File]::AppendAllText($Script:HbFile,

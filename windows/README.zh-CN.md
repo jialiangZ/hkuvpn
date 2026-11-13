@@ -78,6 +78,27 @@ HKU_EXTRA_ROUTES=10.128.0.0/16
 `Test-NetConnection <lab-host> -Port <port>` —— 而不是走代理：
 `HKU_EXTRA_ROUTES` 加的是系统路由，该主机在隧道的校园一侧。
 
+## 空闲保活
+
+港大网关在**隧道里连续 30 分钟没有数据**之后会主动断开
+（`X-CSTP-Idle-Timeout: 1800`）。OpenConnect 自己的 DPD/keepalive 包
+**不算**数据，所以即使客户端一切正常，放着不用也会收到
+`Received server disconnect: 'Idle Timeout'`。
+
+worker 在连接期间每隔 `HKU_KEEPALIVE` 秒通过代理发一个很小的请求
+（`https://www.hku.hk/`）：默认 **600**（10 分钟），设为 `0` 关闭；
+要小于网关的 1800 秒才有效。所有模式都生效（smart、`-t`、`-d`、桌面 App），只在隧道建立之后才发；
+每次尝试会往 `%TEMP%\hkuvpn\keepalive.log` 追加一行
+（`... keepalive http=200`，`000` 表示没通）。`--check` 会打印当前间隔。
+
+```ini
+# %USERPROFILE%\.vpn\hku.env
+HKU_KEEPALIVE=600
+```
+
+之所以走代理：只有真正穿过隧道的数据才会重置网关计时器，而
+`www.hku.hk` 本来就是连接流程里用的端到端探测地址。
+
 ## 环境要求
 
 - Windows 10 1803+ / Windows 11，64 位（系统自带 `curl.exe`）
