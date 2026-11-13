@@ -85,16 +85,37 @@ HKU_EXTRA_ROUTES=10.128.0.0/16
 **不算**数据，所以即使客户端一切正常，放着不用也会收到
 `Received server disconnect: 'Idle Timeout'`。
 
-worker 在连接期间每隔 `HKU_KEEPALIVE` 秒通过代理发一个很小的请求
-（`https://www.hku.hk/`）：默认 **600**（10 分钟），设为 `0` 关闭；
-要小于网关的 1800 秒才有效。所有模式都生效（smart、`-t`、`-d`、桌面 App），只在隧道建立之后才发；
-每次尝试会往 `%TEMP%\hkuvpn\keepalive.log` 追加一行
-（`... keepalive http=200`，`000` 表示没通）。`--check` 会打印当前间隔。
+worker 在连接期间每隔 `HKU_KEEPALIVE` 秒做一次保活，默认 **600**（10 分钟），
+设为 `0` 关闭；要小于网关的 1800 秒才有效。所有模式都生效（smart、`-t`、`-d`、
+桌面 App），只在隧道建立之后才发；每次尝试会往 `%TEMP%\hkuvpn\keepalive.log`
+追加一行 —— `... keepalive ping=ok http=200`。`ping` 那一半必定穿过隧道（目标
+在隧道自己的网段里，路由表无论被谁接管都改不了它的去向）；`http` 是第二个
+贴近真实使用的探测，那边出现 `000` 表示代理请求没走通。`--check` 会打印当前间隔。
 
 ```ini
 # %USERPROFILE%\.vpn\hku.env
 HKU_KEEPALIVE=600
 ```
+
+## 与 TUN 代理客户端（Clash / FlClash 等）共存
+
+**不需要在对方客户端里加任何规则。** hkuvpn 用两个办法把控制信道从 TUN 下面
+拉出来：
+
+1. worker 启动 openconnect 和 gost 前，会把 `http_proxy`/`https_proxy`/
+   `all_proxy`（含大写形式）从子进程环境里清掉 —— 否则启动终端里导出过的
+   代理变量会被 openconnect 当真，整条 VPN 都从那个代理走。
+2. 连接时，DoH 解析出的控制端点（`vpn2fa*.hku.hk`，因此依赖默认开启的
+   `HKU_AUTO_RESOLVE`）会通过**物理网卡的网关**加上 `/32` 主机路由。主机路由
+   仅凭前缀长度就压过任何 TUN 的 `0.0.0.0/0`，去 VPN 网关的包无论如何都从
+   真实网卡出去。断开时删除这些路由；下次连接会先清残留再加。
+
+隧道流量本身从来不受影响：下发的分片路由（`10.64.192.0/20`、
+`HKU_EXTRA_ROUTES`）和自动学习的 `/24` 都比默认路由更精确。
+
+有一个情况在脚本能力之外：**驱动级强制接管、无视路由表的 TUN**。那种情况下
+任何基于路由的办法都无效，只能在客户端里给 `147.8.240.0/24` 加 `DIRECT`
+规则。标准的 Clash/Meta TUN 遵循路由表，实际使用中主机路由就够。
 
 之所以走代理：只有真正穿过隧道的数据才会重置网关计时器，而
 `www.hku.hk` 本来就是连接流程里用的端到端探测地址。

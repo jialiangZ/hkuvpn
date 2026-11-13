@@ -1063,6 +1063,7 @@ function Initialize-ConnectConfig {
     # DoH resolution of the control endpoints (immune to fake-IP DNS).
     $resolveArgs = @()
     $primaryIp = $null
+    $controlIps = @()
     $autoResolve = [string]$envMap['HKU_AUTO_RESOLVE']
     if ($autoResolve -ne '0') {
         Write-Info 'Resolving HKU control endpoints over DoH (immune to fake-IP DNS)...'
@@ -1070,6 +1071,7 @@ function Initialize-ConnectConfig {
             $ip = Invoke-DoH $h
             if ($ip) {
                 $resolveArgs += ("--resolve={0}:{1}" -f $h, $ip)
+                if ($controlIps -notcontains $ip) { $controlIps += $ip }
                 if ($h -eq $Script:VpnHost -and -not $primaryIp) { $primaryIp = $ip }
             } else {
                 Write-Info ("DoH: could not resolve {0}" -f $h)
@@ -1094,6 +1096,7 @@ function Initialize-ConnectConfig {
         NoDtls       = ([string]$envMap['HKU_DTLS'] -ne '1')
         ResolveArgs  = $resolveArgs
         ServerCert   = $serverCert
+        ControlIps   = $controlIps
         ExtraRoutes  = [string]$envMap['HKU_EXTRA_ROUTES']
         AutoRoutes   = ([string]$envMap['HKU_AUTO_ROUTES'] -ne '0')
         RoutePrefix  = 24
@@ -1127,6 +1130,63 @@ function Initialize-ConnectConfig {
     $pd = [string]$envMap['HKU_PROXY_DOMAINS']
     if ($pd) { $cfg.ProxyDomains = @($pd -split '[,\s]+' | Where-Object { $_ }) }
     return $cfg
+}
+
+# --- control-channel pinning -------------------------------------------------
+
+function Get-PhysicalDefaultRoute {
+    # The default route of the physical NIC, ignoring the TUN adapters that
+    # shadow it: a Clash/FlClash style TUN answers in 198.18.0.0/15 and
+    # sits on metric 0, our own wintun adapter is the OpenConnect Tunnel.
+    # (The VPN is not up yet when this runs, so it cannot appear here.)
+    $cands = @(Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | Where-Object {
+        $_.NextHop -and
+        $_.NextHop -ne '0.0.0.0' -and
+        -not $_.NextHop.StartsWith('198.18.') -and
+        $_.InterfaceAlias -notmatch 'OpenConnect|Loopback'
+    })
+    $best = $null
+    $bestMetric = [int]::MaxValue
+    foreach ($r in $cands) {
+        $im = 9999
+        try {
+            $im = (Get-NetIPInterface -InterfaceIndex $r.InterfaceIndex -AddressFamily IPv4 -ErrorAction Stop).InterfaceMetric
+        } catch {}
+        $m = [int]$r.RouteMetric + [int]$im
+        if ($m -lt $bestMetric) { $bestMetric = $m; $best = $r }
+    }
+    return $best
+}
+
+function Add-ControlRoutePins {
+    # Host routes for the VPN control endpoints via the physical gateway.
+    # A /32 beats every TUN's 0.0.0.0/0 by prefix length alone, so no other
+    # client on the machine (a Clash TUN, another VPN) can put the control
+    # channel behind itself - no per-client rule is needed.
+    param([string[]]$Ips)
+    $pinned = @()
+    if (-not $Ips -or $Ips.Count -eq 0) { return $pinned }
+    $best = Get-PhysicalDefaultRoute
+    if (-not $best) { return $pinned }
+    foreach ($ip in ($Ips | Where-Object { $_ })) {
+        # A pin left by a crashed worker would make 'route add' fail with
+        # "object already exists"; delete first so the add always wins.
+        & route.exe delete $ip *> $null
+        & route.exe add $ip mask 255.255.255.255 $best.NextHop metric 1 if $best.InterfaceIndex *> $null
+        if ($LASTEXITCODE -eq 0) { $pinned += $ip }
+    }
+    if ($pinned.Count -gt 0) {
+        Write-Info ("control endpoints pinned to the physical NIC ({1} on {0}): {2}" -f `
+                    $best.InterfaceAlias, $best.NextHop, ($pinned -join ', '))
+    }
+    return $pinned
+}
+
+function Remove-ControlRoutePins {
+    param([string[]]$Ips)
+    foreach ($ip in ($Ips | Where-Object { $_ })) {
+        & route.exe delete $ip *> $null
+    }
 }
 
 # --- the tunnel worker ------------------------------------------------------
@@ -1342,6 +1402,15 @@ function Invoke-TunnelWorker {
         }
     }
 
+    # The control channel must not ride a proxy - neither one exported in
+    # the launching terminal (https_proxy and friends, which openconnect
+    # honors) nor a TUN client's default route. Scrub the variables for
+    # both children, and pin the resolved endpoints to the physical NIC.
+    $script:proxyVars = @('http_proxy','https_proxy','all_proxy','ftp_proxy',
+                          'HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','FTP_PROXY',
+                          'no_proxy','NO_PROXY')
+    $script:controlPins = Add-ControlRoutePins -Ips $Cfg.ControlIps
+
     $gostPsi = New-Object System.Diagnostics.ProcessStartInfo
     $gostPsi.FileName = $Cfg.Gost
     $gostPsi.Arguments = ('-D -L socks5://127.0.0.1:{0} -L http://127.0.0.1:{1}' -f $Cfg.SocksPort, $Cfg.HttpPort)
@@ -1349,6 +1418,7 @@ function Invoke-TunnelWorker {
     $gostPsi.CreateNoWindow = $true
     $gostPsi.RedirectStandardOutput = $true
     $gostPsi.RedirectStandardError = $true
+    foreach ($k in $script:proxyVars) { try { $gostPsi.EnvironmentVariables.Remove($k) } catch {} }
     $gost = [System.Diagnostics.Process]::Start($gostPsi)
     # gost exits immediately when it cannot bind the listeners (most often
     # because another proxy already owns 1080/1088). Give it a moment and
@@ -1384,6 +1454,7 @@ function Invoke-TunnelWorker {
     $ocPsi.EnvironmentVariables['HKU_EXTRA_ROUTES'] = [string]$Cfg.ExtraRoutes
     $ocPsi.EnvironmentVariables['HKU_STATE_FILE'] = $Script:StateFile
     $ocPsi.EnvironmentVariables['HKU_LOG_FILE'] = $Script:LogFile
+    foreach ($k in $script:proxyVars) { try { $ocPsi.EnvironmentVariables.Remove($k) } catch {} }
     $oc = [System.Diagnostics.Process]::Start($ocPsi)
 
     Write-PidFile -WorkerPid $PID -OpenConnectPid $oc.Id -GostPid $gost.Id
@@ -1408,6 +1479,7 @@ function Invoke-TunnelWorker {
     $mfaAttempts = 0
     $lastFlush = Get-Date
     $lastKeepalive = Get-Date
+    $kaPingIp = $null
     $exitCode = 0
 
     try {
@@ -1501,6 +1573,17 @@ function Invoke-TunnelWorker {
                 Set-TunnelMtuFromDtls -LogBuffer $logAll
                 if ($Cfg.AutoRoutes) { Initialize-AutoRoutes -Cfg $Cfg }
                 if (Test-Path $Script:StateFile) {
+                    # A keepalive target INSIDE the tunnel's own subnet:
+                    # whatever else the routing table does, an address in
+                    # the on-link /20 leaves through the wintun adapter, so
+                    # the ping crosses the tunnel even when a TUN client
+                    # owns the default route. ".1" of the assigned network;
+                    # a reply is nice but not required - the packet counts.
+                    try {
+                        $a = [Net.IPAddress]::Parse([string](Read-StateValue 'IP4')).GetAddressBytes()
+                        $m = [Net.IPAddress]::Parse([string](Read-StateValue 'MASK')).GetAddressBytes()
+                        $kaPingIp = "{0}.{1}.{2}.1" -f ($a[0] -band $m[0]), ($a[1] -band $m[1]), ($a[2] -band $m[2])
+                    } catch {}
                     Write-Info ("Connected - split routes installed (see hkuvpn.ps1 --logs)" )
                     $code2 = & curl.exe -s -m 15 -x "socks5h://127.0.0.1:$($Cfg.SocksPort)" `
                         -o NUL -w '%{http_code}' 'https://www.hku.hk/' 2>$null
@@ -1525,13 +1608,22 @@ function Invoke-TunnelWorker {
             if ($connected -and $Cfg.Keepalive -gt 0 -and
                 ((Get-Date) - $lastKeepalive).TotalSeconds -ge $Cfg.Keepalive) {
                 $lastKeepalive = Get-Date
+                # The ping is the guaranteed one: its target is inside the
+                # tunnel's own on-link subnet, so it crosses the tunnel no
+                # matter what owns the default route. The proxied request
+                # is a second, usage-shaped probe (and a diagnostic).
+                $kaPing = 'n/a'
+                if ($kaPingIp) {
+                    $null = & ping.exe -n 1 -w 1000 $kaPingIp 2>$null
+                    $kaPing = if ($LASTEXITCODE -eq 0) { 'ok' } else { 'no-reply' }
+                }
                 $kaCode = & curl.exe -s -m 10 -x "socks5h://127.0.0.1:$($Cfg.SocksPort)" `
                     -o NUL -w '%{http_code}' 'https://www.hku.hk/' 2>$null
                 $kaCode = "$kaCode".Trim()
                 if (-not $kaCode) { $kaCode = '000' }
                 try {
                     [IO.File]::AppendAllText($Script:KeepaliveLog,
-                        ("{0} keepalive http={1}`n" -f (Get-Date -Format s), $kaCode))
+                        ("{0} keepalive ping={1} http={2}`n" -f (Get-Date -Format s), $kaPing, $kaCode))
                 } catch {}
             }
 
@@ -1602,6 +1694,9 @@ function Invoke-TunnelWorker {
         Write-Marker ("HKUVPN_EXITED code={0}" -f $exitCode)
     }
     finally {
+        # Take the control-route pins out again (the vpnc script's own
+        # teardown does not know about them; they are ours).
+        try { if ($script:controlPins) { Remove-ControlRoutePins -Ips $script:controlPins } } catch {}
         if (-not $gost.HasExited) { Stop-Process -Id $gost.Id -Force -ErrorAction SilentlyContinue }
         if (-not $oc.HasExited) { Stop-Process -Id $oc.Id -Force -ErrorAction SilentlyContinue }
         # Give them a moment to go, so the proxy ports are free for the

@@ -143,13 +143,44 @@ The worker sends one tiny proxied request (`https://www.hku.hk/`) every
 `0` turns it off. Keep it below 1800, or it cannot beat the gateway's
 timer. It runs in every mode (smart, `-t`, `-d`, the app), only
 after the tunnel is up, and appends one line per attempt to
-`%TEMP%\hkuvpn\keepalive.log` (`... keepalive http=200`; `000` means the
-request did not get through). `--check` prints the interval.
+`%TEMP%\hkuvpn\keepalive.log` — `... keepalive ping=ok http=200`.
+The `ping` half is the one that always crosses the tunnel (its target is
+inside the tunnel's own subnet, so no routing-table owner can divert it);
+`http` is a second, usage-shaped probe, and `000` there means the proxied
+request did not get through. `--check` prints the interval.
 
 ```ini
 # %USERPROFILE%\.vpn\hku.env
 HKU_KEEPALIVE=600
 ```
+
+## Coexisting with a TUN proxy client (Clash / FlClash / ...)
+
+No rules are needed in the other client. hkuvpn keeps its control channel
+out from under a TUN in two ways:
+
+1. The worker scrubs `http_proxy`/`https_proxy`/`all_proxy` (and their
+   uppercase forms) from the environment of both children, so a proxy
+   exported in the launching terminal — which openconnect would otherwise
+   honor, sending the whole VPN through that proxy — cannot capture the
+   control connection.
+2. At connect time the DoH-resolved control endpoints (`vpn2fa*.hku.hk`,
+   so this needs `HKU_AUTO_RESOLVE`, the default) get `/32` host routes
+   through the physical NIC's gateway. A host route beats any TUN's
+   `0.0.0.0/0` by prefix length alone, so the packets to the VPN gateway
+   leave through the real adapter whatever the TUN client does. The pins
+   are removed at disconnect, and re-pinned (after a stale delete) at the
+   next connect.
+
+Tunnel traffic was never affected to begin with: the pushed split routes
+(`10.64.192.0/20`, `HKU_EXTRA_ROUTES`) and the learned `/24`s are all more
+specific than a default route.
+
+One case is outside this script's reach: a TUN that intercepts at the
+driver level and ignores the routing table. Nothing route-based beats
+that; there, a `DIRECT` rule for `147.8.240.0/24` inside the client is
+the only answer. The standard Clash/Meta TUN stacks respect the table, so
+in practice the pins are enough.
 
 A proxied request is used on purpose: only traffic through the tunnel
 resets the gateway's timer, and `www.hku.hk` is already the end-to-end
