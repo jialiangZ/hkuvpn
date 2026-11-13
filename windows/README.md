@@ -146,8 +146,10 @@ after the tunnel is up, and appends one line per attempt to
 `%TEMP%\hkuvpn\keepalive.log` — `... keepalive ping=ok http=200`.
 The `ping` half is the one that always crosses the tunnel (its target is
 inside the tunnel's own subnet, so no routing-table owner can divert it);
-`http` is a second, usage-shaped probe, and `000` there means the proxied
-request did not get through. `--check` prints the interval.
+`http` is a second, usage-shaped probe — it runs in the background with a
+30-second budget, because the campus egress can be slow, so its line may
+trail the ping by half a minute and `000` there means the proxied request
+did not get through. `--check` prints the interval.
 
 ```ini
 # %USERPROFILE%\.vpn\hku.env

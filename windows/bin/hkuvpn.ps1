@@ -1015,7 +1015,9 @@ function Get-StatusText {
         $lines += 'e2e      : unknown (curl.exe not available)'
         return @{ Text = $lines; Code = 0 }
     }
-    $code = & curl.exe -s -m 15 -x "socks5h://127.0.0.1:$socksPort" `
+    # 30 s, not 15: the campus egress to www.hku.hk can take tens of
+    # seconds, and a timed-out probe reads as a broken tunnel.
+    $code = & curl.exe -s -m 30 -x "socks5h://127.0.0.1:$socksPort" `
         -o NUL -w '%{http_code}' 'https://www.hku.hk/' 2>$null
     $code = "$code".Trim()
     if ($code -match '^[23]') {
@@ -1480,6 +1482,9 @@ function Invoke-TunnelWorker {
     $lastFlush = Get-Date
     $lastKeepalive = Get-Date
     $kaPingIp = $null
+    $kaPingResult = 'n/a'
+    $kaHttpProc = $null
+    $kaHttpFile = Join-Path $Script:TempBase 'keepalive-http.txt'
     $exitCode = 0
 
     try {
@@ -1585,7 +1590,7 @@ function Invoke-TunnelWorker {
                         $kaPingIp = "{0}.{1}.{2}.1" -f ($a[0] -band $m[0]), ($a[1] -band $m[1]), ($a[2] -band $m[2])
                     } catch {}
                     Write-Info ("Connected - split routes installed (see hkuvpn.ps1 --logs)" )
-                    $code2 = & curl.exe -s -m 15 -x "socks5h://127.0.0.1:$($Cfg.SocksPort)" `
+                    $code2 = & curl.exe -s -m 30 -x "socks5h://127.0.0.1:$($Cfg.SocksPort)" `
                         -o NUL -w '%{http_code}' 'https://www.hku.hk/' 2>$null
                     $code2 = "$code2".Trim()
                     Write-Info ("e2e check: https://www.hku.hk -> HTTP {0}" -f ($(if ($code2) { $code2 } else { 'none' })))
@@ -1610,21 +1615,44 @@ function Invoke-TunnelWorker {
                 $lastKeepalive = Get-Date
                 # The ping is the guaranteed one: its target is inside the
                 # tunnel's own on-link subnet, so it crosses the tunnel no
-                # matter what owns the default route. The proxied request
-                # is a second, usage-shaped probe (and a diagnostic).
-                $kaPing = 'n/a'
+                # matter what owns the default route (a reply is nice but
+                # not required - the packet counts). The proxied request is
+                # a second, usage-shaped probe; it runs ASYNC because the
+                # campus egress can take tens of seconds, and this loop must
+                # never stop draining the child streams for that long.
+                $kaPingResult = 'n/a'
                 if ($kaPingIp) {
                     $null = & ping.exe -n 1 -w 1000 $kaPingIp 2>$null
-                    $kaPing = if ($LASTEXITCODE -eq 0) { 'ok' } else { 'no-reply' }
+                    $kaPingResult = if ($LASTEXITCODE -eq 0) { 'ok' } else { 'no-reply' }
                 }
-                $kaCode = & curl.exe -s -m 10 -x "socks5h://127.0.0.1:$($Cfg.SocksPort)" `
-                    -o NUL -w '%{http_code}' 'https://www.hku.hk/' 2>$null
-                $kaCode = "$kaCode".Trim()
-                if (-not $kaCode) { $kaCode = '000' }
+                try { Remove-Item $kaHttpFile -Force -ErrorAction SilentlyContinue } catch {}
                 try {
-                    [IO.File]::AppendAllText($Script:KeepaliveLog,
-                        ("{0} keepalive ping={1} http={2}`n" -f (Get-Date -Format s), $kaPing, $kaCode))
-                } catch {}
+                    $kaHttpProc = Start-Process -FilePath (Join-Path $env:SystemRoot 'System32\curl.exe') `
+                        -ArgumentList @('-s','-m','30',
+                                        '-x',('socks5h://127.0.0.1:{0}' -f $Cfg.SocksPort),
+                                        '-o','NUL','-w','%{http_code}',
+                                        'https://www.hku.hk/') `
+                        -WindowStyle Hidden -PassThru -RedirectStandardOutput $kaHttpFile
+                } catch { $kaHttpProc = $null }
+            }
+
+            # The async probe of the last cycle: once curl is done, collect
+            # the HTTP code and write the keepalive line (with that cycle's
+            # ping result).
+            if ($kaHttpProc) {
+                $kaDone = $false
+                try { $kaDone = $kaHttpProc.HasExited } catch { $kaDone = $true }
+                if ($kaDone) {
+                    $kaCode = ''
+                    try { $kaCode = ("{0}" -f (Get-Content $kaHttpFile -Raw -ErrorAction Stop)).Trim() } catch {}
+                    if (-not $kaCode) { $kaCode = '000' }
+                    try {
+                        [IO.File]::AppendAllText($Script:KeepaliveLog,
+                            ("{0} keepalive ping={1} http={2}`n" -f (Get-Date -Format s), $kaPingResult, $kaCode))
+                    } catch {}
+                    $kaHttpProc = $null
+                    try { Remove-Item $kaHttpFile -Force -ErrorAction SilentlyContinue } catch {}
+                }
             }
 
             # Bound buffer growth; keep the tail for pattern context.
@@ -1695,7 +1723,9 @@ function Invoke-TunnelWorker {
     }
     finally {
         # Take the control-route pins out again (the vpnc script's own
-        # teardown does not know about them; they are ours).
+        # teardown does not know about them; they are ours), and stop a
+        # keepalive probe that is still running.
+        try { if ($kaHttpProc -and -not $kaHttpProc.HasExited) { Stop-Process -Id $kaHttpProc.Id -Force -ErrorAction SilentlyContinue } } catch {}
         try { if ($script:controlPins) { Remove-ControlRoutePins -Ips $script:controlPins } } catch {}
         if (-not $gost.HasExited) { Stop-Process -Id $gost.Id -Force -ErrorAction SilentlyContinue }
         if (-not $oc.HasExited) { Stop-Process -Id $oc.Id -Force -ErrorAction SilentlyContinue }
