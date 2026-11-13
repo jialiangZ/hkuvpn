@@ -184,10 +184,6 @@ that; there, a `DIRECT` rule for `147.8.240.0/24` inside the client is
 the only answer. The standard Clash/Meta TUN stacks respect the table, so
 in practice the pins are enough.
 
-A proxied request is used on purpose: only traffic through the tunnel
-resets the gateway's timer, and `www.hku.hk` is already the end-to-end
-probe the connect path uses.
-
 ## Requirements
 
 - Windows 10 1803+ / Windows 11, 64-bit (`curl.exe` ships with the OS)

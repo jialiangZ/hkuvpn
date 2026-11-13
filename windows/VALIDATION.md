@@ -211,11 +211,12 @@ where to look:
 | 2 | `process : not running` | The tunnel died — read `--logs` |
 | 3 | `tunnel : down` | OpenConnect has not finished authenticating, or the session failed |
 | 4 | `proxy : down` | gost is not listening — check `%TEMP%\hkuvpn\gost.log` |
-| 5 | `e2e : failed` | `www.hku.hk` is outside the pushed split routes; expected in some networks |
+| 5 | `e2e : failed` | The probe timed out (it allows 30 s — the campus egress can be slow), or `www.hku.hk` is outside the pushed split routes |
 
 Exit code 5 is often **not** a bug: this port routes only what the server
 pushes, so a public site that is not in the campus ranges cannot be reached
-through the tunnel. Verify with a genuinely campus-hosted host instead.
+through the tunnel — and a merely slow egress times the probe out. Verify
+with a genuinely campus-hosted host instead.
 
 ---
 

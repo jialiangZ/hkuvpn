@@ -196,10 +196,11 @@ e2e      : ok (https://www.hku.hk -> HTTP 200 through the HKU tunnel)
 | 2 | `process : not running` | 隧道进程已退出 —— 看 `--logs` |
 | 3 | `tunnel : down` | OpenConnect 还在认证，或会话失败 |
 | 4 | `proxy : down` | gost 没在监听 —— 看 `%TEMP%\hkuvpn\gost.log` |
-| 5 | `e2e : failed` | `www.hku.hk` 不在推送的分流网段内，某些网络下属预期 |
+| 5 | `e2e : failed` | 探测超时（预算 30 秒，校园出口可能很慢），或 `www.hku.hk` 不在推送的分流网段内 |
 
 退出码 5 往往**不是 bug**：本版只路由服务器推送的网段，不在校园区段内的公网站点
-本来就无法经隧道访问 —— 换一个确实托管在校内的主机来验证。
+本来就无法经隧道访问；出口偶尔很慢也会让探测超时 —— 换一个确实托管在校内的
+主机来验证。
 
 ---
 

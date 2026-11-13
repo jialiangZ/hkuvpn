@@ -11,7 +11,8 @@ WSL or Docker. Mirrors docker/bin/hkuvpn of the Docker edition:
   -f            foreground connect: same flow, echoes the raw OpenConnect log
   -d            background connect: MFA delivered via 'hkuvpn.ps1 --mfa CODE'
   --mfa CODE    send the 6-digit Authenticator code to a detached worker
-  --check       pre-flight check (config, PIN file, tools, ports, cert pin)
+  --check       pre-flight check (config, PIN file, tools, ports, cert pin,
+                autoroute, keepalive)
   --status      layered health check (exit 0/2/3/4/5)
   --logs        follow the OpenConnect log
   --stop        stop the VPN, remove routes and NRPT rules
@@ -22,6 +23,18 @@ routes the VPN server pushes (plus optional HKU_EXTRA_ROUTES). Proxied
 requests to campus subnets go through HKU; everything else keeps using
 your normal connection. Campus-only name resolution (*.hku.hk) is wired
 through an NRPT rule pointing at the VPN's DNS servers.
+
+Idle keepalive: the gateway ends a session 30 minutes after the last data
+packet crossed the tunnel (X-CSTP-Idle-Timeout: 1800); its own DPD and
+keepalive packets do not count. While connected, the worker sends a tiny
+probe every HKU_KEEPALIVE seconds (default 600), logged to
+%TEMP%\hkuvpn\keepalive.log.
+
+Control channel: the worker scrubs http_proxy/https_proxy/all_proxy from
+both children and pins the DoH-resolved vpn2fa*.hku.hk endpoints with /32
+host routes through the physical NIC - so neither a proxy exported in the
+launching terminal nor a TUN client's default route can capture the
+connection to the gateway.
 
 Requires: Windows 10 1803+ (curl.exe), PowerShell 5.1, admin rights for
 connect/stop (self-elevates), tools installed by get-tools.ps1.
@@ -1025,8 +1038,9 @@ function Get-StatusText {
         return @{ Text = $lines; Code = 0 }
     }
     $lines += ("e2e      : failed (http={0})" -f ($(if ($code) { $code } else { 'none' })))
-    $lines += '           if www.hku.hk is outside the pushed split routes, direct access is'
-    $lines += '           expected; check with: hkuvpn.ps1 --logs'
+    $lines += '           the probe allows 30s - a slow campus egress times out too;'
+    $lines += '           www.hku.hk may also sit outside the pushed split routes.'
+    $lines += '           check with: hkuvpn.ps1 --logs'
     return @{ Text = $lines; Code = 5 }
 }
 
